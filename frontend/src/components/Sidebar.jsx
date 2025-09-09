@@ -1,20 +1,27 @@
-import { Link } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 
 function Sidebar() {
+  const linkStyle = ({ isActive }) => ({
+    display: "block",
+    padding: "8px 10px",
+    borderRadius: "8px",
+    textDecoration: "none",
+    color: isActive ? "#fff" : "#333",
+    background: isActive ? "#3b82f6" : "transparent",
+    marginBottom: "6px",
+  });
+
   return (
     <div style={{
-      width: "200px",
-      height: "100vh",
-      background: "#f4f4f4",
-      padding: "1rem",
-      boxSizing: "border-box"
+      width: 220, height: "100vh", background: "#f7f7f7",
+      padding: "1rem", boxSizing: "border-box", borderRight: "1px solid #e5e7eb"
     }}>
-      <h2>Teacher</h2>
+      <h2 style={{ marginTop: 0 }}>Teacher</h2>
       <nav>
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          <li><Link to="/">Dashboard</Link></li>
-          <li><Link to="/students">Students</Link></li>
-          <li><Link to="/topics">Topics</Link></li>
+        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          <li><NavLink to="/dashboard" style={linkStyle}>Dashboard</NavLink></li>
+          <li><NavLink to="/students" style={linkStyle}>Students</NavLink></li>
+          <li><NavLink to="/topics" style={linkStyle}>Topics</NavLink></li>
         </ul>
       </nav>
     </div>

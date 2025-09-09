@@ -15,11 +15,20 @@ function Students() {
       const querySnapshot = await getDocs(collection(db, "students"));
       const data = querySnapshot.docs.map(docSnap => {
         const student = docSnap.data();
-        const passThreshold = student.final / 2;
-        const status = student.score >= passThreshold ? "PASS" : "FAIL";
+
+        // For backward compatibility
+        const totalFinal = student.final || 0;
+        const totalScore = student.score || 0;
+
+        // Compute status
+        const passThreshold = totalFinal / 2;
+        const status = totalScore >= passThreshold ? "PASS" : "FAIL";
+
         return {
           id: docSnap.id,
           ...student,
+          totalScore,
+          totalFinal,
           status
         };
       });
@@ -41,25 +50,57 @@ function Students() {
       return;
     }
 
+    // Validation: score cannot exceed final
+    if (Number(score) > Number(final)) {
+      alert("Score cannot be greater than Final score");
+      return;
+    }
+
     try {
+      // Future-proof schema
       await setDoc(doc(db, "students", id), {
         name,
+        // Store topic-level scores under "scores"
+        scores: {
+          general: Number(score), // placeholder for now
+        },
+        finals: {
+          general: Number(final),
+        },
+        mastered: [], // empty array for now
+        // Keep top-level score/final for quick dashboard
         score: Number(score),
-        final: Number(final)
+        final: Number(final),
       });
+
+      // Reset form
       setId("");
       setName("");
       setScore("");
       setFinal("");
-      fetchData(); // refresh list
+
+      // Refresh list
+      fetchData();
     } catch (err) {
       console.error("Error adding student:", err);
     }
   };
 
+  // Dashboard summary
+  const totalStudents = students.length;
+  const totalPass = students.filter(s => s.status === "PASS").length;
+  const totalFail = totalStudents - totalPass;
+
   return (
     <div style={{ padding: "2rem" }}>
       <h1>Manage Students</h1>
+
+      {/* Dashboard summary */}
+      <div style={{ marginBottom: "1rem" }}>
+        <strong>Total:</strong> {totalStudents} |
+        <span style={{ color: "green", marginLeft: "0.5rem" }}>Pass: {totalPass}</span> |
+        <span style={{ color: "red", marginLeft: "0.5rem" }}>Fail: {totalFail}</span>
+      </div>
 
       {/* Add Student Form */}
       <form onSubmit={addStudent} style={{ marginBottom: "1rem" }}>
@@ -94,7 +135,7 @@ function Students() {
       <ul>
         {students.map(student => (
           <li key={student.id}>
-            {student.id}: {student.name} → Score {student.score}/{student.final} → {student.status}
+            {student.id}: {student.name} → Score {student.totalScore}/{student.totalFinal} → {student.status}
           </li>
         ))}
       </ul>
