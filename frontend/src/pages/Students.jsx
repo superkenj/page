@@ -1,144 +1,127 @@
+// frontend/src/pages/Students.jsx
 import { useEffect, useState } from "react";
-import { collection, getDocs, doc, setDoc } from "firebase/firestore";
-import { db } from "../firebase";
+
+const API_BASE = "http://127.0.0.1:5000"; // change if backend is hosted elsewhere
 
 function Students() {
   const [students, setStudents] = useState([]);
   const [id, setId] = useState("");
   const [name, setName] = useState("");
   const [score, setScore] = useState("");
-  const [final, setFinal] = useState("");
+  const [finalScore, setFinalScore] = useState("");
+  const [currentPath, setCurrentPath] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  // Fetch all students
-  const fetchData = async () => {
+  async function fetchStudents() {
+    setLoading(true);
     try {
-      const querySnapshot = await getDocs(collection(db, "students"));
-      const data = querySnapshot.docs.map(docSnap => {
-        const student = docSnap.data();
-
-        // For backward compatibility
-        const totalFinal = student.final || 0;
-        const totalScore = student.score || 0;
-
-        // Compute status
-        const passThreshold = totalFinal / 2;
-        const status = totalScore >= passThreshold ? "PASS" : "FAIL";
-
-        return {
-          id: docSnap.id,
-          ...student,
-          totalScore,
-          totalFinal,
-          status
-        };
-      });
+      // If you want list-all endpoint, add it to Flask; otherwise fetch known IDs.
+      // We'll assume you want to fetch a list: create endpoint /students/list in Flask (below).
+      const res = await fetch(`${API_BASE}/students/list`);
+      const data = await res.json();
       setStudents(data);
     } catch (err) {
-      console.error("Error fetching students:", err);
+      console.error("Failed to load students", err);
+    } finally {
+      setLoading(false);
     }
-  };
+  }
 
   useEffect(() => {
-    fetchData();
+    fetchStudents();
   }, []);
 
-  // Add or Update a student with custom ID
-  const addStudent = async (e) => {
+  async function saveStudent(e) {
     e.preventDefault();
-    if (!id || !name || !score || !final) {
-      alert("Please fill out all fields");
+    if (!id || !name || !score || !finalScore) {
+      alert("Please fill all fields");
       return;
     }
-
-    // Validation: score cannot exceed final
-    if (Number(score) > Number(final)) {
-      alert("Score cannot be greater than Final score");
+    if (Number(score) > Number(finalScore)) {
+      alert("Score cannot exceed final score");
       return;
     }
-
     try {
-      // Future-proof schema
-      await setDoc(doc(db, "students", id), {
+      const payload = {
         name,
-        // Store topic-level scores under "scores"
-        scores: {
-          general: Number(score), // placeholder for now
-        },
-        finals: {
-          general: Number(final),
-        },
-        mastered: [], // empty array for now
-        // Keep top-level score/final for quick dashboard
         score: Number(score),
-        final: Number(final),
+        final: Number(finalScore),
+        scores: { general: Number(score) },
+        finals: { general: Number(finalScore) },
+      };
+      const res = await fetch(`${API_BASE}/students/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
-
-      // Reset form
-      setId("");
-      setName("");
-      setScore("");
-      setFinal("");
-
-      // Refresh list
-      fetchData();
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to save");
+      }
+      // refresh
+      setId(""); setName(""); setScore(""); setFinalScore("");
+      await fetchStudents();
     } catch (err) {
-      console.error("Error adding student:", err);
+      console.error(err);
+      alert("Could not save student: " + err.message);
     }
-  };
+  }
 
-  // Dashboard summary
-  const totalStudents = students.length;
-  const totalPass = students.filter(s => s.status === "PASS").length;
-  const totalFail = totalStudents - totalPass;
+  async function getRecommendation(studentId) {
+    try {
+      const res = await fetch(`${API_BASE}/students/${studentId}/path`);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to get recommendation");
+      }
+      const data = await res.json();
+      setCurrentPath({ studentId, recommended: data.recommended });
+    } catch (err) {
+      console.error(err);
+      alert("Recommendation error: " + err.message);
+    }
+  }
 
   return (
     <div style={{ padding: "2rem" }}>
       <h1>Manage Students</h1>
 
-      {/* Dashboard summary */}
-      <div style={{ marginBottom: "1rem" }}>
-        <strong>Total:</strong> {totalStudents} |
-        <span style={{ color: "green", marginLeft: "0.5rem" }}>Pass: {totalPass}</span> |
-        <span style={{ color: "red", marginLeft: "0.5rem" }}>Fail: {totalFail}</span>
-      </div>
-
-      {/* Add Student Form */}
-      <form onSubmit={addStudent} style={{ marginBottom: "1rem" }}>
-        <input
-          type="text"
-          placeholder="Student ID"
-          value={id}
-          onChange={e => setId(e.target.value)}
-        />
-        <input
-          type="text"
-          placeholder="Name"
-          value={name}
-          onChange={e => setName(e.target.value)}
-        />
-        <input
-          type="number"
-          placeholder="Score"
-          value={score}
-          onChange={e => setScore(e.target.value)}
-        />
-        <input
-          type="number"
-          placeholder="Final Score"
-          value={final}
-          onChange={e => setFinal(e.target.value)}
-        />
+      <form onSubmit={saveStudent} style={{ marginBottom: "1rem" }}>
+        <input placeholder="Student ID" value={id} onChange={e=>setId(e.target.value)} />
+        <input placeholder="Name" value={name} onChange={e=>setName(e.target.value)} />
+        <input placeholder="Score" type="number" value={score} onChange={e=>setScore(e.target.value)} />
+        <input placeholder="Final Score" type="number" value={finalScore} onChange={e=>setFinalScore(e.target.value)} />
         <button type="submit">Save Student</button>
       </form>
 
-      {/* Display Students */}
+      <div style={{ marginBottom: 12 }}>
+        <strong>Students</strong>
+        {loading ? <div>Loading…</div> : null}
+      </div>
+
       <ul>
-        {students.map(student => (
-          <li key={student.id}>
-            {student.id}: {student.name} → Score {student.totalScore}/{student.totalFinal} → {student.status}
+        {students.map(s => (
+          <li key={s.id} style={{ marginBottom: 8 }}>
+            <div>
+              <strong>{s.id}</strong>: {s.name} → Score {s.score}/{s.final || s.final_score || "?"} → {s.status || ""}
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <button onClick={() => getRecommendation(s.id)} style={{ marginRight: 8 }}>
+                Get Recommendation
+              </button>
+            </div>
           </li>
         ))}
       </ul>
+
+      {currentPath && (
+        <div style={{ marginTop: 20 }}>
+          <h3>Recommended path for {currentPath.studentId}</h3>
+          <ol>
+            {currentPath.recommended.map(t => <li key={t}>{t}</li>)}
+          </ol>
+        </div>
+      )}
     </div>
   );
 }
