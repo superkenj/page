@@ -13,6 +13,41 @@ db = get_client()
 def home():
     return jsonify({"message": "PaGe Flask backend is running"})
 
+@app.route("/dashboard/summary", methods=["GET"])
+def dashboard_summary():
+    # Students
+    snaps = db.collection("students").stream()
+    students = []
+    pass_count, fail_count = 0, 0
+    for d in snaps:
+        doc = d.to_dict()
+        total_score = doc.get("score") or (doc.get("scores", {}).get("general") if doc.get("scores") else 0)
+        total_final = doc.get("final") or (doc.get("finals", {}).get("general") if doc.get("finals") else 0)
+        status = ""
+        if total_final:
+            status = "PASS" if total_score >= (total_final / 2) else "FAIL"
+        if status == "PASS": pass_count += 1
+        elif status == "FAIL": fail_count += 1
+        students.append({
+            "id": d.id,
+            "name": doc.get("name"),
+            "score": total_score,
+            "final": total_final,
+            "status": status
+        })
+
+    # Topics
+    topics_ref = db.collection("topics")
+    topic_docs = list(topics_ref.stream())
+    topic_count = len(topic_docs)
+
+    return jsonify({
+        "students_total": len(students),
+        "students_pass": pass_count,
+        "students_fail": fail_count,
+        "topic_count": topic_count,
+    })
+
 @app.route("/topics/graph")
 def get_graph():
     topics_ref = db.collection("topics")

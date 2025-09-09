@@ -1,64 +1,106 @@
+// frontend/src/pages/Dashboard.jsx
 import { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../firebase";
+import { useNavigate } from "react-router-dom";
 
-export default function Dashboard() {
-  const [stats, setStats] = useState({
-    totalStudents: 0,
-    pass: 0,
-    fail: 0,
-    avgScore: 0,
-    topicsCount: 0,
-  });
+const API_BASE = "http://localhost:5000";
+
+function Dashboard() {
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const load = async () => {
-      // students
-      const stuSnap = await getDocs(collection(db, "students"));
-      const students = stuSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const totalStudents = students.length;
-
-      let pass = 0, fail = 0, sum = 0;
-      students.forEach(s => {
-        const final = Number(s.final || 0);
-        const score = Number(s.score || 0);
-        if (final > 0) {
-          const threshold = final / 2;
-          if (score >= threshold) pass++; else fail++;
-        }
-        sum += score;
-      });
-      const avgScore = totalStudents ? +(sum / totalStudents).toFixed(2) : 0;
-
-      // topics
-      const topicSnap = await getDocs(collection(db, "topics"));
-      const topicsCount = topicSnap.size;
-
-      setStats({ totalStudents, pass, fail, avgScore, topicsCount });
-    };
-    load();
+    async function fetchSummary() {
+      try {
+        const res = await fetch(`${API_BASE}/dashboard/summary`);
+        const data = await res.json();
+        setSummary(data);
+      } catch (err) {
+        console.error("Failed to load dashboard:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchSummary();
   }, []);
 
-  const card = (title, value) => (
-    <div style={{
-      padding: "16px", borderRadius: 12, background: "#fff",
-      boxShadow: "0 1px 3px rgba(0,0,0,0.08)", minWidth: 180
-    }}>
-      <div style={{ color: "#6b7280", fontSize: 12 }}>{title}</div>
-      <div style={{ fontSize: 28, fontWeight: 700 }}>{value}</div>
-    </div>
-  );
+  if (loading) return <div>Loading dashboard...</div>;
+  if (!summary) return <div>No data available</div>;
+
+  // Card styles
+  const cardStyle = {
+    flex: 1,
+    background: "#fff",
+    borderRadius: "12px",
+    padding: "1.5rem",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+    cursor: "pointer",
+    transition: "transform 0.2s ease",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",   // centers horizontally
+    justifyContent: "center", // centers vertically
+    textAlign: "center",
+  };
+
+  const gridStyle = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: "1.5rem",
+    marginTop: "2rem",
+  };
+
+  const numberStyle = {
+    fontSize: "2.5rem",
+    fontWeight: "bold",
+    marginBottom: "0.5rem",
+  };
+
+  const subStatStyle = {
+    display: "flex",
+    justifyContent: "space-around",
+    marginTop: "1rem",
+    width: "100%",
+    fontSize: "0.9rem",
+  };
 
   return (
-    <div>
-      <h1 style={{ marginTop: 0 }}>Dashboard</h1>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        {card("Total Students", stats.totalStudents)}
-        {card("Pass", stats.pass)}
-        {card("Fail", stats.fail)}
-        {card("Average Score", stats.avgScore)}
-        {card("Topics", stats.topicsCount)}
+    <div style={{ padding: "2rem" }}>
+      <h1 style={{ marginBottom: "1rem" }}>Teacher Dashboard</h1>
+
+      <div style={gridStyle}>
+        {/* Students Card */}
+        <div
+          style={cardStyle}
+          onClick={() => navigate("/students")}
+          onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
+          onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
+        >
+          <div style={{ ...numberStyle, color: "#3b82f6" }}>
+            {summary.students_total}
+          </div>
+          <div style={{ fontWeight: "600" }}>Students</div>
+          <div style={subStatStyle}>
+            <span style={{ color: "#16a34a" }}>✔ {summary.students_pass} Pass</span>
+            <span style={{ color: "#dc2626" }}>✘ {summary.students_fail} Fail</span>
+          </div>
+        </div>
+
+        {/* Topics Card */}
+        <div
+          style={cardStyle}
+          onClick={() => navigate("/topics")}
+          onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
+          onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
+        >
+          <div style={{ ...numberStyle, color: "#f59e0b" }}>
+            {summary.topic_count}
+          </div>
+          <div style={{ fontWeight: "600" }}>Topics</div>
+        </div>
       </div>
     </div>
   );
 }
+
+export default Dashboard;

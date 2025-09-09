@@ -11,7 +11,8 @@ function App() {
         <Sidebar />
         <div style={{ flex: 1, padding: "1rem" }}>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<Dashboard />} />         {/* fallback root */}
+            <Route path="/dashboard" element={<Dashboard />} /> {/* explicit */}
             <Route path="/students" element={<Students />} />
             <Route path="/topics" element={<Topics />} />
           </Routes>
