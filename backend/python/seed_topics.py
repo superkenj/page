@@ -1,41 +1,53 @@
-from firestore_client import get_client
+# seed_topics.py
+import firebase_admin
+from firebase_admin import credentials, firestore
 
-db = get_client()
+cred = credentials.Certificate("serviceAccountKey.json")
+firebase_admin.initialize_app(cred)
+
+db = firestore.client()
 
 topics = [
-    {"id": "dec_place_value", "title": "gives the place value and the value of a digit of a given decimal number through ten thousandths.", "prerequisites": []},
-    {"id": "dec_read_write", "title": "reads and writes decimal numbers through ten thousandths.", "prerequisites": ["dec_place_value"]},
-    {"id": "dec_rounding", "title": "rounds decimal numbers to the nearest hundredth and thousandth.", "prerequisites": ["dec_read_write"]},
-    {"id": "dec_compare", "title": "compares and arranges decimal numbers.", "prerequisites": ["dec_rounding"]},
-    {"id": "dec_add_sub_visual", "title": "visualizes addition and subtraction of decimals.", "prerequisites": ["dec_compare"]},
-    {"id": "dec_add_sub", "title": "adds and subtracts decimal numbers through thousandths without and with regrouping.", "prerequisites": ["dec_add_sub_visual"]},
-    {"id": "dec_add_sub_estimate", "title": "estimates the sum or difference of decimal numbers with reasonable results.", "prerequisites": ["dec_add_sub"]},
-    {"id": "dec_add_sub_problems", "title": "solves routine or non-routine problems involving addition and subtraction of decimal numbers including money using appropriate problem solving strategies and tools.", "prerequisites": ["dec_add_sub_estimate"]},
-    {"id": "dec_add_sub_create", "title": "creates problems (with reasonable answers) involving addition and/or subtraction of decimal numbers including money.", "prerequisites": ["dec_add_sub_problems"]},
-    {"id": "dec_mul_visual", "title": "visualizes multiplication of decimal numbers using pictorial models.", "prerequisites": ["dec_add_sub_create"]},
-    {"id": "dec_mul_whole", "title": "multiplies decimals up to 2 decimal places by 1- to 2-digit whole numbers.", "prerequisites": ["dec_mul_visual"]},
-    {"id": "dec_mul_dec", "title": "multiplies decimals with factors up to 2 decimal places.", "prerequisites": ["dec_mul_whole"]},
-    {"id": "dec_mul_estimate", "title": "estimates the products of decimal numbers with reasonable results.", "prerequisites": ["dec_mul_dec"]},
-    {"id": "dec_mul_problems", "title": "solves routine and non-routine problems involving multiplication without or with addition or subtraction of decimals and whole numbers including money using appropriate problem solving strategies and tools.", "prerequisites": ["dec_mul_estimate"]},
-    {"id": "dec_div_visual", "title": "visualizes division of decimal numbers using pictorial models.", "prerequisites": ["dec_mul_problems"]},
-    {"id": "dec_div_dec", "title": "divides decimals with up to 2 decimal places.", "prerequisites": ["dec_div_visual"]},
-    {"id": "dec_div_whole", "title": "divides whole numbers with quotients in decimal form.", "prerequisites": ["dec_div_dec"]},
-    {"id": "dec_div_estimate", "title": "estimates the quotients of decimal numbers with reasonable results.", "prerequisites": ["dec_div_whole"]},
-    {"id": "dec_div_problems", "title": "solves routine and non-routine problems involving division without or with any of the other operations of decimals and whole numbers including money using appropriate problem solving strategies and tools.", "prerequisites": ["dec_div_estimate"]},
-    {"id": "dec_div_create", "title": "creates problems (with reasonable answers) involving multiplication and/or division or with any of the other operations of decimals and whole numbers including money.", "prerequisites": ["dec_div_problems"]},
-    {"id": "ratio_visual", "title": "visualizes the ratio of 2 given numbers.", "prerequisites": ["dec_div_create"]},
-    {"id": "ratio_express", "title": "expresses ratio using either the colon (:) or fraction.", "prerequisites": ["ratio_visual"]},
-    {"id": "ratio_equivalent", "title": "identifies and writes equivalent ratios.", "prerequisites": ["ratio_express"]},
-    {"id": "ratio_simplify", "title": "expresses ratios in their simplest forms.", "prerequisites": ["ratio_equivalent"]},
-    {"id": "ratio_missing", "title": "finds the missing term in a pair of equivalent ratios.", "prerequisites": ["ratio_simplify"]},
-    {"id": "proportion_define", "title": "defines and describes a proportion.", "prerequisites": ["ratio_missing"]},
-    {"id": "proportion_direct", "title": "recognizes when two quantities are in direct proportion.", "prerequisites": ["proportion_define"]}
+    # --- Decimals Cluster ---
+    {"id": "place_val_dec", "name": "Place Value of Decimals", "description": "Understanding decimal place values", "prerequisites": []},
+    {"id": "read_write_dec", "name": "Reading & Writing Decimals", "description": "Reading and writing decimals in words and numerals", "prerequisites": ["place_val_dec"]},
+    {"id": "round_dec", "name": "Rounding Decimals", "description": "Rounding decimals to specified place values", "prerequisites": ["place_val_dec","read_write_dec"]},
+    {"id": "compare_order_dec", "name": "Comparing & Ordering Decimals", "description": "Comparing and ordering decimals", "prerequisites": ["place_val_dec","read_write_dec"]},
+    {"id": "visual_addsub_dec", "name": "Visualizing Addition/Subtraction of Decimals", "description": "Using visuals to understand decimal addition and subtraction", "prerequisites": ["place_val_dec","read_write_dec"]},
+    {"id": "add_sub_dec", "name": "Adding & Subtracting Decimals", "description": "Performing decimal addition and subtraction", "prerequisites": ["visual_addsub_dec"]},
+    {"id": "estimate_sumdiff_dec", "name": "Estimating Sum/Difference of Decimals", "description": "Estimating sums and differences of decimals", "prerequisites": ["round_dec","add_sub_dec"]},
+    {"id": "prob_solve_addsub_dec", "name": "Problem Solving (Add/Sub Decimals, incl. Money)", "description": "Solving word problems involving decimal addition/subtraction including money", "prerequisites": ["add_sub_dec","estimate_sumdiff_dec"]},
+    {"id": "create_prob_addsub_dec", "name": "Creating Problems (Add/Sub Decimals, incl. Money)", "description": "Creating word problems involving decimal addition/subtraction including money", "prerequisites": ["prob_solve_addsub_dec"]},
+
+    # --- Multiplication of Decimals ---
+    {"id": "visual_mult_dec", "name": "Visualizing Multiplication of Decimals", "description": "Using visuals to understand decimal multiplication", "prerequisites": ["place_val_dec","read_write_dec"]},
+    {"id": "mult_dec_whole_num", "name": "Multiplying Decimals by Whole Numbers", "description": "Performing multiplication of decimals by whole numbers", "prerequisites": ["visual_mult_dec"]},
+    {"id": "mult_dec", "name": "Multiplying Decimals", "description": "Multiplying decimals with up to 2 decimal places", "prerequisites": ["mult_dec_whole_num"]},
+    {"id": "estimate_prod_dec", "name": "Estimating Products of Decimals", "description": "Estimating decimal products", "prerequisites": ["round_dec","mult_dec"]},
+    {"id": "prob_solve_mult_dec", "name": "Problem Solving (Multiplication + Decimals/Whole Numbers incl. Money)", "description": "Solving word problems involving decimal multiplication including money", "prerequisites": ["mult_dec","estimate_prod_dec"]},
+
+    # --- Division of Decimals ---
+    {"id": "visual_div_dec", "name": "Visualizing Division of Decimals", "description": "Using visuals to understand decimal division", "prerequisites": ["place_val_dec","read_write_dec"]},
+    {"id": "div_dec", "name": "Dividing Decimals", "description": "Dividing decimals up to 2 decimal places", "prerequisites": ["visual_div_dec"]},
+    {"id": "div_whole_num_dec_quot", "name": "Dividing Whole Numbers with Decimal Quotients", "description": "Dividing whole numbers resulting in decimal quotients", "prerequisites": ["div_dec"]},
+    {"id": "estimate_quot_dec", "name": "Estimating Quotients of Decimals", "description": "Estimating decimal quotients", "prerequisites": ["round_dec","div_dec"]},
+    {"id": "prob_solve_div_dec", "name": "Problem Solving (Division + Decimals/Whole Numbers incl. Money)", "description": "Solving word problems involving decimal division including money", "prerequisites": ["div_whole_num_dec_quot","estimate_quot_dec"]},
+    {"id": "create_prob_multdiv_dec", "name": "Creating Problems (Multiplication/Division with Decimals & Whole Numbers incl. Money)", "description": "Creating problems involving decimal multiplication and division including money", "prerequisites": ["prob_solve_mult_dec","prob_solve_div_dec"]},
+
+    # --- Ratios & Proportion ---
+    {"id": "visual_ratio", "name": "Visualizing Ratios", "description": "Understanding ratios using visuals", "prerequisites": []},
+    {"id": "express_ratio", "name": "Expressing Ratio", "description": "Writing ratios in colon or fraction form", "prerequisites": ["visual_ratio"]},
+    {"id": "equiv_ratio", "name": "Equivalent Ratios", "description": "Finding and understanding equivalent ratios", "prerequisites": ["express_ratio"]},
+    {"id": "simplify_ratio", "name": "Simplifying Ratios", "description": "Simplifying ratios to their lowest form", "prerequisites": ["equiv_ratio"]},
+    {"id": "find_missing_term_ratio", "name": "Finding Missing Term in Equivalent Ratios", "description": "Finding missing terms in equivalent ratios", "prerequisites": ["equiv_ratio","simplify_ratio"]},
+    {"id": "def_desc_prop", "name": "Defining & Describing Proportion", "description": "Understanding and defining proportions", "prerequisites": ["find_missing_term_ratio"]},
+    {"id": "recog_dir_prop", "name": "Recognizing Direct Proportion", "description": "Recognizing direct proportion in problems", "prerequisites": ["def_desc_prop"]}
 ]
 
-for t in topics:
-    db.collection("topics").document(t["id"]).set({
-        "title": t["title"],
-        "prerequisites": t["prerequisites"]
-    })
+def seed_topics():
+    for topic in topics:
+        db.collection("topics").document(topic["id"]).set(topic)
+    print("Topics seeded successfully!")
 
-print("🔥 Competency topics seeded successfully.")
+if __name__ == "__main__":
+    seed_topics()

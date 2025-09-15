@@ -1,6 +1,7 @@
 // frontend/src/pages/Dashboard.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { FaUserGraduate, FaBook } from "react-icons/fa";
 
 const API_BASE = "http://localhost:5000";
 
@@ -27,7 +28,6 @@ function Dashboard() {
   if (loading) return <div>Loading dashboard...</div>;
   if (!summary) return <div>No data available</div>;
 
-  // Card styles
   const cardStyle = {
     flex: 1,
     background: "#fff",
@@ -38,8 +38,8 @@ function Dashboard() {
     transition: "transform 0.2s ease",
     display: "flex",
     flexDirection: "column",
-    alignItems: "center",   // centers horizontally
-    justifyContent: "center", // centers vertically
+    alignItems: "center",
+    justifyContent: "center",
     textAlign: "center",
   };
 
@@ -64,6 +64,11 @@ function Dashboard() {
     fontSize: "0.9rem",
   };
 
+  const iconStyle = {
+    fontSize: "2rem",
+    marginBottom: "0.5rem",
+  };
+
   return (
     <div style={{ padding: "2rem" }}>
       <h1 style={{ marginBottom: "1rem" }}>Teacher Dashboard</h1>
@@ -76,6 +81,7 @@ function Dashboard() {
           onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
           onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
         >
+          <FaUserGraduate style={{ ...iconStyle, color: "#3b82f6" }} />
           <div style={{ ...numberStyle, color: "#3b82f6" }}>
             {summary.students_total}
           </div>
@@ -93,6 +99,7 @@ function Dashboard() {
           onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
           onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
         >
+          <FaBook style={{ ...iconStyle, color: "#f59e0b" }} />
           <div style={{ ...numberStyle, color: "#f59e0b" }}>
             {summary.topic_count}
           </div>

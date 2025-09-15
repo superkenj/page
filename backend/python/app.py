@@ -1,7 +1,12 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from firestore_client import get_client
-from graph_service import build_graph_from_topics, recommend_next_topics
+from graph_service import (
+    build_graph_from_topics,
+    recommend_next_topics,
+    validate_dag,
+    nodes_with_titles,
+)
 from flask import abort
 
 app = Flask(__name__)
@@ -48,6 +53,20 @@ def dashboard_summary():
         "topic_count": topic_count,
     })
 
+@app.route("/topics")
+def get_topics():
+    topics_ref = db.collection("topics").stream()
+    topics = []
+    for doc in topics_ref:
+        data = doc.to_dict()
+        topics.append({
+            "id": data.get("id"),
+            "name": data.get("name"),
+            "description": data.get("description"),
+            "prerequisites": data.get("prerequisites", [])
+        })
+    return jsonify(topics)
+
 @app.route("/topics/graph")
 def get_graph():
     topics_ref = db.collection("topics")
@@ -58,6 +77,58 @@ def get_graph():
         "edges": list(G.edges),
         "count": len(G.nodes)
     })
+
+@app.route("/topics/graph/details", methods=["GET"])
+def topics_graph_details():
+    topics_ref = db.collection("topics")
+    docs = [{"id": d.id, **d.to_dict()} for d in topics_ref.stream()]
+    G = build_graph_from_topics(docs)
+    cycles = validate_dag(G)
+    if cycles:
+        return jsonify({"error": "Graph has cycles", "cycles": cycles}), 500
+    nodes = nodes_with_titles(G)
+    edges = [list(e) for e in G.edges()]
+    return jsonify({"nodes": nodes, "edges": edges, "count": len(nodes)})
+
+# GET list of topics
+@app.route("/topics/list", methods=["GET"])
+def list_topics():
+    snaps = db.collection("topics").stream()
+    out = []
+    for d in snaps:
+        doc = d.to_dict()
+        out.append({
+            "id": d.id,
+            "name": doc.get("name"),
+            "description": doc.get("description"),
+            "prerequisites": doc.get("prerequisites", [])
+        })
+    return jsonify(out)
+
+# Create or update a topic
+@app.route("/topics/<topic_id>", methods=["POST"])
+def upsert_topic(topic_id):
+    body = request.get_json() or {}
+    allowed = {}
+    for k in ("title", "prerequisites", "description"):
+        if k in body:
+            allowed[k] = body[k]
+    if not allowed:
+        return jsonify({"error": "No valid fields provided"}), 400
+    db.collection("topics").document(topic_id).set(allowed, merge=True)
+    return jsonify({"message": f"Topic {topic_id} saved"}), 201
+
+# Delete a topic
+@app.route("/topics/<topic_id>", methods=["DELETE"])
+def delete_topic(topic_id):
+    db.collection("topics").document(topic_id).delete()
+    return jsonify({"message": f"Topic {topic_id} deleted"}), 200
+
+# Delete student
+@app.route("/students/<student_id>", methods=["DELETE"])
+def delete_student(student_id):
+    db.collection("students").document(student_id).delete()
+    return jsonify({"message": f"Student {student_id} deleted"}), 200
 
 @app.route("/students/list", methods=["GET"])
 def list_students():
@@ -103,36 +174,53 @@ def upsert_student(student_id):
     db.collection("students").document(student_id).set(allowed, merge=True)
     return jsonify({"message": f"Student {student_id} updated"}), 201
 
-@app.route("/students/<student_id>/path")
+@app.route("/students/<student_id>/path", methods=["GET"])
 def student_path(student_id):
+    # Query params
+    try:
+        limit = int(request.args.get("limit", 10))
+    except (ValueError, TypeError):
+        limit = 10
+
+    # fetch student doc
     doc_ref = db.collection("students").document(student_id)
     snap = doc_ref.get()
     if not snap.exists:
         return jsonify({"error": "Student not found"}), 404
     student = snap.to_dict()
 
-    # Determine mastered topics
-    mastered = student.get("mastered", [])
+    # compute mastered topics
+    # priority: explicit 'mastered' list -> scores+finals mapping -> empty
+    mastered = list(student.get("mastered", []) or [])
     if not mastered and student.get("scores"):
-        scores = student.get("scores", {})
-        finals = student.get("finals", {})
+        scores = student.get("scores", {})        # e.g. {"fractions": 31}
+        finals = student.get("finals", {})        # e.g. {"fractions": 60}
         for topic_id, sc in scores.items():
             max_sc = finals.get(topic_id, student.get("final") or 0)
-            if max_sc > 0 and sc >= (max_sc / 2):
+            if max_sc and sc >= (max_sc / 2):
                 mastered.append(topic_id)
 
-    # Build graph
+    # Build graph and mapping id -> title
     topics_ref = db.collection("topics")
     docs = [{"id": d.id, **d.to_dict()} for d in topics_ref.stream()]
     G = build_graph_from_topics(docs)
 
-    # Recommend next topics
+    # validate DAG
+    cycles = validate_dag(G)
+    if cycles:
+        return jsonify({"error": "Curriculum graph has cycles", "cycles": cycles}), 500
+
     try:
-        recommended = recommend_next_topics(G, mastered, limit=10)
+        rec_ids = recommend_next_topics(G, mastered, limit=limit)
     except ValueError as e:
         return jsonify({"error": str(e)}), 500
 
-    return jsonify({"recommended": recommended})
+    # Map rec_ids to {id,title}
+    id_to_title = {n: G.nodes[n].get("title", "") for n in G.nodes}
+    recommended = [{"id": rid, "title": id_to_title.get(rid, "")} for rid in rec_ids]
+
+    # return current mastered for UI context too
+    return jsonify({"student_id": student_id, "mastered": mastered, "recommended": recommended})
 
 @app.route("/students/<student_id>/mastered", methods=["POST"])
 def add_mastered(student_id):
