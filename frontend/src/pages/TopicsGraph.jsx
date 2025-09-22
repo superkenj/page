@@ -1,49 +1,13 @@
 // frontend/src/pages/TopicsGraph.jsx
 import React, { useEffect, useState, useRef } from "react";
 import { ForceGraph2D } from "react-force-graph";
-import { useNavigate } from "react-router-dom";
-import { hierarchy, tree } from "d3-hierarchy";   // ⬅ import tree tools
 
 const API_BASE = "http://localhost:5000";
-
-// helper: arrange nodes in horizontal tree
-function toTreeLayout(nodes, links) {
-  // map: parent -> children
-  const childrenMap = {};
-  links.forEach(l => {
-    if (!childrenMap[l.source]) childrenMap[l.source] = [];
-    childrenMap[l.source].push(l.target);
-  });
-
-  // find root (node that is never a target)
-  const allTargets = new Set(links.map(l => l.target));
-  const rootNode = nodes.find(n => !allTargets.has(n.id));
-
-  if (!rootNode) return nodes; // fallback if no root found
-
-  // build d3 hierarchy
-  const root = hierarchy(rootNode, d =>
-    (childrenMap[d.id] || []).map(cid => nodes.find(n => n.id === cid))
-  );
-
-  // compute layout (spacing)
-  const treeLayout = tree().nodeSize([80, 200]); // y-gap, x-gap
-  treeLayout(root);
-
-  // assign positions
-  root.each(d => {
-    d.data.x = d.y; // horizontal: use y as x
-    d.data.y = d.x;
-  });
-
-  return nodes;
-}
 
 export default function TopicsGraph() {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [loading, setLoading] = useState(true);
   const fgRef = useRef();
-  const navigate = useNavigate();
 
   useEffect(() => {
     async function load() {
@@ -51,31 +15,40 @@ export default function TopicsGraph() {
       try {
         const res = await fetch(`${API_BASE}/topics/graph/details`);
         const json = await res.json();
-        if (json.error) {
-          console.error("Graph details error:", json);
-          setGraphData({ nodes: [], links: [] });
-          return;
-        }
+        if (json.error) { console.error(json); setGraphData({nodes:[],links:[]}); return; }
 
         const nodes = (json.nodes || []).map(n => ({
           id: n.id,
-          title: n.title ?? n.name ?? n.id,
-          meta: n,
+          title: n.title,
+          description: n.description,
+          cluster: n.cluster,
+          level: typeof n.level === "number" ? n.level : 0
         }));
 
-        const links = (json.edges || []).map(e => ({
-          source: e[0],
-          target: e[1],
-        }));
+        const links = (json.edges || []).map(e => ({ source: e[0], target: e[1] }));
 
-        // ⬅️ arrange nodes as horizontal tree
-        const laidOutNodes = toTreeLayout(nodes, links);
+        // layout: assign x,y based on level
+        const byLevel = {};
+        nodes.forEach(n => { (byLevel[n.level] = byLevel[n.level]||[]).push(n); });
 
-        setGraphData({ nodes: laidOutNodes, links });
+        const xGap = 260; // horizontal spacing
+        const yGap = 80;  // vertical spacing
+        const positioned = [];
+        Object.keys(byLevel).sort((a,b)=>a-b).forEach((levStr) => {
+          const lev = Number(levStr);
+          const group = byLevel[lev];
+          const total = (group.length - 1) * yGap;
+          group.forEach((node, i) => {
+            node.x = lev * xGap;
+            node.y = (i * yGap) - (total / 2);
+            positioned.push(node);
+          });
+        });
 
-        setTimeout(() => fgRef.current?.zoomToFit(400, 50), 200);
+        setGraphData({ nodes: positioned, links });
+        setTimeout(()=> fgRef.current?.zoomToFit(400, 30), 200);
       } catch (err) {
-        console.error("Failed load graph:", err);
+        console.error("Failed to load graph:", err);
       } finally {
         setLoading(false);
       }
@@ -83,43 +56,44 @@ export default function TopicsGraph() {
     load();
   }, []);
 
-  // draw node: circle + text
+  useEffect(() => {
+    if (!fgRef.current) return;
+    try {
+      fgRef.current.d3Force('charge', null);
+      fgRef.current.d3Force('link', null);
+      fgRef.current.d3Force('center', null);
+    } catch(e) {}
+  }, [graphData]);
+
   const nodeCanvasObject = (node, ctx, globalScale) => {
     const label = node.title || node.id;
     const fontSize = 12 / globalScale;
     ctx.font = `${Math.max(fontSize, 8)}px Sans-Serif`;
-
     ctx.beginPath();
-    ctx.arc(node.x, node.y, 10, 0, 2 * Math.PI, false);
-    ctx.fillStyle = node.color || "#cfcfcf";
+    ctx.arc(node.x, node.y, 10, 0, 2*Math.PI, false);
+    ctx.fillStyle = "#93c5fd";
     ctx.fill();
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = "#333";
-    ctx.stroke();
-
-    ctx.fillStyle = "#111";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText(label, node.x + 12, node.y);
+    ctx.strokeStyle = "#333"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = "#111"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    const truncated = label.length > 30 ? label.slice(0,30) + "…" : label;
+    ctx.fillText(truncated, node.x + 14, node.y);
   };
 
   return (
     <div style={{ padding: 16 }}>
-      <h1>Topics Graph (Tree Layout)</h1>
-      {loading ? (
-        <div>Loading graph…</div>
-      ) : (
-        <div style={{ height: "700px", borderRadius: 8, background: "#fff" }}>
+      <h1>Topics Graph</h1>
+      {loading ? <div>Loading...</div> : (
+        <div style={{ height: "720px", background: "#fff", borderRadius: 8 }}>
           <ForceGraph2D
             ref={fgRef}
             graphData={graphData}
-            nodeLabel={n => `${n.title} (${n.id})`}
+            nodeLabel={n => `${n.title}\n${n.description}`}
             nodeCanvasObject={nodeCanvasObject}
-            linkDirectionalArrowLength={6}
-            linkDirectionalArrowRelPos={1}
-            d3VelocityDecay={0.9}
-            d3AlphaDecay={1}   // <-- stops the simulation quickly
-            d3Force="none"     // <-- disables automatic force layout
+            enableNodeDrag={false}
+            cooldownTicks={0}
+            linkWidth={1}
+            linkColor={() => '#bdbdbd'}
+            onNodeClick={n => alert(`${n.title}\n\n${n.description}`)}
           />
         </div>
       )}

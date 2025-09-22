@@ -1,14 +1,17 @@
+//Topics.jsx
+
 import { useEffect, useState } from "react";
 const API_BASE = "http://localhost:5000";
 
 export default function Topics() {
   const [topics, setTopics] = useState([]);
-  const [form, setForm] = useState({ id: "", name: "", description: "", prerequisites: [] });
+  const [form, setForm] = useState({ id: "", name: "", description: "", prerequisites: [], cluster: "" });
 
   useEffect(() => { load(); }, []);
   async function load() {
     const res = await fetch(`${API_BASE}/topics/list`);
     const data = await res.json();
+    console.log("Fetched topics:", data);  // 👈 check here
     setTopics(data);
   }
 
@@ -23,7 +26,8 @@ export default function Topics() {
     const payload = { 
       name: form.name, 
       description: form.description, 
-      prerequisites: form.prerequisites 
+      prerequisites: form.prerequisites,   // ✅ FIX: add comma
+      cluster: form.cluster || "Uncategorized"  // ✅ FIX
     };
     const res = await fetch(`${API_BASE}/topics/${form.id}`, {
       method: "POST",
@@ -31,7 +35,7 @@ export default function Topics() {
       body: JSON.stringify(payload)
     });
     await load();
-    setForm({ id: "", name: "", description: "", prerequisites: [] });
+    setForm({ id: "", name: "", description: "", prerequisites: [], cluster: "" });
   }
 
   function editTopic(t){
@@ -39,7 +43,8 @@ export default function Topics() {
       id: t.id, 
       name: t.name || "", 
       description: t.description || "", 
-      prerequisites: t.prerequisites || [] 
+      prerequisites: t.prerequisites || [],  // ✅ FIX: add comma
+      cluster: t.cluster || ""               // ✅ FIX
     });
   }
 
@@ -48,6 +53,13 @@ export default function Topics() {
     await fetch(`${API_BASE}/topics/${id}`, { method:"DELETE" });
     await load();
   }
+
+  const clusters = topics.reduce((acc, t) => {
+    const cluster = t.cluster || "Uncategorized";
+    if (!acc[cluster]) acc[cluster] = [];
+    acc[cluster].push(t);
+    return acc;
+  }, {});
 
   return (
     <div style={{ padding: 20 }}>
@@ -97,10 +109,19 @@ export default function Topics() {
         </div>
 
         <div style={{ marginTop: 8 }}>
+          <input
+            style={{ width: "100%" }}
+            placeholder="Cluster"
+            value={form.cluster || ""}
+            onChange={e => setField("cluster", e.target.value)}
+          />
+        </div>
+
+        <div style={{ marginTop: 8 }}>
           <button type="submit">Save Topic</button>
           <button
             type="button"
-            onClick={() => setForm({ id: "", name: "", description: "", prerequisites: [] })}
+            onClick={() => setForm({ id: "", name: "", description: "", prerequisites: [], cluster: "" })}
             style={{ marginLeft: 8 }}
           >
             Clear
@@ -108,22 +129,28 @@ export default function Topics() {
         </div>
       </form>
 
+      {/* Grouped by cluster */}
       <div>
-        {topics.map(t => (
-          <div key={t.id} style={{ padding:8, border:"1px solid #eee", borderRadius:8, marginBottom:8, background:"#fff" }}>
-            <div style={{ display:"flex", justifyContent:"space-between" }}>
-              <div>
-                <strong>{t.name} [{t.id}]</strong>
-                <div style={{ fontSize: 12, color: "#666" }}>{t.description}</div>
-                <div style={{ fontSize: 12, color: "#666" }}>
-                  Prerequisites: {(t.prerequisites || []).join(", ") || "None"}
+        {Object.entries(clusters).map(([cluster, items]) => (
+          <div key={cluster} style={{ marginBottom: 20 }}>
+            <h2>{cluster}</h2>
+            {items.map(t => (
+              <div key={t.id} style={{ padding:8, border:"1px solid #eee", borderRadius:8, marginBottom:8, background:"#fff" }}>
+                <div style={{ display:"flex", justifyContent:"space-between" }}>
+                  <div>
+                    <strong>{t.name} [{t.id}]</strong>
+                    <div style={{ fontSize: 12, color: "#666" }}>{t.description}</div>
+                    <div style={{ fontSize: 12, color: "#666" }}>
+                      Prerequisites: {(t.prerequisites || []).join(", ") || "None"}
+                    </div>
+                  </div>
+                  <div>
+                    <button onClick={()=>editTopic(t)} style={{marginRight:8}}>Edit</button>
+                    <button onClick={()=>delTopic(t.id)}>Delete</button>
+                  </div>
                 </div>
               </div>
-              <div>
-                <button onClick={()=>editTopic(t)} style={{marginRight:8}}>Edit</button>
-                <button onClick={()=>delTopic(t.id)}>Delete</button>
-              </div>
-            </div>
+            ))}
           </div>
         ))}
       </div>

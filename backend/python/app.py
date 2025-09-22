@@ -83,10 +83,31 @@ def topics_graph_details():
     topics_ref = db.collection("topics")
     docs = [{"id": d.id, **d.to_dict()} for d in topics_ref.stream()]
     G = build_graph_from_topics(docs)
+    
     cycles = validate_dag(G)
     if cycles:
         return jsonify({"error": "Graph has cycles", "cycles": cycles}), 500
-    nodes = nodes_with_titles(G)
+    
+    # assign levels (new)
+    try:
+        from graph_service import assign_levels_to_graph
+        assign_levels_to_graph(G)
+    except Exception as e:
+        # if something goes wrong with levels, continue but log
+        print("assign_levels error:", e)
+
+    # produce nodes with metadata (title/description/cluster/level)
+    nodes = []
+    for n in G.nodes:
+        node_data = G.nodes[n] if isinstance(G.nodes[n], dict) else {}
+        nodes.append({
+            "id": n,
+            "title": node_data.get("name") or node_data.get("title") or n,
+            "description": node_data.get("description", ""),
+            "cluster": node_data.get("cluster", ""),
+            "level": node_data.get("level", 0)
+        })
+
     edges = [list(e) for e in G.edges()]
     return jsonify({"nodes": nodes, "edges": edges, "count": len(nodes)})
 
@@ -101,7 +122,8 @@ def list_topics():
             "id": d.id,
             "name": doc.get("name"),
             "description": doc.get("description"),
-            "prerequisites": doc.get("prerequisites", [])
+            "prerequisites": doc.get("prerequisites", []),
+            "cluster": doc.get("cluster", "Uncategorized")
         })
     return jsonify(out)
 

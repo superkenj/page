@@ -121,3 +121,31 @@ def nodes_with_titles(G: nx.DiGraph) -> List[Dict[str, Any]]:
             "prerequisites": list(G.predecessors(n))
         })
     return out
+
+def assign_levels_to_graph(G):
+    """
+    Assign integer 'level' attribute to each node.
+    Root nodes (no predecessors) => level 0.
+    node.level = max(predecessor.level) + 1
+    """
+    # safe-guard: if graph empty
+    if G is None or len(G.nodes) == 0:
+        return {}
+
+    levels = {}
+    try:
+        topo = list(nx.topological_sort(G))
+    except Exception as e:
+        # If graph has cycles, bail
+        raise
+
+    for n in topo:
+        preds = list(G.predecessors(n))
+        if not preds:
+            levels[n] = 0
+        else:
+            levels[n] = max(levels.get(p, 0) for p in preds) + 1
+    # attach to node attrs
+    for n, lvl in levels.items():
+        G.nodes[n]["level"] = lvl
+    return levels
