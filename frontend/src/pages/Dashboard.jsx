@@ -11,6 +11,11 @@ function Dashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const role = localStorage.getItem("role");
+    if (role !== "teacher") navigate("/");
+  }, []);
+
+  useEffect(() => {
     async function fetchSummary() {
       try {
         const res = await fetch(`${API_BASE}/dashboard/summary`);
@@ -77,7 +82,7 @@ function Dashboard() {
         {/* Students Card */}
         <div
           style={cardStyle}
-          onClick={() => navigate("/students")}
+          onClick={() => navigate("/teacher/students")}
           onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
           onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
         >
@@ -95,7 +100,7 @@ function Dashboard() {
         {/* Topics Card */}
         <div
           style={cardStyle}
-          onClick={() => navigate("/topics")}
+          onClick={() => navigate("/teacher/topics")}
           onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
           onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
         >

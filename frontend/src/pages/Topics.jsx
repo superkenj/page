@@ -7,6 +7,11 @@ export default function Topics() {
   const [topics, setTopics] = useState([]);
   const [form, setForm] = useState({ id: "", name: "", description: "", prerequisites: [], cluster: "" });
 
+  useEffect(() => {
+    const role = localStorage.getItem("role");
+    if (role !== "teacher") navigate("/");
+  }, []);
+
   useEffect(() => { load(); }, []);
   async function load() {
     const res = await fetch(`${API_BASE}/topics/list`);

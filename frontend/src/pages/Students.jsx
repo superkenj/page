@@ -6,7 +6,10 @@ const API_BASE = "http://localhost:5000";
 
 function Students() {
   const navigate = useNavigate();
-
+  
+  const [csvFile, setCsvFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadThreshold, setUploadThreshold] = useState(0.5);
   const [students, setStudents] = useState([]);
   const [form, setForm] = useState({ id: "", name: "", score: "", final: "" });
   const [editing, setEditing] = useState(false);
@@ -15,6 +18,11 @@ function Students() {
   const [recommendLoading, setRecommendLoading] = useState({}); // { studentId: bool }
   const [filter, setFilter] = useState("all"); // all | pass | fail
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    const role = localStorage.getItem("role");
+    if (role !== "teacher") navigate("/");
+  }, []);
 
   useEffect(() => { fetchStudents(); }, []);
 
@@ -144,6 +152,65 @@ function Students() {
     }
   }
 
+  async function handleUploadCsv() {
+    if (!csvFile) { alert("Choose a CSV file"); return; }
+    setUploading(true);
+
+    const text = await csvFile.text();
+    // parse naive CSV: split lines, split by comma
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const rows = lines.map(line => {
+      // naive split; assumes no commas inside fields
+      const parts = line.split(",").map(p => p.trim());
+      // expected: id,name,topic,score,final
+      return parts;
+    });
+
+    // build per-student map
+    const studentsMap = {};
+    for (const parts of rows) {
+      if (parts.length < 5) continue;
+      const [sid, sname, topic, scoreStr, finalStr] = parts;
+      if (!sid || !topic) continue;
+      if (!studentsMap[sid]) studentsMap[sid] = { id: sid, name: sname || "", scores: {}, finals: {}, threshold: uploadThreshold };
+      // try parse numbers
+      const sc = Number(scoreStr);
+      const fin = Number(finalStr);
+      if (!Number.isNaN(sc)) studentsMap[sid].scores[topic] = sc;
+      if (!Number.isNaN(fin)) studentsMap[sid].finals[topic] = fin;
+    }
+
+    const payload = Object.values(studentsMap);
+    if (!payload.length) {
+      alert("No valid rows found in CSV (expected columns: id,name,topic,score,final)");
+      setUploading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/students/bulk_upload`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        console.error("Upload error", json);
+        alert("Upload failed: " + (json.error || "unknown"));
+      } else {
+        console.log("Upload result", json);
+        alert("Upload finished. Updated " + json.results.length + " students.");
+        await fetchStudents(); // refresh student list
+      }
+    } catch (err) {
+      console.error("Upload exception", err);
+      alert("Upload failed: " + err.message);
+    } finally {
+      setUploading(false);
+      setCsvFile(null);
+    }
+  }
+
   // Derived & filter
   const filtered = students.filter(s => {
     if (!s) return false;
@@ -201,6 +268,35 @@ function Students() {
           Reset
         </button>
       </form>
+
+      {/* CSV Upload */}
+      <div style={{ marginBottom: 16, padding: 12, border: "1px dashed #ccc", borderRadius: 8 }}>
+        <div style={{ marginBottom: 8 }}><strong>Bulk upload scores (CSV)</strong></div>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+          <input type="file" accept=".csv" onChange={e => setCsvFile(e.target.files?.[0] || null)} />
+          <div>
+            <label style={{ fontSize: 12, display: "block" }}>Threshold (fraction):</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              max="1"
+              value={uploadThreshold}
+              onChange={e => setUploadThreshold(Number(e.target.value))}
+              style={{ width: 80 }}
+            />
+          </div>
+          <button onClick={handleUploadCsv} disabled={!csvFile || uploading}>
+            {uploading ? "Uploading..." : "Upload CSV"}
+          </button>
+        </div>
+
+        <div style={{ fontSize: 12, color: "#666" }}>
+          CSV format (rows): <code>student_id,student_name,topic_id,score,final</code><br />
+          Multiple rows per student allowed — the uploader will group scores by student.
+        </div>
+      </div>
 
       {loading ? <div>Loading students...</div> : (
         <table style={{ width: "100%", borderCollapse: "collapse", background: "#fff", borderRadius: 8 }}>

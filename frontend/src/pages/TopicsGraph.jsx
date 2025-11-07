@@ -10,6 +10,11 @@ export default function TopicsGraph() {
   const fgRef = useRef();
 
   useEffect(() => {
+    const role = localStorage.getItem("role");
+    if (role !== "teacher") navigate("/");
+  }, []);
+
+  useEffect(() => {
     async function load() {
       setLoading(true);
       try {

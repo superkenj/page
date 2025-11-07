@@ -4,33 +4,44 @@ import networkx as nx
 
 def build_graph_from_topics(topics: Iterable[Dict[str, Any]]) -> nx.DiGraph:
     """
-    Build a directed graph from topics.
-    Each topic should be a dict with 'id' and optionally 'title' and 'prerequisites' (list).
-    Nodes will have attribute 'title'.
+    Build a directed graph from topic data.
+    Each topic should have:
+      - id (required)
+      - name or title
+      - description (optional)
+      - prerequisites (optional)
+      - cluster (optional)
     """
     G = nx.DiGraph()
-    # Add nodes with title attribute
-    for t in topics:
-        tid = t.get("id") or t.get("doc_id")
-        if not tid:
-            continue
-        title = t.get("title", "")
-        G.add_node(tid, title=title)
 
-    # Add edges from prereq -> topic
     for t in topics:
         tid = t.get("id") or t.get("doc_id")
         if not tid:
             continue
-        prereqs = t.get("prerequisites") or []
-        for p in prereqs:
-            if p == tid:
+
+        # Add node with metadata
+        G.add_node(tid, **{
+            "name": t.get("name") or t.get("title") or tid,
+            "title": t.get("title") or t.get("name") or tid,
+            "description": t.get("description", ""),
+            "cluster": t.get("cluster", "Uncategorized"),
+            "prerequisites": t.get("prerequisites", []),
+        })
+
+    # Add edges from prerequisites → topic
+    for t in topics:
+        tid = t.get("id") or t.get("doc_id")
+        if not tid:
+            continue
+        for p in t.get("prerequisites", []):
+            if not p or p == tid:
                 continue
-            # If prereq node missing, still create it (title empty) to avoid KeyError later
             if p not in G:
-                G.add_node(p, title="")
+                G.add_node(p, title=p)
             G.add_edge(p, tid)
+
     return G
+
 
 def validate_dag(G: nx.DiGraph) -> Optional[List[List[str]]]:
     """
