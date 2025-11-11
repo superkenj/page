@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { ForceGraph2D } from "react-force-graph";
 import { useParams, useNavigate } from "react-router-dom";
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = "https://page-jirk.onrender.com";
 
 export default function StudentPath() {
   const { id: studentId } = useParams();

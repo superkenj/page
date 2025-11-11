@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaUserGraduate, FaBook } from "react-icons/fa";
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = "https://page-jirk.onrender.com";
 
 function Dashboard() {
   const [summary, setSummary] = useState(null);

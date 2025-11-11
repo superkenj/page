@@ -2,7 +2,7 @@
 import { Outlet, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = "https://page-jirk.onrender.com";
 
 export default function StudentLayout() {
   const [student, setStudent] = useState(null);

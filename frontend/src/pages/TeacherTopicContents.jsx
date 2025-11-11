@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = "https://page-jirk.onrender.com";
 
 export default function TeacherTopicContents() {
   const { topicId } = useParams();

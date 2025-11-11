@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { ForceGraph2D } from "react-force-graph";
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = "https://page-jirk.onrender.com";
 
 export default function TopicsGraph() {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
