@@ -18,7 +18,7 @@ function Dashboard() {
   useEffect(() => {
     async function fetchSummary() {
       try {
-        const res = await fetch(`${API_BASE}/dashboard/summary`);
+        const res = await fetch(`${API_BASE}/teacher/summary`);
         const data = await res.json();
         setSummary(data);
       } catch (err) {

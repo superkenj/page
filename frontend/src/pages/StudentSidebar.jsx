@@ -1,81 +1,106 @@
-// frontend/src/pages/StudentSidebar.jsx
-import { Link, useNavigate, useParams } from "react-router-dom";
+// frontend/src/components/StudentSidebar.jsx
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+
+const API_BASE = "http://localhost:5000";
 
 export default function StudentSidebar() {
-  const navigate = useNavigate();
-  const { id: studentId } = useParams();
+  const { id } = useParams();
+  const [path, setPath] = useState({
+    mastered: [],
+    recommended: [],
+  });
+  const [topics, setTopics] = useState([]);
 
-  function handleLogout() {
-    localStorage.clear();
-    navigate("/");
-  }
+  useEffect(() => {
+    async function loadSidebarData() {
+      try {
+        const tRes = await fetch(`${API_BASE}/topics/list`);
+        const tJson = await tRes.json();
+        setTopics(Array.isArray(tJson) ? tJson : tJson.topics || []);
 
-  const linkStyle = {
-    display: "block",
-    padding: "10px 16px",
-    textDecoration: "none",
-    color: "#111",
-    borderRadius: "6px",
-    marginBottom: "4px",
-  };
+        const pRes = await fetch(`${API_BASE}/students/${id}/path`);
+        const pJson = await pRes.json();
+        setPath({
+          mastered: pJson.mastered || [],
+          recommended: pJson.recommended || [],
+        });
+      } catch (err) {
+        console.error("Sidebar data load error:", err);
+      }
+    }
+    loadSidebarData();
+  }, [id]);
 
-  const linkHover = { background: "#e5e7eb" };
-
-  const sidebarStyle = {
-    width: "220px",
-    minHeight: "100vh",
-    background: "#f3f4f6",
-    padding: "1rem",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-between",
-  };
+  const masteredCount = path.mastered.length;
+  const totalTopics = topics.length;
+  const progressPercent =
+    totalTopics > 0 ? Math.round((masteredCount / totalTopics) * 100) : 0;
 
   return (
-    <div style={sidebarStyle}>
-      <div>
-        <h2 style={{ fontSize: "1.2rem", marginBottom: "1rem" }}>Student Panel</h2>
-        <nav>
-          <Link
-            to={`/student-dashboard/${studentId}`}
-            style={linkStyle}
-            onMouseOver={(e) => Object.assign(e.target.style, linkHover)}
-            onMouseOut={(e) => (e.target.style.background = "none")}
-          >
-            🏠 Dashboard
-          </Link>
-          <Link
-            to={`/student-dashboard/${studentId}?tab=topics`}
-            style={linkStyle}
-            onMouseOver={(e) => Object.assign(e.target.style, linkHover)}
-            onMouseOut={(e) => (e.target.style.background = "none")}
-          >
-            📚 My Topics
-          </Link>
-          <Link
-            to={`/student-dashboard/${studentId}?tab=progress`}
-            style={linkStyle}
-            onMouseOver={(e) => Object.assign(e.target.style, linkHover)}
-            onMouseOut={(e) => (e.target.style.background = "none")}
-          >
-            🧾 Progress
-          </Link>
-        </nav>
+    <div
+      style={{
+        width: 280,
+        background: "#2563eb",
+        color: "white",
+        padding: "24px 20px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+      }}
+    >
+      <img
+        src="https://cdn-icons-png.flaticon.com/512/201/201818.png"
+        alt="Student Avatar"
+        style={{
+          width: 90,
+          height: 90,
+          borderRadius: "50%",
+          marginBottom: 12,
+          border: "3px solid #fff",
+        }}
+      />
+      <h3>Hello!</h3>
+      <p style={{ textAlign: "center", fontSize: 14, color: "#e0e7ff" }}>
+        Keep up the great work! 🌟
+      </p>
+
+      <div style={{ marginTop: 24, width: "100%" }}>
+        <h4>Your Progress</h4>
+        <div
+          style={{
+            background: "#1e3a8a",
+            borderRadius: 6,
+            height: 8,
+            marginBottom: 6,
+          }}
+        >
+          <div
+            style={{
+              width: `${progressPercent}%`,
+              height: "100%",
+              background: "#22c55e",
+              borderRadius: 6,
+            }}
+          ></div>
+        </div>
+        <p style={{ fontSize: 13 }}>{progressPercent}% Complete</p>
       </div>
 
-      <button
-        onClick={handleLogout}
-        style={{
-          background: "#dc2626",
-          color: "#fff",
-          border: "none",
-          padding: "10px",
-          borderRadius: "6px",
-          cursor: "pointer",
-        }}
-      >
-        Logout
-      </button>
+      <div style={{ marginTop: 24, width: "100%" }}>
+        <h4>⭐ Recommended Topics</h4>
+        {path.recommended.length ? (
+          <ul style={{ fontSize: 14, color: "#e0e7ff" }}>
+            {path.recommended.map((r) => (
+              <li key={r}>• {r}</li>
+            ))}
+          </ul>
+        ) : (
+          <p style={{ fontSize: 13, color: "#cbd5e1" }}>
+            No recommendations yet.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

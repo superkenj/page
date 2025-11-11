@@ -1,35 +1,53 @@
-import { Outlet } from "react-router-dom";
+// frontend/src/pages/StudentLayout.jsx
+import { Outlet, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 
 const API_BASE = "http://localhost:5000";
 
 export default function StudentLayout() {
   const [student, setStudent] = useState(null);
-  const [progress, setProgress] = useState({ total: 0, mastered: 0 });
+  const [topics, setTopics] = useState([]);
+  const [mastered, setMastered] = useState([]);
   const [recommended, setRecommended] = useState([]);
   const [quote, setQuote] = useState("");
+  const navigate = useNavigate();
 
   useEffect(() => {
-    async function load() {
+    async function loadData() {
       const id = localStorage.getItem("studentId");
       if (!id) return;
 
-      const stuRes = await fetch(`${API_BASE}/students/${id}`);
-      const stuJson = await stuRes.json();
-      setStudent(stuJson);
+      try {
+        // ✅ Fetch student info
+        const stuRes = await fetch(`${API_BASE}/students/${id}`);
+        const stuJson = await stuRes.json();
+        setStudent(stuJson);
 
-      const pathRes = await fetch(`${API_BASE}/students/${id}/path`);
-      const pathJson = await pathRes.json();
+        // ✅ Get mastered topics
+        const masteredTopics = stuJson.mastered || [];
+        setMastered(masteredTopics);
 
-      setProgress({
-        total: pathJson.mastered.length + pathJson.recommended.length,
-        mastered: pathJson.mastered.length,
-      });
-      setRecommended(pathJson.recommended.slice(0, 3));
+        // ✅ Fetch all topics
+        const topicRes = await fetch(`${API_BASE}/topics/list`);
+        const topicsJson = await topicRes.json();
+
+        // normalize data
+        const allTopics = Array.isArray(topicsJson)
+          ? topicsJson
+          : topicsJson.topics || [];
+        setTopics(allTopics);
+
+        // ✅ Compute recommended
+        const computed = computeRecommended(allTopics, masteredTopics);
+        setRecommended(computed);
+      } catch (err) {
+        console.error("Error loading student layout:", err);
+      }
     }
-    load();
 
-    // rotate quotes daily
+    loadData();
+
+    // ✅ Rotating quote
     const quotes = [
       "Mathematics is the language of the universe!",
       "Every problem has a solution — let’s find it!",
@@ -39,30 +57,78 @@ export default function StudentLayout() {
     setQuote(quotes[Math.floor(Math.random() * quotes.length)]);
   }, []);
 
-  const progressPercent = progress.total
-    ? Math.round((progress.mastered / progress.total) * 100)
-    : 0;
+  // ✅ Function to compute recommended topics
+  function computeRecommended(allTopics, masteredList) {
+    if (!Array.isArray(allTopics) || !Array.isArray(masteredList)) return [];
+    const masteredSet = new Set(masteredList);
+
+    return allTopics
+      .filter((topic) => {
+        // Skip if already mastered
+        if (masteredSet.has(topic.id)) return false;
+
+        // If no prerequisites, skip (assume basic topic already known)
+        if (!topic.prerequisites || topic.prerequisites.length === 0)
+          return false;
+
+        // Recommend only if all prerequisites are mastered
+        return topic.prerequisites.every((p) => masteredSet.has(p));
+      })
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+      }));
+  }
+
+  // ✅ Compute progress
+  const progressPercent =
+    topics.length > 0
+      ? Math.round((mastered.length / topics.length) * 100)
+      : 0;
+
+  // ✅ Logout handler
+  function handleLogout() {
+    localStorage.removeItem("studentId");
+    localStorage.removeItem("role");
+    navigate("/");
+  }
+
+  // ✅ Avatar by gender
+  const avatarUrl =
+    student?.gender === "male"
+      ? "https://cdn-icons-png.flaticon.com/512/4140/4140048.png"
+      : "https://cdn-icons-png.flaticon.com/512/706/706830.png";
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f0f9ff" }}>
-      {/* 🌈 Sidebar */}
+    <div
+      style={{
+        display: "flex",
+        minHeight: "100vh",
+        background: "#f0f9ff",
+      }}
+    >
+      {/* Sidebar */}
       <aside
         style={{
           width: 280,
           background: "linear-gradient(180deg, #3b82f6 0%, #2563eb 100%)",
           color: "white",
           padding: "1.5rem",
-          boxShadow: "4px 0 10px rgba(0,0,0,0.1)",
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
+          boxShadow: "4px 0 10px rgba(0,0,0,0.1)",
+          borderRadius: "0 20px 20px 0",
+          position: "sticky",
+          top: 0,
+          height: "100vh",
         }}
       >
         <div>
           {/* Profile */}
           <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
             <img
-              src="https://cdn-icons-png.flaticon.com/512/706/706830.png"
+              src={avatarUrl}
               alt="avatar"
               style={{
                 width: 80,
@@ -107,7 +173,14 @@ export default function StudentLayout() {
           {/* Recommended Topics */}
           <div>
             <p style={{ fontWeight: "bold" }}>⭐ Recommended Topics</p>
-            <ul style={{ listStyle: "none", paddingLeft: 0, fontSize: "0.9rem" }}>
+            <ul
+              style={{
+                listStyle: "none",
+                paddingLeft: 0,
+                fontSize: "0.9rem",
+                marginBottom: "1rem",
+              }}
+            >
               {recommended.length ? (
                 recommended.map((r) => (
                   <li
@@ -119,28 +192,49 @@ export default function StudentLayout() {
                       marginBottom: "6px",
                     }}
                   >
-                    {r.title || r.id}
+                    {r.name}
                   </li>
                 ))
               ) : (
                 <li>No recommendations yet</li>
               )}
             </ul>
+
+            {/* Daily Quote */}
+            <div
+              style={{
+                background: "rgba(255,255,255,0.2)",
+                borderRadius: "10px",
+                padding: "10px",
+                fontSize: "0.85rem",
+                fontStyle: "italic",
+              }}
+            >
+              💬 “{quote}”
+            </div>
           </div>
         </div>
 
-        {/* Daily Quote */}
-        <div
+        {/* Logout Button */}
+        <button
+          onClick={handleLogout}
           style={{
-            background: "rgba(255,255,255,0.2)",
+            width: "100%",
+            background: "#ef4444",
+            border: "none",
+            color: "white",
+            padding: "10px 0",
             borderRadius: "10px",
-            padding: "10px",
-            fontSize: "0.85rem",
-            fontStyle: "italic",
+            fontWeight: "bold",
+            marginTop: "1.5rem",
+            cursor: "pointer",
+            transition: "background 0.2s ease",
           }}
+          onMouseOver={(e) => (e.currentTarget.style.background = "#dc2626")}
+          onMouseOut={(e) => (e.currentTarget.style.background = "#ef4444")}
         >
-          💬 “{quote}”
-        </div>
+          Logout
+        </button>
       </aside>
 
       {/* Main Dashboard */}

@@ -30,12 +30,9 @@ function Students() {
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/students/list`);
-      if (!res.ok) {
-        const err = await res.json().catch(()=>({error: "unknown"}));
-        throw new Error(err.error || "Failed to load students");
-      }
       const data = await res.json();
-      setStudents(data);
+      if (!res.ok) {throw new Error(data.message || data.error || "Failed to load students");}
+      setStudents(data.students || []);
     } catch (err) {
       console.error("fetchStudents error:", err);
       alert("Could not load students: " + err.message);

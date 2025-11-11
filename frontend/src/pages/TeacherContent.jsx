@@ -17,7 +17,7 @@ export default function TeacherContent() {
     async function loadTopics() {
       const res = await fetch(`${API_BASE}/topics/list`);
       const json = await res.json();
-      setTopics(json);
+      setTopics(Array.isArray(json) ? json : json.topics || []);
     }
     loadTopics();
   }, []);
@@ -27,7 +27,7 @@ export default function TeacherContent() {
     async function loadContents() {
       const res = await fetch(`${API_BASE}/content`);
       const json = await res.json();
-      setContents(json);
+      setContents(Array.isArray(json) ? json : json.contents || []);
     }
     loadContents();
   }, []);
