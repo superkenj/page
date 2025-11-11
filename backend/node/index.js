@@ -106,60 +106,68 @@ app.get("/students/:id/path", async (req, res) => {
   try {
     const studentId = req.params.id;
     const studentDoc = await db.collection("students").doc(studentId).get();
-    const topicsSnap = await db.collection("topics").get();
-
     if (!studentDoc.exists) {
-      return res.status(404).json({
-        mastered: [],
-        recommended: [],
-        inProgress: [],
-        upcoming: [],
-        error: "Student not found",
-      });
+      return res.status(404).json({ error: "Student not found" });
     }
 
-    const studentData = studentDoc.data() || {};
-    const mastered = Array.isArray(studentData.mastered) ? studentData.mastered : [];
+    const studentData = studentDoc.data();
+    const mastered = Array.isArray(studentData.mastered)
+      ? studentData.mastered
+      : [];
 
-    // Get all topics
+    // Fetch topics from Firestore
+    const topicsSnap = await db.collection("topics").get();
     const allTopics = topicsSnap.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
 
-    // Find topics where all prerequisites are mastered
+    // Map topic IDs → details
+    const idToData = {};
+    allTopics.forEach((t) => {
+      idToData[t.id] = {
+        title: t.name || t.title || t.id,
+        description: t.description || "",
+        cluster: t.cluster || "Uncategorized",
+        prerequisites: t.prerequisites || [],
+      };
+    });
+
+    // Compute recommended topics (same logic as Flask’s recommend_next_topics)
     const recommended = allTopics
       .filter((topic) => {
         const prereqs = topic.prerequisites || [];
         return (
           prereqs.length > 0 &&
-          prereqs.every((req) => mastered.includes(req)) &&
+          prereqs.every((p) => mastered.includes(p)) &&
           !mastered.includes(topic.id)
         );
       })
-      .map((t) => t.id);
+      .map((t) => ({
+        id: t.id,
+        title: t.name || t.title || t.id,
+        description: t.description || "",
+        cluster: t.cluster || "Uncategorized",
+      }));
 
-    const path = {
-      mastered,
+    // Build mastered with full details
+    const masteredDetailed = mastered.map((mid) => ({
+      id: mid,
+      title: idToData[mid]?.title || mid,
+      description: idToData[mid]?.description || "",
+      cluster: idToData[mid]?.cluster || "Uncategorized",
+    }));
+
+    res.status(200).json({
+      student_id: studentId,
+      mastered: masteredDetailed,
       recommended,
-      inProgress: Array.isArray(studentData.inProgress)
-        ? studentData.inProgress
-        : [],
-      upcoming: Array.isArray(studentData.upcoming)
-        ? studentData.upcoming
-        : [],
-    };
-
-    res.status(200).json(path);
-  } catch (err) {
-    console.error("Error computing student path:", err);
-    res.status(500).json({
-      mastered: [],
-      recommended: [],
-      inProgress: [],
-      upcoming: [],
-      error: "Internal Server Error",
+      inProgress: studentData.inProgress || [],
+      upcoming: studentData.upcoming || [],
     });
+  } catch (err) {
+    console.error("Error building student path:", err);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
