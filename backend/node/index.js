@@ -14,12 +14,21 @@ const db = admin.firestore();
 const app = express();
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: [
+      "http://localhost:3000",
+      "https://pathgen.netlify.app", // your frontend (Netlify) domain
+    ],
     methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   })
 );
+app.options("*", cors()); 
 app.use(express.json());
+
+app.get("/", (req, res) => {
+  res.send("✅ PaGe backend is running successfully!");
+});
 
 // ------------------------------------------------
 // 🔹 STUDENTS ROUTES

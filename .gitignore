@@ -9,3 +9,9 @@ venv/
 
 # Logs
 *.log
+
+# Environment files
+.env.local
+.env
+
+serviceAccountKey.json

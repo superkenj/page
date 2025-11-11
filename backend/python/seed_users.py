@@ -9,6 +9,8 @@ db = firestore.client()
 users = [
     {"id": "teacher001", "name": "Ms. dela Cerna", "role": "teacher"},
     {"id": "teacher002", "name": "Mr. Bastasa", "role": "teacher"},
+    {"id": "student001", "name": "Arrol Zyl Bastasa", "role": "student"},
+    {"id": "student002", "name": "Zia Valdez", "role": "student"},
 ]
 
 for user in users:
