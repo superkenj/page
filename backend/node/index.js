@@ -101,73 +101,96 @@ app.post("/students/:id", async (req, res) => {
   }
 });
 
-// ✅ Student learning path (used by StudentDashboard)
+// Student learning path (used by StudentDashboard)
 app.get("/students/:id/path", async (req, res) => {
   try {
     const studentId = req.params.id;
     const studentDoc = await db.collection("students").doc(studentId).get();
     if (!studentDoc.exists) {
-      return res.status(404).json({ error: "Student not found" });
+      return res.status(404).json({
+        student_id: studentId,
+        mastered_ids: [],
+        mastered: [],
+        recommended_ids: [],
+        recommended: [],
+        inProgress: [],
+        upcoming: [],
+        error: "Student not found",
+      });
     }
 
-    const studentData = studentDoc.data();
-    const mastered = Array.isArray(studentData.mastered)
-      ? studentData.mastered
-      : [];
+    const studentData = studentDoc.data() || {};
 
-    // Fetch topics from Firestore
+    // Normalise mastered ids (explicit list first, else try compute from scores/finals)
+    let masteredIds = Array.isArray(studentData.mastered) ? [...studentData.mastered] : [];
+
+    // fallback compute if explicit mastered empty
+    if (!masteredIds.length && studentData.scores) {
+      const scores = studentData.scores || {};
+      const finals = studentData.finals || {};
+      const globalFinal = studentData.final || 0;
+      for (const [tid, scRaw] of Object.entries(scores)) {
+        const sc = Number(scRaw);
+        const maxSc = Number(finals[tid] ?? globalFinal ?? 0);
+        if (maxSc && sc >= (maxSc * 0.5)) {
+          if (!masteredIds.includes(tid)) masteredIds.push(tid);
+        }
+      }
+    }
+
+    // fetch all topics and build id -> data map
     const topicsSnap = await db.collection("topics").get();
-    const allTopics = topicsSnap.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const allTopics = topicsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-    // Map topic IDs → details
     const idToData = {};
     allTopics.forEach((t) => {
       idToData[t.id] = {
-        title: t.name || t.title || t.id,
-        description: t.description || "",
-        cluster: t.cluster || "Uncategorized",
-        prerequisites: t.prerequisites || [],
-      };
-    });
-
-    // Compute recommended topics (same logic as Flask’s recommend_next_topics)
-    const recommended = allTopics
-      .filter((topic) => {
-        const prereqs = topic.prerequisites || [];
-        return (
-          prereqs.length > 0 &&
-          prereqs.every((p) => mastered.includes(p)) &&
-          !mastered.includes(topic.id)
-        );
-      })
-      .map((t) => ({
         id: t.id,
         title: t.name || t.title || t.id,
         description: t.description || "",
         cluster: t.cluster || "Uncategorized",
-      }));
+        prerequisites: Array.isArray(t.prerequisites) ? t.prerequisites : [],
+      };
+    });
 
-    // Build mastered with full details
-    const masteredDetailed = mastered.map((mid) => ({
-      id: mid,
-      title: idToData[mid]?.title || mid,
-      description: idToData[mid]?.description || "",
-      cluster: idToData[mid]?.cluster || "Uncategorized",
-    }));
+    // Build mastered detailed array (preserve original order)
+    const masteredDetailed = masteredIds
+      .filter((id) => idToData[id]) // only include known topics
+      .map((id) => idToData[id]);
+
+    // Compute recommended: any topic whose all prerequisites are in masteredIds
+    // and that is not already mastered.
+    const recommendedCandidates = allTopics.filter((t) => {
+      const prereqs = Array.isArray(t.prerequisites) ? t.prerequisites : [];
+      if (!prereqs.length) return false; // if no prereqs, don't recommend just because
+      // require every prereq to be mastered
+      return prereqs.every((p) => masteredIds.includes(p)) && !masteredIds.includes(t.id);
+    });
+
+    // Convert to id array + detailed array
+    const recommendedIds = recommendedCandidates.map((t) => t.id);
+    const recommendedDetailed = recommendedCandidates.map((t) => idToData[t.id]);
 
     res.status(200).json({
       student_id: studentId,
+      mastered_ids: masteredIds,
       mastered: masteredDetailed,
-      recommended,
-      inProgress: studentData.inProgress || [],
-      upcoming: studentData.upcoming || [],
+      recommended_ids: recommendedIds,
+      recommended: recommendedDetailed,
+      inProgress: Array.isArray(studentData.inProgress) ? studentData.inProgress : [],
+      upcoming: Array.isArray(studentData.upcoming) ? studentData.upcoming : [],
     });
   } catch (err) {
     console.error("Error building student path:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({
+      mastered_ids: [],
+      mastered: [],
+      recommended_ids: [],
+      recommended: [],
+      inProgress: [],
+      upcoming: [],
+      error: "Internal Server Error",
+    });
   }
 });
 
