@@ -105,9 +105,10 @@ app.post("/students/:id", async (req, res) => {
 app.get("/students/:id/path", async (req, res) => {
   try {
     const studentId = req.params.id;
-    const doc = await db.collection("students").doc(studentId).get();
+    const studentDoc = await db.collection("students").doc(studentId).get();
+    const topicsSnap = await db.collection("topics").get();
 
-    if (!doc.exists) {
+    if (!studentDoc.exists) {
       return res.status(404).json({
         mastered: [],
         recommended: [],
@@ -117,19 +118,41 @@ app.get("/students/:id/path", async (req, res) => {
       });
     }
 
-    const data = doc.data() || {};
+    const studentData = studentDoc.data() || {};
+    const mastered = Array.isArray(studentData.mastered) ? studentData.mastered : [];
 
-    // Safely normalize
+    // Get all topics
+    const allTopics = topicsSnap.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    // Find topics where all prerequisites are mastered
+    const recommended = allTopics
+      .filter((topic) => {
+        const prereqs = topic.prerequisites || [];
+        return (
+          prereqs.length > 0 &&
+          prereqs.every((req) => mastered.includes(req)) &&
+          !mastered.includes(topic.id)
+        );
+      })
+      .map((t) => t.id);
+
     const path = {
-      mastered: Array.isArray(data.mastered) ? data.mastered : [],
-      recommended: Array.isArray(data.recommended) ? data.recommended : [],
-      inProgress: Array.isArray(data.inProgress) ? data.inProgress : [],
-      upcoming: Array.isArray(data.upcoming) ? data.upcoming : [],
+      mastered,
+      recommended,
+      inProgress: Array.isArray(studentData.inProgress)
+        ? studentData.inProgress
+        : [],
+      upcoming: Array.isArray(studentData.upcoming)
+        ? studentData.upcoming
+        : [],
     };
 
     res.status(200).json(path);
   } catch (err) {
-    console.error("Error fetching student path:", err);
+    console.error("Error computing student path:", err);
     res.status(500).json({
       mastered: [],
       recommended: [],
