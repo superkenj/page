@@ -16,7 +16,8 @@ app.use(
   cors({
     origin: [
       "http://localhost:3000",
-      "https://pathgen.netlify.app", // your frontend (Netlify) domain
+      "https://pathgen.netlify.app", // Netlify frontend
+      "https://page-ebon-kappa.vercel.app",  // Vercel frontend
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
