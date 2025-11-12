@@ -1,6 +1,7 @@
 // frontend/src/pages/StudentTopicContent.jsx
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, BookOpen } from "lucide-react"; // optional icons if using lucide-react
 
 const API_BASE = "https://page-jirk.onrender.com";
 
@@ -14,18 +15,15 @@ export default function StudentTopicContent() {
   useEffect(() => {
     async function load() {
       try {
-        // Load topic details
         const topicRes = await fetch(`${API_BASE}/topics/list`);
         const topicList = await topicRes.json();
-        const found = topicList.find(t => t.id === topicId);
+        const found = topicList.find((t) => t.id === topicId);
         setTopic(found);
 
-        // Load topic content
         const res = await fetch(`${API_BASE}/content/${topicId}`);
         const json = await res.json();
         setContents(json);
 
-        // Load seen list
         const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
         const stuJson = await stuRes.json();
         setSeen(stuJson.content_seen || []);
@@ -50,51 +48,78 @@ export default function StudentTopicContent() {
     }
   }
 
-  if (!topic) return <div>Loading topic...</div>;
+  if (!topic) return <div className="p-6 text-center text-gray-600">Loading topic...</div>;
 
   return (
-    <div style={{ padding: 20 }}>
-      <button onClick={() => navigate(-1)}>&larr; Back</button>
-      <h1>{topic.name}</h1>
-      <p style={{ color: "#555" }}>{topic.description}</p>
-      <hr style={{ margin: "1rem 0" }} />
-
-      <h3>Learning Materials</h3>
-      {contents.length === 0 && <p>No materials yet for this topic.</p>}
-      {contents.map((c) => (
-        <div
-          key={c.id}
-          style={{
-            marginBottom: 10,
-            padding: "10px",
-            border: "1px solid #ddd",
-            borderRadius: 6,
-            background: "#fafafa",
-          }}
+    <div className="min-h-screen bg-gradient-to-b from-sky-100 via-pink-100 to-emerald-100 p-6 flex flex-col items-center">
+      {/* 🟡 Top Back Button */}
+      <div className="w-full max-w-3xl mb-4">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-2 bg-yellow-400 hover:bg-yellow-500 text-white font-semibold px-4 py-2 rounded-full shadow-md transition-transform hover:scale-105"
         >
-          <a href={c.link} target="_blank" rel="noreferrer">
-            {c.title}
-          </a>
-          <p style={{ fontSize: 13, color: "#666" }}>{c.description}</p>
-          {seen.includes(c.id) ? (
-            <span style={{ color: "green", fontWeight: "bold" }}>✅ Viewed</span>
-          ) : (
-            <button
-              onClick={() => markSeen(c.id)}
-              style={{
-                background: "#f59e0b",
-                color: "white",
-                border: "none",
-                padding: "5px 8px",
-                borderRadius: 4,
-                cursor: "pointer",
-              }}
+          <ArrowLeft size={20} /> Back to Dashboard
+        </button>
+      </div>
+
+      {/* 🧩 Topic Header */}
+      <div className="bg-white w-full max-w-3xl rounded-3xl shadow-lg p-6 text-center">
+        <h1 className="text-3xl font-bold text-sky-600 mb-2 flex justify-center items-center gap-2">
+          <BookOpen size={28} /> {topic.name}
+        </h1>
+        <p className="text-gray-700 mb-4">{topic.description}</p>
+        <hr className="border-gray-300 my-4" />
+
+        <h2 className="text-2xl font-semibold text-emerald-600 mb-4">
+          📚 Learning Materials
+        </h2>
+
+        {contents.length === 0 && (
+          <p className="text-gray-600 italic">No materials yet for this topic.</p>
+        )}
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {contents.map((c) => (
+            <div
+              key={c.id}
+              className="bg-white border-2 border-sky-200 rounded-2xl p-4 text-left shadow-md hover:shadow-lg transition-transform hover:scale-105"
             >
-              Mark as Seen
-            </button>
-          )}
+              <a
+                href={c.link}
+                target="_blank"
+                rel="noreferrer"
+                className="text-lg font-semibold text-sky-700 hover:underline"
+              >
+                {c.title}
+              </a>
+              <p className="text-sm text-gray-600 mt-1">{c.description}</p>
+
+              <div className="mt-3">
+                {seen.includes(c.id) ? (
+                  <span className="text-green-600 font-bold">✅ Viewed</span>
+                ) : (
+                  <button
+                    onClick={() => markSeen(c.id)}
+                    className="bg-orange-400 hover:bg-orange-500 text-white font-semibold px-3 py-1 rounded-full shadow-md transition-transform hover:scale-105"
+                  >
+                    Mark as Seen
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+      </div>
+
+      {/* 🟢 Bottom Back Button */}
+      <div className="w-full max-w-3xl mt-6">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center justify-center gap-2 bg-yellow-400 hover:bg-yellow-500 text-white font-semibold px-6 py-3 rounded-full shadow-md transition-transform hover:scale-105"
+        >
+          <ArrowLeft size={22} /> Back to Dashboard
+        </button>
+      </div>
     </div>
   );
 }
