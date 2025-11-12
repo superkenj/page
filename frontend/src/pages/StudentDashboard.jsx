@@ -61,7 +61,7 @@ export default function StudentDashboard() {
 
   // ✅ Clicking a card opens topic content page
   function handleTopicClick(topicId) {
-    navigate(`/students/${id}/content/${topicId}`);
+    navigate(`/student-dashboard/${id}/topic/${topicId}`);
   }
 
   if (loading) return <div style={{ padding: 20 }}>Loading dashboard...</div>;
