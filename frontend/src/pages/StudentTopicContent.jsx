@@ -256,7 +256,8 @@ export default function StudentTopicContent() {
             height: "100vh",
             background: "rgba(0,0,0,0.7)",
             display: "flex",
-            alignItems: "center",
+            alignItems: "flex-start",
+            paddingTop: "5vh",
             justifyContent: "center",
             zIndex: 1200,
             overflowY: "auto",
@@ -282,8 +283,10 @@ export default function StudentTopicContent() {
                 onClick={(e) => {
                   e.stopPropagation();
                   markSeen(activeContent.id)
-                    .then(() => {
-                      window.dispatchEvent(new Event("contentSeenUpdated"));
+                    .then(async () => {
+                      const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
+                      const stuJson = await stuRes.json();
+                      setSeen(stuJson.content_seen || []);
                       setActiveContent(null);
                     })
                     .catch(() => {});
