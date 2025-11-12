@@ -1,3 +1,4 @@
+// frontend/src/pages/StudentDashboard.jsx
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
@@ -8,192 +9,114 @@ export default function StudentDashboard() {
   const navigate = useNavigate();
 
   const [topics, setTopics] = useState([]);
-  const [path, setPath] = useState({
-    mastered: [],
-    recommended: [],
-    inProgress: [],
-    upcoming: [],
-  });
+  const [path, setPath] = useState({ mastered: [], recommended: [], inProgress: [], upcoming: [] });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function loadAll() {
-      try {
-        const tRes = await fetch(`${API_BASE}/topics/list`);
-        const tJson = await tRes.json();
-        const allTopics = Array.isArray(tJson) ? tJson : tJson.topics || [];
-        setTopics(allTopics);
+  // fetch topics + path + student (for content_seen)
+  async function loadAll() {
+    try {
+      setLoading(true);
+      const [tRes, pRes, sRes] = await Promise.all([
+        fetch(`${API_BASE}/topics/list`),
+        fetch(`${API_BASE}/students/${id}/path`),
+        fetch(`${API_BASE}/students/${id}`),
+      ]);
+      const tJson = await tRes.json();
+      const pJson = await pRes.json();
+      const sJson = await sRes.json();
 
-        const pRes = await fetch(`${API_BASE}/students/${id}/path`);
-        const pJson = await pRes.json();
+      const allTopics = Array.isArray(tJson) ? tJson : tJson.topics || [];
+      setTopics(allTopics);
 
-        // ✅ Handle missing recommended for new students
-        let recommended = Array.isArray(pJson.recommended)
-          ? pJson.recommended
-          : [];
+      const p = {
+        mastered: Array.isArray(pJson.mastered) ? pJson.mastered : [],
+        recommended: Array.isArray(pJson.recommended) ? pJson.recommended : [],
+        inProgress: Array.isArray(pJson.inProgress) ? pJson.inProgress : [],
+        upcoming: Array.isArray(pJson.upcoming) ? pJson.upcoming : [],
+      };
 
-        if (recommended.length === 0 && allTopics.length > 0) {
-          // show topics with no prerequisites
-          recommended = allTopics.filter(
-            (t) =>
-              !pJson.mastered?.some((m) => m.id === t.id) &&
-              (!t.prerequisites || t.prerequisites.length === 0)
-          );
-        }
+      // fallback: if student.content_seen contains items from a topic and topic not mastered -> mark inProgress client-side
+      const seenSet = new Set(sJson.content_seen || []);
 
-        setPath({
-          mastered: Array.isArray(pJson.mastered) ? pJson.mastered : [],
-          recommended,
-          inProgress: Array.isArray(pJson.inProgress)
-            ? pJson.inProgress
-            : [],
-          upcoming: Array.isArray(pJson.upcoming) ? pJson.upcoming : [],
-        });
-      } catch (err) {
-        console.error("Dashboard load error:", err);
-      } finally {
-        setLoading(false);
+      // For performance: only fetch content lists for topics not mastered
+      const notMastered = allTopics.filter((t) => !p.mastered.some((m) => (m?.id || m) === t.id));
+      const fetches = notMastered.map((t) =>
+        fetch(`${API_BASE}/content/${t.id}`).then((r) => r.json()).then((list) => ({ topicId: t.id, list }))
+      );
+      const results = await Promise.all(fetches);
+
+      const derivedInProgressIds = new Set(p.inProgress.map((x) => (x?.id || x)));
+      for (const res of results) {
+        if (res.list.some((c) => seenSet.has(c.id))) derivedInProgressIds.add(res.topicId);
       }
+
+      p.inProgress = Array.from(derivedInProgressIds).map((id) => ({ id }));
+      setPath(p);
+    } catch (err) {
+      console.error("Dashboard load error:", err);
+    } finally {
+      setLoading(false);
     }
+  }
+
+  useEffect(() => {
     loadAll();
+    window.addEventListener("contentSeenUpdated", loadAll);
+    return () => window.removeEventListener("contentSeenUpdated", loadAll);
   }, [id]);
 
-  // ✅ Card Colors & Borders
-  function getCardColor(topicId) {
-    if (path.mastered.some((t) => t.id === topicId)) return "#dcfce7"; // green
-    if (path.inProgress.some((t) => t.id === topicId)) return "#dbeafe"; // blue
-    if (path.recommended.some((t) => t.id === topicId)) return "#fef9c3"; // yellow
-    return "#f3f4f6"; // gray
-  }
-
-  function getCardBorder(topicId) {
-    if (path.mastered.some((t) => t.id === topicId)) return "2px solid #16a34a";
-    if (path.inProgress.some((t) => t.id === topicId)) return "2px solid #2563eb";
-    if (path.recommended.some((t) => t.id === topicId)) return "2px solid #ca8a04";
-    return "1px solid #e5e7eb";
-  }
-
-  // ✅ Card Status
   function getStatus(topicId) {
-    if (path.inProgress.some((t) => t.id === topicId)) return "In Progress";
-    if (path.recommended.some((t) => t.id === topicId)) return "Recommended";
-    if (path.mastered.some((t) => t.id === topicId)) return "Mastered";
+    if (path.inProgress.some((t) => (t?.id || t) === topicId)) return "In Progress";
+    if (path.recommended.some((t) => (t?.id || t) === topicId)) return "Recommended";
+    if (path.mastered.some((t) => (t?.id || t) === topicId)) return "Mastered";
     return "Upcoming";
   }
 
-  function getStatusColor(status) {
+  function getColorForStatus(status) {
     switch (status) {
-      case "Recommended":
-        return "#facc15";
-      case "Mastered":
-        return "#16a34a";
-      case "In Progress":
-        return "#3b82f6";
-      default:
-        return "#9ca3af";
+      case "In Progress": return "#3b82f6";
+      case "Recommended": return "#facc15";
+      case "Mastered": return "#16a34a";
+      default: return "#9ca3af";
     }
-  }
-
-  // ✅ Sort Order (In Progress → Recommended → Mastered → Upcoming)
-  function getSortedTopics() {
-    const allTopics = topics.map((t) => ({
-      ...t,
-      category: path.inProgress.some((x) => x.id === t.id)
-        ? "inProgress"
-        : path.recommended.some((x) => x.id === t.id)
-        ? "recommended"
-        : path.mastered.some((x) => x.id === t.id)
-        ? "mastered"
-        : "upcoming",
-    }));
-
-    const order = { inProgress: 1, recommended: 2, mastered: 3, upcoming: 4 };
-    return allTopics.sort((a, b) => order[a.category] - order[b.category]);
-  }
-
-  function handleTopicClick(topicId) {
-    navigate(`/student-dashboard/${id}/topic/${topicId}`);
   }
 
   if (loading) return <div style={{ padding: 20 }}>Loading dashboard...</div>;
 
-  const sortedTopics = getSortedTopics();
+  const order = { "In Progress": 1, Recommended: 2, Mastered: 3, Upcoming: 4 };
+  const sorted = [...topics].sort((a, b) => order[getStatus(a.id)] - order[getStatus(b.id)]);
 
   return (
-    <div style={{ padding: "40px 60px" }}>
-      {/* 💬 Updated Guidance Message */}
-      <div
-        style={{
-          background: "linear-gradient(90deg, #3b82f6, #06b6d4)",
-          color: "white",
-          padding: "12px 20px",
-          borderRadius: 10,
-          fontWeight: "bold",
-          textAlign: "center",
-          marginBottom: 24,
-          boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-          fontSize: 18,
-        }}
-      >
-        💬 Choose a recommended card to start your learning adventure!
-      </div>
+    <div style={{ padding: "20px 40px" }}>
+      <h2 style={{
+        textAlign: "center", marginBottom: 24,
+        background: "linear-gradient(90deg,#3b82f6,#06b6d4)", color: "white",
+        padding: "10px 20px", borderRadius: 10, boxShadow: "0 3px 6px rgba(0,0,0,0.15)"
+      }}>
+        💬 Click a card to start learning a topic.
+      </h2>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-          gap: 16,
-        }}
-      >
-        {sortedTopics.map((topic) => {
-          const status = getStatus(topic.id);
-          const labelColor = getStatusColor(status);
-
+      <div style={{
+        display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
+        gap: 16
+      }}>
+        {sorted.map((t) => {
+          const status = getStatus(t.id);
+          const color = getColorForStatus(status);
           return (
-            <div
-              key={topic.id}
-              onClick={() => handleTopicClick(topic.id)}
+            <div key={t.id}
+              onClick={() => navigate(`/student-dashboard/${id}/topic/${t.id}`)}
               style={{
-                background: getCardColor(topic.id),
-                border: getCardBorder(topic.id),
-                borderRadius: 10,
-                padding: 16,
-                cursor: "pointer",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                transition: "transform 0.2s ease, box-shadow 0.2s ease",
-                position: "relative",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = "scale(1.03)";
-                e.currentTarget.style.boxShadow = "0 4px 8px rgba(0,0,0,0.15)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "scale(1)";
-                e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.1)";
-              }}
-            >
-              {/* Status Label */}
-              <div
-                style={{
-                  position: "absolute",
-                  top: 10,
-                  right: 10,
-                  background: labelColor,
-                  color: "white",
-                  fontSize: 12,
-                  fontWeight: "bold",
-                  padding: "3px 8px",
-                  borderRadius: "12px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
-                }}
-              >
+                background: status === "Mastered" ? "#ecfdf5" : status === "In Progress" ? "#eff6ff" : status === "Recommended" ? "#fffbeb" : "#f3f4f6",
+                border: `2px solid ${color}`, borderRadius: 10, padding: 16,
+                cursor: "pointer", position: "relative", transition: "transform 0.15s"
+              }}>
+              <div style={{ position: "absolute", top: 10, right: 10, background: color, color: "white", fontSize: 12, fontWeight: "bold", padding: "3px 8px", borderRadius: 12 }}>
                 {status}
               </div>
 
-              <h3 style={{ marginBottom: 8 }}>{topic.name}</h3>
-              <p style={{ fontSize: 14, color: "#374151" }}>
-                {topic.description}
-              </p>
+              <h3 style={{ marginBottom: 8 }}>{t.name}</h3>
+              <p style={{ fontSize: 14, color: "#374151" }}>{t.description}</p>
             </div>
           );
         })}
