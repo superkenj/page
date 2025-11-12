@@ -251,27 +251,37 @@ app.post("/students/:id/content_seen", async (req, res) => {
         .get();
       const topicContentIds = topicContentsSnap.docs.map((d) => d.id);
 
-      // ✅ Step 3: Check if student has seen all contents for this topic
-      // Reload the latest content_seen after update to avoid stale data
+      // ✅ Step 3: Reload latest student data
       const updatedStudentSnap = await studentRef.get();
       const updatedData = updatedStudentSnap.data();
       const updatedSeen = Array.isArray(updatedData.content_seen)
         ? updatedData.content_seen
         : [];
 
+      // ✅ Step 4: Check if all contents for this topic are viewed
       const allSeen = topicContentIds.every((cid) => updatedSeen.includes(cid));
 
-      if (allSeen) {
-        // ✅ Step 4: Add topic_id to mastered if not already there
-        const mastered = Array.isArray(updatedData.mastered)
-          ? [...updatedData.mastered]
-          : [];
+      // ✅ Step 5: Normalize mastered to simple string IDs
+      let mastered = Array.isArray(updatedData.mastered)
+        ? updatedData.mastered.map((m) => (typeof m === "object" ? m.id : m))
+        : [];
 
-        if (!mastered.includes(topic_id)) {
-          mastered.push(topic_id);
-          await studentRef.update({ mastered });
-        }
+      // ✅ Step 6: If all contents are seen, promote to mastered
+      if (allSeen && !mastered.includes(topic_id)) {
+        mastered.push(topic_id);
+        await studentRef.update({ mastered });
+        console.log(`✅ Topic ${topic_id} mastered by ${id}`);
       }
+
+      // ✅ Return fresh data
+      const refreshedDoc = await studentRef.get();
+      const refreshed = refreshedDoc.data();
+
+      res.status(200).json({
+        success: true,
+        content_seen: refreshed.content_seen || [],
+        mastered: refreshed.mastered || [],
+      });
     }
 
     // ✅ Respond with updated content_seen (and optionally mastered)
