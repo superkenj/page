@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, BookOpen, Sparkles } from "lucide-react";
+import { ArrowLeft, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
 
 const API_BASE = "https://page-jirk.onrender.com";
 
@@ -10,118 +10,96 @@ export default function StudentTopicContent() {
   const [topic, setTopic] = useState(null);
   const [contents, setContents] = useState([]);
   const [seen, setSeen] = useState([]);
+  const [openCard, setOpenCard] = useState(null); // which card is expanded
 
   useEffect(() => {
     async function load() {
-      try {
-        const topicRes = await fetch(`${API_BASE}/topics/list`);
-        const topicList = await topicRes.json();
-        const found = topicList.find((t) => t.id === topicId);
-        setTopic(found);
+      const topicRes = await fetch(`${API_BASE}/topics/list`);
+      const topicList = await topicRes.json();
+      setTopic(topicList.find((t) => t.id === topicId));
 
-        const res = await fetch(`${API_BASE}/content/${topicId}`);
-        const json = await res.json();
-        setContents(json);
+      const res = await fetch(`${API_BASE}/content/${topicId}`);
+      const json = await res.json();
+      setContents(json);
 
-        const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
-        const stuJson = await stuRes.json();
-        setSeen(stuJson.content_seen || []);
-      } catch (err) {
-        console.error("Error loading content:", err);
-      }
+      const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
+      const stuJson = await stuRes.json();
+      setSeen(stuJson.content_seen || []);
     }
     load();
   }, [studentId, topicId]);
 
-  async function markSeen(contentId) {
-    try {
-      const res = await fetch(`${API_BASE}/students/${studentId}/content_seen`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content_id: contentId }),
-      });
-      const data = await res.json();
-      setSeen(data.content_seen || []);
-    } catch (err) {
-      console.error("Failed to mark content as seen:", err);
-    }
-  }
-
-  if (!topic)
-    return (
-      <div className="flex items-center justify-center h-screen text-gray-600 text-xl">
-        Loading topic...
-      </div>
-    );
+  if (!topic) return <div className="text-center mt-10 text-gray-500">Loading...</div>;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky-100 via-pink-100 to-emerald-100 flex flex-col items-center py-8 px-4">
-      {/* 🟡 Top Back Button */}
-      <div className="w-full max-w-4xl mb-6">
+    <div className="min-h-screen bg-gradient-to-b from-sky-100 via-pink-100 to-emerald-100 p-6">
+      <div className="max-w-4xl mx-auto">
+        {/* Back Button */}
         <button
           onClick={() => navigate(-1)}
-          className="w-full flex items-center justify-center gap-2 bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-3 rounded-full shadow-lg transition-transform hover:scale-105"
+          className="w-full bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-3 rounded-full mb-6 shadow-md transition-transform hover:scale-105"
         >
-          <ArrowLeft size={22} /> Back to Dashboard
+          <ArrowLeft className="inline mr-2" /> Back to Dashboard
         </button>
-      </div>
 
-      {/* 📘 Topic Card */}
-      <div className="bg-white w-full max-w-4xl rounded-3xl shadow-xl p-8 text-center border-4 border-sky-200">
-        <h1 className="text-4xl font-bold text-sky-600 mb-2 flex justify-center items-center gap-2">
-          <BookOpen size={36} /> {topic.name}
-        </h1>
-        <p className="text-gray-700 mb-6 text-lg">{topic.description}</p>
-        <hr className="border-gray-300 mb-6" />
+        {/* Topic Header */}
+        <div className="bg-white p-8 rounded-3xl shadow-lg text-center border-4 border-sky-200">
+          <h1 className="text-4xl font-bold text-sky-600 mb-3 flex justify-center items-center gap-2">
+            <BookOpen size={36} /> {topic.name}
+          </h1>
+          <p className="text-gray-700 mb-6 text-lg">{topic.description}</p>
+        </div>
 
-        <h2 className="text-3xl font-bold text-emerald-600 mb-6 flex items-center justify-center gap-2">
-          <Sparkles size={30} /> Learning Materials
-        </h2>
-
-        {contents.length === 0 && (
-          <p className="text-gray-600 italic text-lg">
-            No materials yet for this topic.
-          </p>
-        )}
-
-        <div className="grid gap-6 md:grid-cols-2">
+        {/* Learning Material Cards */}
+        <div className="mt-8 grid gap-6">
           {contents.map((c) => (
             <div
               key={c.id}
-              className="bg-white border-2 border-sky-300 rounded-2xl p-5 shadow-md hover:shadow-lg transition-transform hover:scale-105 text-left"
+              className="bg-white border-2 border-sky-200 rounded-2xl p-6 shadow-md transition-transform hover:scale-105"
             >
-              <a
-                href={c.link}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xl font-semibold text-sky-700 hover:underline block mb-2"
+              <div
+                className="flex justify-between items-center cursor-pointer"
+                onClick={() => setOpenCard(openCard === c.id ? null : c.id)}
               >
-                {c.title}
-              </a>
-              <p className="text-gray-600 mb-4">{c.description}</p>
+                <h2 className="text-xl font-semibold text-sky-700">{c.title}</h2>
+                {openCard === c.id ? <ChevronUp /> : <ChevronDown />}
+              </div>
 
-              {seen.includes(c.id) ? (
-                <span className="text-green-600 font-bold text-lg">✅ Viewed</span>
-              ) : (
-                <button
-                  onClick={() => markSeen(c.id)}
-                  className="w-full bg-orange-400 hover:bg-orange-500 text-white font-bold py-2 rounded-full shadow-md transition-transform hover:scale-105"
-                >
-                  Mark as Seen
-                </button>
+              <p className="text-gray-600 mt-2">{c.description}</p>
+
+              {/* Expanded Inline View */}
+              {openCard === c.id && (
+                <div className="mt-4 bg-sky-50 border border-sky-200 rounded-xl p-4 text-center">
+                  <iframe
+                    src={c.link}
+                    title={c.title}
+                    className="w-full h-64 rounded-xl"
+                  ></iframe>
+                </div>
               )}
+
+              <div className="mt-4">
+                {seen.includes(c.id) ? (
+                  <span className="text-green-600 font-bold">✅ Viewed</span>
+                ) : (
+                  <button
+                    onClick={() => markSeen(c.id)}
+                    className="bg-orange-400 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-full shadow-md transition-transform hover:scale-105"
+                  >
+                    Mark as Seen
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
-      </div>
 
-      {/* 🟢 Bottom Back Button */}
-      <div className="w-full max-w-4xl mt-8">
+        {/* Bottom Back Button */}
         <button
           onClick={() => navigate(-1)}
-          className="w-full flex items-center justify-center gap-2 bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-3 rounded-full shadow-lg transition-transform hover:scale-105"
+          className="w-full bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-3 rounded-full mt-8 shadow-md transition-transform hover:scale-105"
         >
-          <ArrowLeft size={22} /> Back to Dashboard
+          <ArrowLeft className="inline mr-2" /> Back to Dashboard
         </button>
       </div>
     </div>
