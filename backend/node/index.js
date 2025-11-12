@@ -214,6 +214,38 @@ app.get("/topics/list", async (req, res) => {
   }
 });
 
+// ✅ Mark content as seen for a student
+app.post("/students/:id/content_seen", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content_id } = req.body;
+
+    if (!content_id)
+      return res.status(400).json({ error: "content_id is required" });
+
+    const studentRef = db.collection("students").doc(id);
+    const doc = await studentRef.get();
+
+    if (!doc.exists)
+      return res.status(404).json({ error: "Student not found" });
+
+    const data = doc.data();
+    const seen = Array.isArray(data.content_seen) ? [...data.content_seen] : [];
+
+    // Add only if not already included
+    if (!seen.includes(content_id)) {
+      seen.push(content_id);
+      await studentRef.update({ content_seen: seen });
+    }
+
+    res.status(200).json({ success: true, content_seen: seen });
+  } catch (err) {
+    console.error("Error updating content_seen:", err);
+    res.status(500).json({ error: "Failed to update content_seen" });
+  }
+});
+
+
 // ✅ Delete topic and its contents
 app.delete("/topics/:id", async (req, res) => {
   try {
