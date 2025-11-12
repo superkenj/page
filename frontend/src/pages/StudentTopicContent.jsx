@@ -6,42 +6,32 @@ const API_BASE = "https://page-jirk.onrender.com";
 export default function StudentTopicContent() {
   const { id: studentId, topicId } = useParams();
   const navigate = useNavigate();
-
   const [topic, setTopic] = useState(null);
   const [contents, setContents] = useState([]);
   const [seen, setSeen] = useState([]);
   const [activeContent, setActiveContent] = useState(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
-        setLoading(true);
-
-        const [topicRes, contentRes, stuRes] = await Promise.all([
-          fetch(`${API_BASE}/topics/list`),
-          fetch(`${API_BASE}/content/${topicId}`),
-          fetch(`${API_BASE}/students/${studentId}`),
-        ]);
-
+        const topicRes = await fetch(`${API_BASE}/topics/list`);
         const topicList = await topicRes.json();
-        setTopic((topicList || []).find((t) => t.id === topicId) || null);
+        setTopic(topicList.find((t) => t.id === topicId));
 
-        const contentList = await contentRes.json();
-        setContents(contentList || []);
+        const res = await fetch(`${API_BASE}/content/${topicId}`);
+        const json = await res.json();
+        setContents(json);
 
-        const stu = await stuRes.json();
-        setSeen(stu.content_seen || []);
+        const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
+        const stuJson = await stuRes.json();
+        setSeen(stuJson.content_seen || []);
       } catch (err) {
-        console.error("Error loading topic content:", err);
-      } finally {
-        setLoading(false);
+        console.error("Error loading content:", err);
       }
     }
     load();
   }, [studentId, topicId]);
 
-  // ✅ Mark as seen function
   async function markSeen(contentId) {
     try {
       const res = await fetch(`${API_BASE}/students/${studentId}/content_seen`, {
@@ -50,118 +40,37 @@ export default function StudentTopicContent() {
         body: JSON.stringify({ content_id: contentId }),
       });
       const data = await res.json();
-      setSeen(data.content_seen || []);
-      return data;
+
+      const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
+      const stuJson = await stuRes.json();
+      setSeen(stuJson.content_seen || []);
+      setActiveContent(null);
     } catch (err) {
-      console.error("markSeen failed:", err);
+      console.error("Failed to mark content as seen:", err);
     }
   }
 
-  if (loading) return <div style={{ padding: 20 }}>Loading topic...</div>;
-
-  // 🧠 Handle different embed formats
-  const renderEmbed = (link) => {
-    if (!link) return null;
-
-    // YouTube
-    if (link.includes("youtube.com") || link.includes("youtu.be")) {
-      const embed = link.includes("embed/")
-        ? link
-        : link.includes("watch?v=")
-        ? `https://www.youtube.com/embed/${link.split("v=")[1].split("&")[0]}`
-        : link;
-      return (
-        <iframe
-          src={embed}
-          title="Video Content"
-          width="100%"
-          height="520"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          style={{
-            border: "none",
-            borderRadius: 8,
-            pointerEvents: "auto",
-          }}
-        />
-      );
+  function getEmbedLink(link) {
+    if (!link) return "";
+    if (link.includes("youtube.com/watch?v=")) {
+      const id = link.split("v=")[1].split("&")[0];
+      return `https://www.youtube.com/embed/${id}`;
     }
+    return link;
+  }
 
-    // PDF
-    if (link.endsWith(".pdf")) {
-      return (
-        <iframe
-          src={link}
-          width="100%"
-          height="600"
-          title="PDF Viewer"
-          style={{
-            border: "none",
-            borderRadius: 8,
-            pointerEvents: "auto",
-          }}
-        />
-      );
-    }
-
-    // Canva / Genially / Interactive embeds
-    if (link.includes("canva.com") || link.includes("genial.ly")) {
-      return (
-        <iframe
-          src={link}
-          width="100%"
-          height="600"
-          title="Interactive Content"
-          allowFullScreen
-          style={{
-            border: "none",
-            borderRadius: 8,
-            pointerEvents: "auto",
-          }}
-        />
-      );
-    }
-
-    // Fallback (generic link)
-    return (
-      <div
-        style={{
-          padding: 20,
-          background: "#f9fafb",
-          borderRadius: 10,
-          width: "100%",
-          textAlign: "center",
-        }}
-      >
-        <p style={{ color: "#374151" }}>
-          This content type isn’t embeddable. You can open it directly:
-        </p>
-        <a
-          href={link}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            color: "#2563eb",
-            textDecoration: "underline",
-            fontWeight: "bold",
-          }}
-        >
-          Open Content in New Tab
-        </a>
-      </div>
-    );
-  };
+  if (!topic) return <div style={{ padding: 20 }}>Loading topic...</div>;
 
   return (
     <div
       style={{
-        background: "linear-gradient(to bottom,#eaf6ff,#fff6f8)",
+        background: "linear-gradient(to bottom, #eaf6ff, #fff6f8)",
         minHeight: "100vh",
         padding: "40px 60px",
         position: "relative",
       }}
     >
-      {/* 🔙 Back Button */}
+      {/* Top Back Button */}
       <button
         onClick={() => navigate(-1)}
         style={{
@@ -175,34 +84,38 @@ export default function StudentTopicContent() {
           borderRadius: 10,
           cursor: "pointer",
           marginBottom: 24,
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
         }}
       >
         ← Back to Dashboard
       </button>
 
-      {/* 🧩 Topic Header */}
+      {/* Topic Header */}
       <div
         style={{
-          background: "#fff",
+          background: "#ffffff",
           border: "1px solid #dbeafe",
           borderRadius: 12,
           padding: 24,
           marginBottom: 32,
+          boxShadow: "0 3px 6px rgba(0,0,0,0.05)",
         }}
       >
         <h1 style={{ marginBottom: 8, fontSize: 26, color: "#1e3a8a" }}>
-          📘 {topic?.name}
+          📘 {topic.name}
         </h1>
-        <p style={{ color: "#334155" }}>{topic?.description}</p>
+        <p style={{ color: "#334155" }}>{topic.description}</p>
       </div>
 
-      {/* 🎨 Learning Materials */}
-      <h2 style={{ marginBottom: 16, color: "#2563eb" }}>🎨 Learning Materials</h2>
+      {/* Learning Materials Section */}
+      <h2 style={{ marginBottom: 16, color: "#2563eb" }}>
+        🎨 Learning Materials
+      </h2>
 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
           gap: 20,
         }}
       >
@@ -210,11 +123,20 @@ export default function StudentTopicContent() {
           <div
             key={c.id}
             style={{
-              background: "#fff",
+              background: "#ffffff",
               border: "1px solid #e0e7ff",
               borderRadius: 12,
               padding: 16,
               boxShadow: "0 3px 6px rgba(0,0,0,0.08)",
+              transition: "transform 0.2s ease, box-shadow 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "scale(1.03)";
+              e.currentTarget.style.boxShadow = "0 5px 10px rgba(0,0,0,0.1)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
+              e.currentTarget.style.boxShadow = "0 3px 6px rgba(0,0,0,0.08)";
             }}
           >
             <h3
@@ -231,20 +153,41 @@ export default function StudentTopicContent() {
             <p style={{ fontSize: 14, color: "#475569", marginBottom: 12 }}>
               {c.description}
             </p>
+
             {seen.includes(c.id) ? (
               <span style={{ color: "#16a34a", fontWeight: "bold" }}>
                 ✅ Viewed
               </span>
             ) : (
               <span style={{ color: "#f59e0b", fontWeight: "bold" }}>
-                Not viewed
+                🔸 Not viewed
               </span>
             )}
           </div>
         ))}
       </div>
 
-      {/* 🌈 Universal Modal */}
+      {/* Bottom Back Button */}
+      <button
+        onClick={() => navigate(-1)}
+        style={{
+          display: "block",
+          width: "100%",
+          background: "#4db6ac",
+          border: "none",
+          color: "white",
+          fontWeight: "bold",
+          padding: "12px",
+          borderRadius: 10,
+          cursor: "pointer",
+          marginTop: 40,
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+        }}
+      >
+        ← Back to Dashboard
+      </button>
+
+      {/* 🎥 Universal Pop-out Modal */}
       {activeContent && (
         <div
           onClick={() => setActiveContent(null)}
@@ -257,10 +200,9 @@ export default function StudentTopicContent() {
             background: "rgba(0,0,0,0.7)",
             display: "flex",
             alignItems: "flex-start",
-            paddingTop: "5vh",
             justifyContent: "center",
-            zIndex: 1200,
-            overflowY: "auto",
+            paddingTop: "6vh",
+            zIndex: 1000,
           }}
         >
           <div
@@ -269,66 +211,56 @@ export default function StudentTopicContent() {
               background: "#fff",
               padding: 16,
               borderRadius: 12,
-              maxWidth: "95%",
-              width: "900px",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+              maxWidth: "90%",
+              width: "800px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
               position: "relative",
             }}
           >
-            {/* ✅ Mark as Seen & Close */}
-            {!seen.includes(activeContent.id) && (
+            <h2 style={{ marginBottom: 8 }}>{activeContent.title}</h2>
+            <p style={{ marginBottom: 12 }}>{activeContent.description}</p>
+
+            {/* Embedded viewer for all content types */}
+            <iframe
+              src={getEmbedLink(activeContent.link)}
+              title="Content Viewer"
+              width="100%"
+              height="450"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              style={{ border: "none", borderRadius: 10 }}
+            ></iframe>
+
+            {/* Mark as Seen & Close */}
+            <div style={{ marginTop: 16, textAlign: "right" }}>
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  markSeen(activeContent.id)
-                    .then(async () => {
-                      const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
-                      const stuJson = await stuRes.json();
-                      setSeen(stuJson.content_seen || []);
-                      setActiveContent(null);
-                    })
-                    .catch(() => {});
-                }}
+                onClick={() => markSeen(activeContent.id)}
                 style={{
-                  position: "absolute",
-                  top: 10,
-                  left: 12,
-                  background: "#f59e0b",
+                  background: "#16a34a",
                   color: "white",
                   border: "none",
-                  padding: "8px 10px",
+                  padding: "8px 14px",
                   borderRadius: 8,
                   cursor: "pointer",
-                  zIndex: 1301,
+                  marginRight: 10,
                 }}
               >
-                ✅ Mark as Seen & Close
+                Mark as Seen & Close
               </button>
-            )}
-
-            {/* ❌ Close Button */}
-            <button
-              onClick={() => setActiveContent(null)}
-              style={{
-                position: "absolute",
-                top: 10,
-                right: 12,
-                background: "#ef4444",
-                color: "white",
-                border: "none",
-                borderRadius: "50%",
-                width: 36,
-                height: 36,
-                cursor: "pointer",
-                zIndex: 1301,
-              }}
-            >
-              ✖
-            </button>
-
-            <div style={{ marginTop: 50 }}>{renderEmbed(activeContent.link)}</div>
+              <button
+                onClick={() => setActiveContent(null)}
+                style={{
+                  background: "#ef4444",
+                  color: "white",
+                  border: "none",
+                  padding: "8px 14px",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

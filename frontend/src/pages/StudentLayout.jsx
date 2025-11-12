@@ -16,7 +16,7 @@ export default function StudentLayout() {
       if (!id) return;
 
       try {
-        // Fetch student
+        // Fetch student data
         const stuRes = await fetch(`${API_BASE}/students/${id}`);
         const stuJson = await stuRes.json();
         setStudent(stuJson);
@@ -32,7 +32,7 @@ export default function StudentLayout() {
           : topicJson.topics || [];
         setTopics(allTopics);
 
-        // Compute recommendations
+        // Compute recommended
         const computed = computeRecommended(allTopics, masteredTopics);
         setRecommended(computed);
       } catch (err) {
@@ -43,6 +43,7 @@ export default function StudentLayout() {
     loadData();
   }, []);
 
+  // ✅ Compute recommended (fallback to topics without prerequisites)
   function computeRecommended(allTopics, masteredList) {
     const masteredSet = new Set(masteredList.map((m) => m.id));
     let rec = allTopics.filter(
@@ -52,7 +53,6 @@ export default function StudentLayout() {
         topic.prerequisites.every((p) => masteredSet.has(p))
     );
 
-    // ✅ Fallback: show topics without prerequisites if none are recommended
     if (rec.length === 0) {
       rec = allTopics.filter(
         (topic) =>
@@ -66,19 +66,21 @@ export default function StudentLayout() {
   const progressPercent =
     topics.length > 0 ? Math.round((mastered.length / topics.length) * 100) : 0;
 
+  // ✅ Logout handler
   function handleLogout() {
     localStorage.removeItem("studentId");
     localStorage.removeItem("role");
     navigate("/");
   }
 
-  const gender = (student?.gender || student?.sex || "").toString().trim().toLowerCase();
+  // ✅ Child-friendly avatars
+  const gender = (student?.gender || student?.sex || "").toLowerCase().trim();
   const avatarUrl =
     ["male", "m", "boy", "1", "true"].includes(gender)
-      ? "https://cdn-icons-png.flaticon.com/512/706/706797.png"
+      ? "https://cdn-icons-png.flaticon.com/512/3006/3006876.png" // boy
       : ["female", "f", "girl", "0", "false"].includes(gender)
-      ? "https://cdn-icons-png.flaticon.com/512/706/706830.png"
-      : "https://cdn-icons-png.flaticon.com/512/1995/1995574.png";
+      ? "https://cdn-icons-png.flaticon.com/512/3006/3006878.png" // girl
+      : "https://cdn-icons-png.flaticon.com/512/1995/1995574.png"; // default
 
   return (
     <div
@@ -102,7 +104,7 @@ export default function StudentLayout() {
           borderRadius: "0 20px 20px 0",
           position: "sticky",
           top: 0,
-          height: "92vh",
+          height: "88vh",
           overflowY: "auto",
         }}
       >
@@ -203,7 +205,7 @@ export default function StudentLayout() {
         </button>
       </aside>
 
-      {/* Main content */}
+      {/* Main Content */}
       <main style={{ flex: 1, padding: "1.5rem" }}>
         <Outlet />
       </main>
