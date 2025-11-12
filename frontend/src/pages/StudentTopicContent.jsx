@@ -38,19 +38,37 @@ export default function StudentTopicContent() {
     load();
   }, [studentId, topicId]);
 
+  // make sure this is in the same component scope as studentId and setSeen
   async function markSeen(contentId) {
+    // optimistic UI: add immediately so UI feels snappy
+    setSeen((prev) => (prev.includes(contentId) ? prev : [...prev, contentId]));
+
     try {
       const res = await fetch(`${API_BASE}/students/${studentId}/content_seen`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content_id: contentId }),
       });
-      const data = await res.json();
-      setSeen(data.content_seen || []);
-      return data;
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        // revert optimistic change if server rejected
+        setSeen((prev) => prev.filter((id) => id !== contentId));
+        throw new Error(json.error || "Failed to mark content seen");
+      }
+
+      // If response contains the canonical seen list, sync with it
+      if (json.content_seen) {
+        setSeen(json.content_seen);
+      } else if (json.data?.content_seen) {
+        setSeen(json.data.content_seen);
+      } // otherwise keep optimistic
+
+      return json;
     } catch (err) {
-      console.error("markSeen failed:", err);
-      throw err;
+      console.error("markSeen error:", err);
+      throw err; // rethrow so caller knows it failed
     }
   }
 
@@ -97,7 +115,7 @@ export default function StudentTopicContent() {
         ))}
       </div>
 
-      <button onClick={() => navigate(-1)} style={{ display: "block", width: "100%", background: "#4db6ac", border: "none", color: "white", fontWeight: "bold", padding: "12px", borderRadius: 10, cursor: "pointer", marginBottom: 24 }}>
+      <button onClick={() => navigate(-1)} style={{ display: "block", width: "100%", background: "#4db6ac", border: "none", color: "white", fontWeight: "bold", padding: "12px", borderRadius: 10, cursor: "pointer", marginTop: 24 }}>
         ← Back to Dashboard
       </button>
 
@@ -112,17 +130,41 @@ export default function StudentTopicContent() {
 
             {/* Mark as Seen & Close — visible if not already seen */}
             {activeContentId && !seen.includes(activeContentId) && (
-              <button onClick={(e) => {
-                e.stopPropagation();
-                markSeen(activeContentId)
-                  .then(() => {
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  try {
+                    // await the function so we only close on success
+                    await markSeen(activeContentId);
+
+                    // notify other parts of the app (optional)
                     window.dispatchEvent(new Event("contentSeenUpdated"));
-                    setActiveVideo(null);
-                    setActiveContentId(null);
-                  })
-                  .catch(() => {});
-              }}
-                style={{ position: "absolute", top: 10, left: 12, background: "#f59e0b", color: "white", border: "none", padding: "8px 10px", borderRadius: 8, cursor: "pointer", zIndex: 1300 }}>
+
+                    // close modal/viewer — use whatever state names your component uses
+                    // common names: setActiveVideo(null) or setActiveContent(null)
+                    if (typeof setActiveVideo === "function") setActiveVideo(null);
+                    if (typeof setActiveContentId === "function") setActiveContentId(null);
+                    if (typeof setActiveContent === "function") setActiveContent(null);
+                  } catch (err) {
+                    // show failure feedback (console first; add UI feedback as needed)
+                    console.error("Failed to mark seen:", err);
+                    // optionally show an alert or toast:
+                    // alert("Could not mark content as seen. Try again.");
+                  }
+                }}
+                style={{
+                  position: "absolute",
+                  top: 10,
+                  left: 12,
+                  background: "#f59e0b",
+                  color: "white",
+                  border: "none",
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  zIndex: 1300,
+                }}
+              >
                 ✅ Mark as Seen & Close
               </button>
             )}
