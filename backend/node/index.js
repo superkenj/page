@@ -252,12 +252,19 @@ app.post("/students/:id/content_seen", async (req, res) => {
       const topicContentIds = topicContentsSnap.docs.map((d) => d.id);
 
       // ✅ Step 3: Check if student has seen all contents for this topic
-      const allSeen = topicContentIds.every((cid) => seen.includes(cid));
+      // Reload the latest content_seen after update to avoid stale data
+      const updatedStudentSnap = await studentRef.get();
+      const updatedData = updatedStudentSnap.data();
+      const updatedSeen = Array.isArray(updatedData.content_seen)
+        ? updatedData.content_seen
+        : [];
+
+      const allSeen = topicContentIds.every((cid) => updatedSeen.includes(cid));
 
       if (allSeen) {
         // ✅ Step 4: Add topic_id to mastered if not already there
-        const mastered = Array.isArray(studentData.mastered)
-          ? [...studentData.mastered]
+        const mastered = Array.isArray(updatedData.mastered)
+          ? [...updatedData.mastered]
           : [];
 
         if (!mastered.includes(topic_id)) {
