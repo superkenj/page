@@ -187,7 +187,7 @@ export default function StudentTopicContent() {
         ← Back to Dashboard
       </button>
 
-      {/* 🎥 Pop-out Modal */}
+      {/* ✅ Pop-out Modal Fix */}
       {activeContent && (
         <div
           onClick={() => setActiveContent(null)}
@@ -197,67 +197,92 @@ export default function StudentTopicContent() {
             left: 0,
             width: "100vw",
             height: "100vh",
-            background: "rgba(0,0,0,0.7)",
+            background: "rgba(0,0,0,0.6)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 1000,
+            zIndex: 9999,
           }}
         >
           <div
-            onClick={(e) => e.stopPropagation()} // prevents parent click closing
+            onClick={(e) => e.stopPropagation()}
             style={{
               background: "#fff",
               borderRadius: 12,
               padding: 20,
               width: "80%",
-              maxWidth: 800,
+              maxWidth: 850,
               boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
               textAlign: "center",
-              position: "relative",
-              zIndex: 1001,
             }}
           >
-            <iframe
-              src={getEmbedLink(activeContent.link)}
-              title="Learning Content"
-              width="100%"
-              height="450"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              style={{ border: "none", borderRadius: 10, marginBottom: 20 }}
-            ></iframe>
+            <h2 style={{ marginBottom: 10 }}>{activeContent.title}</h2>
+            <p style={{ marginBottom: 15 }}>{activeContent.description}</p>
 
-            <div style={{ display: "flex", justifyContent: "center", gap: 10 }}>
+            {/* ✅ Buttons are ABOVE the iframe and always clickable */}
+            <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 12 }}>
               <button
-                onClick={() => markSeen(activeContent.id)}
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`${API_BASE}/students/${studentId}/content_seen`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ content_id: activeContent.id }),
+                    });
+                    if (res.ok) {
+                      setActiveContent(null); // close modal
+                      window.dispatchEvent(new Event("contentSeenUpdated")); // optional
+                    } else {
+                      console.error("Failed to mark as seen");
+                    }
+                  } catch (err) {
+                    console.error("Mark as seen error:", err);
+                  }
+                }}
                 style={{
                   background: "#16a34a",
                   color: "white",
                   border: "none",
-                  padding: "10px 16px",
+                  padding: "8px 16px",
                   borderRadius: 8,
-                  cursor: "pointer",
                   fontWeight: "bold",
+                  cursor: "pointer",
                 }}
               >
                 ✅ Mark as Seen & Close
               </button>
+
               <button
                 onClick={() => setActiveContent(null)}
                 style={{
                   background: "#ef4444",
                   color: "white",
                   border: "none",
-                  padding: "10px 16px",
+                  padding: "8px 16px",
                   borderRadius: 8,
-                  cursor: "pointer",
                   fontWeight: "bold",
+                  cursor: "pointer",
                 }}
               >
                 ✖ Close
               </button>
             </div>
+
+            <iframe
+              src={getEmbedLink(activeContent.link)}
+              title="Learning Content"
+              width="100%"
+              height="480"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              style={{
+                border: "none",
+                borderRadius: 10,
+                display: "block",
+                margin: "0 auto",
+                pointerEvents: "auto", // keeps iframe active but doesn’t block buttons
+              }}
+            ></iframe>
           </div>
         </div>
       )}

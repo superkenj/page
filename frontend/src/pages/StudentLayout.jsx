@@ -1,5 +1,8 @@
 import { Outlet, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import boyImg from "../assets/images/boy.png";
+import girlImg from "../assets/images/girl.png";
+import neutralImg from "../assets/images/neutral.png";
 
 const API_BASE = "https://page-jirk.onrender.com";
 
@@ -18,7 +21,7 @@ export default function StudentLayout() {
       try {
         const stuRes = await fetch(`${API_BASE}/students/${id}`);
         const stuJson = await stuRes.json();
-        setStudent(stuJson);
+        setStudent(stuJson.student || stuJson);
 
         const masteredTopics = stuJson.mastered || [];
         setMastered(masteredTopics);
@@ -70,13 +73,11 @@ export default function StudentLayout() {
   }
 
   // ✅ Corrected child-like avatars (swapped URLs)
-  const gender = (student?.gender || student?.sex || "").toLowerCase().trim();
-  const avatarUrl =
-    ["male", "m", "boy"].includes(gender)
-      ? "https://cdn-icons-png.flaticon.com/512/706/706830.png" // boy
-      : ["female", "f", "girl"].includes(gender)
-      ? "https://cdn-icons-png.flaticon.com/512/706/706839.png" // girl
-      : "https://cdn-icons-png.flaticon.com/512/706/706797.png"; // neutral
+  const raw = (student?.gender || student?.sex || "").toString().trim().toLowerCase();
+  const isMale = ["male", "m", "boy", "man", "1", "true"].includes(raw);
+  const isFemale = ["female", "f", "girl", "woman", "0", "false"].includes(raw);
+
+  const avatarUrl = isMale ? boyImg : isFemale ? girlImg : neutralImg;
 
   return (
     <div
