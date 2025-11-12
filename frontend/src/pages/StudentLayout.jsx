@@ -5,12 +5,11 @@ import { useEffect, useState } from "react";
 const API_BASE = "https://page-jirk.onrender.com";
 
 export default function StudentLayout() {
-  const { id } = useParams(); // 👈 ensures correct ID reference
+  const { id } = useParams();
   const [student, setStudent] = useState(null);
   const [topics, setTopics] = useState([]);
   const [mastered, setMastered] = useState([]);
   const [recommended, setRecommended] = useState([]);
-  const [quote, setQuote] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -38,14 +37,6 @@ export default function StudentLayout() {
     }
 
     loadData();
-
-    const quotes = [
-      "Mathematics is the language of the universe!",
-      "Every problem has a solution — let’s find it!",
-      "Mistakes mean you’re trying, and that’s what matters!",
-      "Learning is your superpower! 💪",
-    ];
-    setQuote(quotes[Math.floor(Math.random() * quotes.length)]);
   }, [id]);
 
   function computeRecommended(allTopics, masteredList) {
@@ -66,8 +57,8 @@ export default function StudentLayout() {
 
   const avatarUrl =
     student?.gender === "male"
-      ? "https://cdn-icons-png.flaticon.com/512/4140/4140048.png"
-      : "https://cdn-icons-png.flaticon.com/512/706/706830.png";
+      ? "https://cdn-icons-png.flaticon.com/512/4140/4140040.png"
+      : "https://cdn-icons-png.flaticon.com/512/201/201818.png";
 
   function handleLogout() {
     localStorage.removeItem("studentId");
@@ -76,7 +67,13 @@ export default function StudentLayout() {
   }
 
   return (
-    <div style={{ display: "flex", background: "#f0f9ff", minHeight: "100vh" }}>
+    <div
+      style={{
+        display: "flex",
+        background: "#f0f9ff",
+        minHeight: "100vh",
+      }}
+    >
       <aside
         style={{
           width: 280,
@@ -85,22 +82,23 @@ export default function StudentLayout() {
           padding: "1.5rem",
           display: "flex",
           flexDirection: "column",
-          justifyContent: "space-between",
+          justifyContent: "space-between", // ✅ keeps logout at bottom
           height: "100vh",
-          overflowY: "auto", // ✅ fixes logout cutoff
         }}
       >
+        {/* Profile Section */}
         <div>
           <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
             <img
               src={avatarUrl}
               alt="avatar"
               style={{
-                width: 80,
-                height: 80,
+                width: 90,
+                height: 90,
                 borderRadius: "50%",
                 marginBottom: "10px",
                 border: "3px solid white",
+                backgroundColor: "white",
               }}
             />
             <h2 style={{ margin: 0, fontSize: "1.3rem" }}>
@@ -118,8 +116,8 @@ export default function StudentLayout() {
               style={{
                 background: "rgba(255,255,255,0.3)",
                 borderRadius: "10px",
-                height: 14,
                 overflow: "hidden",
+                height: 14,
                 marginBottom: 4,
               }}
             >
@@ -135,7 +133,7 @@ export default function StudentLayout() {
             <p style={{ fontSize: "0.85rem" }}>{progressPercent}% Complete</p>
           </div>
 
-          {/* Recommended */}
+          {/* Recommended Topics */}
           <div>
             <p style={{ fontWeight: "bold" }}>⭐ Recommended Topics</p>
             <ul style={{ listStyle: "none", paddingLeft: 0 }}>
@@ -157,37 +155,28 @@ export default function StudentLayout() {
                 <li>No recommendations yet</li>
               )}
             </ul>
-            <div
-              style={{
-                background: "rgba(255,255,255,0.2)",
-                borderRadius: "10px",
-                padding: "10px",
-                fontStyle: "italic",
-                fontSize: "0.85rem",
-              }}
-            >
-              💬 “{quote}”
-            </div>
           </div>
         </div>
 
+        {/* Logout Button */}
         <button
           onClick={handleLogout}
           style={{
             background: "#ef4444",
             border: "none",
             color: "white",
-            padding: "10px 0",
+            padding: "12px 0",
             borderRadius: "10px",
             fontWeight: "bold",
             cursor: "pointer",
-            marginTop: "1rem",
+            fontSize: "1rem",
           }}
         >
           Logout
         </button>
       </aside>
 
+      {/* Main Content */}
       <main style={{ flex: 1, padding: "2rem", overflowY: "auto" }}>
         <Outlet />
       </main>

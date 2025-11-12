@@ -158,9 +158,8 @@ export default function StudentTopicContent() {
             ) : (
               <button
                 onClick={(e) => {
-                  e.stopPropagation();
+                  e.stopPropagation(); // ✅ prevent parent div capture
                   markSeen(c.id).then(() => {
-                    // 👇 notify dashboard to refresh in-progress
                     window.dispatchEvent(new Event("contentSeenUpdated"));
                   });
                 }}

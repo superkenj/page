@@ -14,51 +14,45 @@ export default function StudentDashboard() {
     inProgress: [],
     upcoming: [],
   });
+  const [quote, setQuote] = useState("");
   const [loading, setLoading] = useState(true);
 
-  async function fetchPath() {
-    try {
-      const res = await fetch(`${API_BASE}/students/${id}/path`);
-      const data = await res.json();
-      setPath({
-        mastered: data.mastered || [],
-        recommended: data.recommended || [],
-        inProgress: data.inProgress || [],
-        upcoming: data.upcoming || [],
-      });
-    } catch (e) {
-      console.error("Path fetch failed:", e);
-    }
-  }
-
   useEffect(() => {
-    async function load() {
+    async function loadAll() {
       try {
-        const tRes = await fetch(`${API_BASE}/topics/list`);
+        const [tRes, pRes] = await Promise.all([
+          fetch(`${API_BASE}/topics/list`),
+          fetch(`${API_BASE}/students/${id}/path`),
+        ]);
+
         const tJson = await tRes.json();
+        const pJson = await pRes.json();
+
         setTopics(Array.isArray(tJson) ? tJson : tJson.topics || []);
-        await fetchPath(); // ✅ load once
+        setPath({
+          mastered: pJson.mastered || [],
+          recommended: pJson.recommended || [],
+          inProgress: pJson.inProgress || [],
+          upcoming: pJson.upcoming || [],
+        });
+
+        const quotes = [
+          "Mathematics is the language of the universe!",
+          "Every problem has a solution — let’s find it!",
+          "Mistakes mean you’re trying, and that’s what matters!",
+          "Learning is your superpower! 💪",
+        ];
+        setQuote(quotes[Math.floor(Math.random() * quotes.length)]);
       } catch (err) {
         console.error("Dashboard load error:", err);
       } finally {
         setLoading(false);
       }
     }
-    load();
+    loadAll();
+    window.addEventListener("contentSeenUpdated", loadAll);
+    return () => window.removeEventListener("contentSeenUpdated", loadAll);
   }, [id]);
-
-  // ✅ refresh path when “Mark as Seen” is clicked in content
-  useEffect(() => {
-    window.addEventListener("contentSeenUpdated", fetchPath);
-    return () => window.removeEventListener("contentSeenUpdated", fetchPath);
-  }, []);
-
-  function getCardColor(topicId) {
-    if (path.mastered.some((t) => t.id === topicId)) return "#dcfce7";
-    if (path.inProgress.some((t) => t.id === topicId)) return "#dbeafe";
-    if (path.recommended.some((t) => t.id === topicId)) return "#fef9c3";
-    return "#f3f4f6";
-  }
 
   function getStatus(topicId) {
     if (path.mastered.some((t) => t.id === topicId)) return "Mastered";
@@ -67,11 +61,42 @@ export default function StudentDashboard() {
     return "Upcoming";
   }
 
-  if (loading) return <div>Loading...</div>;
+  function getCardColor(topicId) {
+    const status = getStatus(topicId);
+    switch (status) {
+      case "Mastered":
+        return "#dcfce7";
+      case "In Progress":
+        return "#dbeafe";
+      case "Recommended":
+        return "#fef9c3";
+      default:
+        return "#f3f4f6";
+    }
+  }
+
+  if (loading) return <div>Loading dashboard...</div>;
+
+  const order = { Recommended: 1, "In Progress": 2, Mastered: 3, Upcoming: 4 };
+  const sorted = [...topics].sort(
+    (a, b) => order[getStatus(a.id)] - order[getStatus(b.id)]
+  );
 
   return (
     <div style={{ padding: "20px 40px" }}>
-      <p>Click a card to start learning a topic.</p>
+      <h2
+        style={{
+          textAlign: "center",
+          marginBottom: 32,
+          background: "linear-gradient(90deg,#3b82f6,#06b6d4)",
+          color: "white",
+          padding: "10px 20px",
+          borderRadius: 10,
+          boxShadow: "0 3px 6px rgba(0,0,0,0.15)",
+        }}
+      >
+        💬 “{quote}”
+      </h2>
 
       <div
         style={{
@@ -80,34 +105,37 @@ export default function StudentDashboard() {
           gap: 16,
         }}
       >
-        {topics.map((topic) => {
-          const status = getStatus(topic.id);
+        {sorted.map((t) => {
+          const status = getStatus(t.id);
+          const color =
+            status === "Mastered"
+              ? "#16a34a"
+              : status === "In Progress"
+              ? "#3b82f6"
+              : status === "Recommended"
+              ? "#facc15"
+              : "#9ca3af";
+
           return (
             <div
-              key={topic.id}
-              onClick={() => navigate(`/student-dashboard/${id}/topic/${topic.id}`)}
+              key={t.id}
+              onClick={() => navigate(`/student-dashboard/${id}/topic/${t.id}`)}
               style={{
-                background: getCardColor(topic.id),
-                border: "2px solid rgba(0,0,0,0.1)",
+                background: getCardColor(t.id),
+                border: `2px solid ${color}`,
                 borderRadius: 10,
                 padding: 16,
                 cursor: "pointer",
                 position: "relative",
+                transition: "transform 0.2s",
               }}
             >
-              <span
+              <div
                 style={{
                   position: "absolute",
                   top: 10,
                   right: 10,
-                  background:
-                    status === "Mastered"
-                      ? "#16a34a"
-                      : status === "In Progress"
-                      ? "#3b82f6"
-                      : status === "Recommended"
-                      ? "#facc15"
-                      : "#9ca3af",
+                  background: color,
                   color: "white",
                   fontSize: 12,
                   fontWeight: "bold",
@@ -116,9 +144,9 @@ export default function StudentDashboard() {
                 }}
               >
                 {status}
-              </span>
-              <h3>{topic.name}</h3>
-              <p>{topic.description}</p>
+              </div>
+              <h3 style={{ marginBottom: 8 }}>{t.name}</h3>
+              <p style={{ fontSize: 14, color: "#374151" }}>{t.description}</p>
             </div>
           );
         })}
