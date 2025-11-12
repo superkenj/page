@@ -16,7 +16,6 @@ export default function StudentLayout() {
       if (!id) return;
 
       try {
-        // Fetch student data
         const stuRes = await fetch(`${API_BASE}/students/${id}`);
         const stuJson = await stuRes.json();
         setStudent(stuJson);
@@ -24,7 +23,6 @@ export default function StudentLayout() {
         const masteredTopics = stuJson.mastered || [];
         setMastered(masteredTopics);
 
-        // Fetch topics
         const topicRes = await fetch(`${API_BASE}/topics/list`);
         const topicJson = await topicRes.json();
         const allTopics = Array.isArray(topicJson)
@@ -32,7 +30,6 @@ export default function StudentLayout() {
           : topicJson.topics || [];
         setTopics(allTopics);
 
-        // Compute recommended
         const computed = computeRecommended(allTopics, masteredTopics);
         setRecommended(computed);
       } catch (err) {
@@ -43,7 +40,7 @@ export default function StudentLayout() {
     loadData();
   }, []);
 
-  // ✅ Compute recommended (fallback to topics without prerequisites)
+  // ✅ Recommended topics fix
   function computeRecommended(allTopics, masteredList) {
     const masteredSet = new Set(masteredList.map((m) => m.id));
     let rec = allTopics.filter(
@@ -66,21 +63,20 @@ export default function StudentLayout() {
   const progressPercent =
     topics.length > 0 ? Math.round((mastered.length / topics.length) * 100) : 0;
 
-  // ✅ Logout handler
   function handleLogout() {
     localStorage.removeItem("studentId");
     localStorage.removeItem("role");
     navigate("/");
   }
 
-  // ✅ Child-friendly avatars
+  // ✅ Corrected child-like avatars (swapped URLs)
   const gender = (student?.gender || student?.sex || "").toLowerCase().trim();
   const avatarUrl =
     ["male", "m", "boy"].includes(gender)
-      ? "https://cdn-icons-png.flaticon.com/512/706/706797.png" // boy avatar
+      ? "https://cdn-icons-png.flaticon.com/512/706/706830.png" // boy
       : ["female", "f", "girl"].includes(gender)
-      ? "https://cdn-icons-png.flaticon.com/512/706/706830.png" // girl avatar
-      : "https://cdn-icons-png.flaticon.com/512/706/706797.png"; // neutral child
+      ? "https://cdn-icons-png.flaticon.com/512/706/706839.png" // girl
+      : "https://cdn-icons-png.flaticon.com/512/706/706797.png"; // neutral
 
   return (
     <div
@@ -109,7 +105,6 @@ export default function StudentLayout() {
         }}
       >
         <div>
-          {/* Profile */}
           <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
             <img
               src={avatarUrl}
@@ -122,7 +117,7 @@ export default function StudentLayout() {
                 border: "3px solid white",
               }}
             />
-            <h2 style={{ margin: 0, fontSize: "1.2rem" }}>
+            <h2 style={{ margin: 0, fontSize: "1.1rem" }}>
               {student ? `Hi, ${student.name}!` : "Hello!"}
             </h2>
             <p style={{ fontSize: "0.9rem", opacity: 0.9 }}>
@@ -130,7 +125,6 @@ export default function StudentLayout() {
             </p>
           </div>
 
-          {/* Progress */}
           <div style={{ marginBottom: "1.5rem" }}>
             <p style={{ fontWeight: "bold" }}>Your Progress</p>
             <div
@@ -154,7 +148,6 @@ export default function StudentLayout() {
             <p style={{ fontSize: "0.85rem" }}>{progressPercent}% Complete</p>
           </div>
 
-          {/* Recommended Topics */}
           <div>
             <p style={{ fontWeight: "bold" }}>⭐ Recommended Topics</p>
             <ul
@@ -186,7 +179,6 @@ export default function StudentLayout() {
           </div>
         </div>
 
-        {/* Logout */}
         <button
           onClick={handleLogout}
           style={{
@@ -205,7 +197,6 @@ export default function StudentLayout() {
         </button>
       </aside>
 
-      {/* Main Content */}
       <main style={{ flex: 1, padding: "1.5rem" }}>
         <Outlet />
       </main>

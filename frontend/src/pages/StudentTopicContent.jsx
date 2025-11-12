@@ -187,7 +187,7 @@ export default function StudentTopicContent() {
         ← Back to Dashboard
       </button>
 
-      {/* Pop-out Modal */}
+      {/* 🎥 Pop-out Modal */}
       {activeContent && (
         <div
           onClick={() => setActiveContent(null)}
@@ -205,18 +205,19 @@ export default function StudentTopicContent() {
           }}
         >
           <div
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()} // prevents parent click closing
             style={{
               background: "#fff",
               borderRadius: 12,
-              padding: 16,
+              padding: 20,
               width: "80%",
               maxWidth: 800,
               boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
               textAlign: "center",
+              position: "relative",
+              zIndex: 1001,
             }}
           >
-            {/* Embed content only */}
             <iframe
               src={getEmbedLink(activeContent.link)}
               title="Learning Content"
@@ -227,7 +228,6 @@ export default function StudentTopicContent() {
               style={{ border: "none", borderRadius: 10, marginBottom: 20 }}
             ></iframe>
 
-            {/* Functional buttons */}
             <div style={{ display: "flex", justifyContent: "center", gap: 10 }}>
               <button
                 onClick={() => markSeen(activeContent.id)}
