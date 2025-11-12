@@ -1,3 +1,4 @@
+// frontend/src/pages/StudentLayout.jsx
 import { Outlet, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import boyImg from "../assets/images/boy.png";
@@ -23,7 +24,7 @@ export default function StudentLayout() {
         const stuJson = await stuRes.json();
         setStudent(stuJson.student || stuJson);
 
-        const masteredTopics = stuJson.mastered || [];
+        const masteredTopics = (stuJson.student || stuJson).mastered || [];
         setMastered(masteredTopics);
 
         const topicRes = await fetch(`${API_BASE}/topics/list`);
@@ -43,7 +44,7 @@ export default function StudentLayout() {
     loadData();
   }, []);
 
-  // ✅ Recommended topics fix
+  // Recommended topics — includes those with no prerequisites if new student
   function computeRecommended(allTopics, masteredList) {
     const masteredSet = new Set(masteredList.map((m) => m.id));
     let rec = allTopics.filter(
@@ -72,10 +73,14 @@ export default function StudentLayout() {
     navigate("/");
   }
 
-  // ✅ Corrected child-like avatars (swapped URLs)
-  const raw = (student?.gender || student?.sex || "").toString().trim().toLowerCase();
-  const isMale = ["male", "m", "boy", "man", "1", "true"].includes(raw);
-  const isFemale = ["female", "f", "girl", "woman", "0", "false"].includes(raw);
+  // ✅ Accurate Gender Handling
+  const rawGender = (student?.gender || student?.sex || "")
+    .toString()
+    .trim()
+    .toLowerCase();
+
+  const isMale = ["male", "m", "boy", "man", "1", "true"].includes(rawGender);
+  const isFemale = ["female", "f", "girl", "woman", "0", "false"].includes(rawGender);
 
   const avatarUrl = isMale ? boyImg : isFemale ? girlImg : neutralImg;
 
@@ -101,7 +106,7 @@ export default function StudentLayout() {
           borderRadius: "0 20px 20px 0",
           position: "sticky",
           top: 0,
-          height: "88vh",
+          height: "100vh",
           overflowY: "auto",
         }}
       >
@@ -119,7 +124,7 @@ export default function StudentLayout() {
               }}
             />
             <h2 style={{ margin: 0, fontSize: "1.1rem" }}>
-              {student ? `Hi, ${student.name}!` : "Hello!"}
+              {student ? `Hi, ${student.name || "Student"}!` : "Hello!"}
             </h2>
             <p style={{ fontSize: "0.9rem", opacity: 0.9 }}>
               Keep up the great work! 🌟

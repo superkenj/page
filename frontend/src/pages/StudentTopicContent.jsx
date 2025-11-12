@@ -209,18 +209,17 @@ export default function StudentTopicContent() {
             style={{
               background: "#fff",
               borderRadius: 12,
-              padding: 20,
+              padding: 16,
               width: "80%",
-              maxWidth: 850,
-              boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+              maxWidth: 700,
+              boxShadow: "0 4px 10px rgba(0,0,0,0.25)",
               textAlign: "center",
             }}
           >
-            <h2 style={{ marginBottom: 10 }}>{activeContent.title}</h2>
-            <p style={{ marginBottom: 15 }}>{activeContent.description}</p>
+            <h2 style={{ marginBottom: 8 }}>{activeContent.title}</h2>
+            <p style={{ marginBottom: 12 }}>{activeContent.description}</p>
 
-            {/* ✅ Buttons are ABOVE the iframe and always clickable */}
-            <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 10 }}>
               <button
                 onClick={async () => {
                   try {
@@ -230,20 +229,20 @@ export default function StudentTopicContent() {
                       body: JSON.stringify({ content_id: activeContent.id }),
                     });
                     if (res.ok) {
-                      setActiveContent(null); // close modal
-                      window.dispatchEvent(new Event("contentSeenUpdated")); // optional
+                      setActiveContent(null);
+                      console.log("✅ Marked as seen!");
                     } else {
-                      console.error("Failed to mark as seen");
+                      console.error("❌ Failed to mark as seen");
                     }
                   } catch (err) {
-                    console.error("Mark as seen error:", err);
+                    console.error("❌ Error marking seen:", err);
                   }
                 }}
                 style={{
                   background: "#16a34a",
                   color: "white",
                   border: "none",
-                  padding: "8px 16px",
+                  padding: "8px 14px",
                   borderRadius: 8,
                   fontWeight: "bold",
                   cursor: "pointer",
@@ -258,7 +257,7 @@ export default function StudentTopicContent() {
                   background: "#ef4444",
                   color: "white",
                   border: "none",
-                  padding: "8px 16px",
+                  padding: "8px 14px",
                   borderRadius: 8,
                   fontWeight: "bold",
                   cursor: "pointer",
@@ -272,15 +271,12 @@ export default function StudentTopicContent() {
               src={getEmbedLink(activeContent.link)}
               title="Learning Content"
               width="100%"
-              height="480"
+              height="380"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
               style={{
                 border: "none",
                 borderRadius: 10,
-                display: "block",
-                margin: "0 auto",
-                pointerEvents: "auto", // keeps iframe active but doesn’t block buttons
               }}
             ></iframe>
           </div>
