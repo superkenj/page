@@ -5,40 +5,43 @@ import { useParams, useNavigate } from "react-router-dom";
 const API_BASE = "https://page-jirk.onrender.com";
 
 export default function StudentTopicContent() {
-  const { id: studentId, topic_id } = useParams();
+  const { id: studentId, topicId } = useParams();
   const navigate = useNavigate();
   const [topic, setTopic] = useState(null);
   const [contents, setContents] = useState([]);
   const [seen, setSeen] = useState([]);
 
-  // Load topic details + contents
   useEffect(() => {
     async function load() {
-      // Load topic details from backend (if needed)
-      const topicRes = await fetch(`${API_BASE}/topics/list`);
-      const topicList = await topicRes.json();
-      const found = topicList.find(t => t.id === topic_id);
-      setTopic(found);
+      try {
+        // Load topic details
+        const topicRes = await fetch(`${API_BASE}/topics/list`);
+        const topicList = await topicRes.json();
+        const found = topicList.find(t => t.id === topicId);
+        setTopic(found);
 
-      // Load topic content
-      const res = await fetch(`${API_BASE}/content/${topic_id}`);
-      const json = await res.json();
-      setContents(json);
+        // Load topic content
+        const res = await fetch(`${API_BASE}/content/${topicId}`);
+        const json = await res.json();
+        setContents(json);
 
-      // Load seen list
-      const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
-      const stuJson = await stuRes.json();
-      setSeen(stuJson.content_seen || []);
+        // Load seen list
+        const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
+        const stuJson = await stuRes.json();
+        setSeen(stuJson.content_seen || []);
+      } catch (err) {
+        console.error("Error loading content:", err);
+      }
     }
     load();
-  }, [studentId, topic_id]);
+  }, [studentId, topicId]);
 
   async function markSeen(contentId) {
     try {
       const res = await fetch(`${API_BASE}/students/${studentId}/content_seen`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content_id: contentId })
+        body: JSON.stringify({ content_id: contentId }),
       });
       const data = await res.json();
       setSeen(data.content_seen || []);
@@ -59,14 +62,19 @@ export default function StudentTopicContent() {
       <h3>Learning Materials</h3>
       {contents.length === 0 && <p>No materials yet for this topic.</p>}
       {contents.map((c) => (
-        <div key={c.id} style={{
-          marginBottom: 10,
-          padding: "10px",
-          border: "1px solid #ddd",
-          borderRadius: 6,
-          background: "#fafafa"
-        }}>
-          <a href={c.link} target="_blank" rel="noreferrer">{c.title}</a>
+        <div
+          key={c.id}
+          style={{
+            marginBottom: 10,
+            padding: "10px",
+            border: "1px solid #ddd",
+            borderRadius: 6,
+            background: "#fafafa",
+          }}
+        >
+          <a href={c.link} target="_blank" rel="noreferrer">
+            {c.title}
+          </a>
           <p style={{ fontSize: 13, color: "#666" }}>{c.description}</p>
           {seen.includes(c.id) ? (
             <span style={{ color: "green", fontWeight: "bold" }}>✅ Viewed</span>
@@ -79,7 +87,7 @@ export default function StudentTopicContent() {
                 border: "none",
                 padding: "5px 8px",
                 borderRadius: 4,
-                cursor: "pointer"
+                cursor: "pointer",
               }}
             >
               Mark as Seen
