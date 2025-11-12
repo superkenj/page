@@ -1,6 +1,6 @@
+// frontend/src/pages/StudentTopicContent.jsx
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
 
 const API_BASE = "https://page-jirk.onrender.com";
 
@@ -10,98 +10,202 @@ export default function StudentTopicContent() {
   const [topic, setTopic] = useState(null);
   const [contents, setContents] = useState([]);
   const [seen, setSeen] = useState([]);
-  const [openCard, setOpenCard] = useState(null); // which card is expanded
+  const [expanded, setExpanded] = useState(null);
 
   useEffect(() => {
     async function load() {
-      const topicRes = await fetch(`${API_BASE}/topics/list`);
-      const topicList = await topicRes.json();
-      setTopic(topicList.find((t) => t.id === topicId));
+      try {
+        // Load topic details
+        const topicRes = await fetch(`${API_BASE}/topics/list`);
+        const topicList = await topicRes.json();
+        const found = topicList.find((t) => t.id === topicId);
+        setTopic(found);
 
-      const res = await fetch(`${API_BASE}/content/${topicId}`);
-      const json = await res.json();
-      setContents(json);
+        // Load topic content
+        const res = await fetch(`${API_BASE}/content/${topicId}`);
+        const json = await res.json();
+        setContents(json);
 
-      const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
-      const stuJson = await stuRes.json();
-      setSeen(stuJson.content_seen || []);
+        // Load student's seen content
+        const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
+        const stuJson = await stuRes.json();
+        setSeen(stuJson.content_seen || []);
+      } catch (err) {
+        console.error("Error loading content:", err);
+      }
     }
     load();
   }, [studentId, topicId]);
 
-  if (!topic) return <div className="text-center mt-10 text-gray-500">Loading...</div>;
+  async function markSeen(contentId) {
+    try {
+      const res = await fetch(`${API_BASE}/students/${studentId}/content_seen`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content_id: contentId }),
+      });
+      const data = await res.json();
+      setSeen(data.content_seen || []);
+    } catch (err) {
+      console.error("Failed to mark content as seen:", err);
+    }
+  }
+
+  if (!topic) return <div style={{ padding: 20 }}>Loading topic...</div>;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky-100 via-pink-100 to-emerald-100 p-6">
-      <div className="max-w-4xl mx-auto">
-        {/* Back Button */}
-        <button
-          onClick={() => navigate(-1)}
-          className="w-full bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-3 rounded-full mb-6 shadow-md transition-transform hover:scale-105"
-        >
-          <ArrowLeft className="inline mr-2" /> Back to Dashboard
-        </button>
+    <div style={{ padding: "40px 60px" }}>
+      {/* Top Back Button */}
+      <button
+        onClick={() => navigate(-1)}
+        style={{
+          display: "block",
+          width: "100%",
+          background: "#facc15",
+          border: "none",
+          color: "white",
+          fontWeight: "bold",
+          padding: "12px",
+          borderRadius: 10,
+          cursor: "pointer",
+          marginBottom: 24,
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+        }}
+      >
+        ← Back to Dashboard
+      </button>
 
-        {/* Topic Header */}
-        <div className="bg-white p-8 rounded-3xl shadow-lg text-center border-4 border-sky-200">
-          <h1 className="text-4xl font-bold text-sky-600 mb-3 flex justify-center items-center gap-2">
-            <BookOpen size={36} /> {topic.name}
-          </h1>
-          <p className="text-gray-700 mb-6 text-lg">{topic.description}</p>
-        </div>
-
-        {/* Learning Material Cards */}
-        <div className="mt-8 grid gap-6">
-          {contents.map((c) => (
-            <div
-              key={c.id}
-              className="bg-white border-2 border-sky-200 rounded-2xl p-6 shadow-md transition-transform hover:scale-105"
-            >
-              <div
-                className="flex justify-between items-center cursor-pointer"
-                onClick={() => setOpenCard(openCard === c.id ? null : c.id)}
-              >
-                <h2 className="text-xl font-semibold text-sky-700">{c.title}</h2>
-                {openCard === c.id ? <ChevronUp /> : <ChevronDown />}
-              </div>
-
-              <p className="text-gray-600 mt-2">{c.description}</p>
-
-              {/* Expanded Inline View */}
-              {openCard === c.id && (
-                <div className="mt-4 bg-sky-50 border border-sky-200 rounded-xl p-4 text-center">
-                  <iframe
-                    src={c.link}
-                    title={c.title}
-                    className="w-full h-64 rounded-xl"
-                  ></iframe>
-                </div>
-              )}
-
-              <div className="mt-4">
-                {seen.includes(c.id) ? (
-                  <span className="text-green-600 font-bold">✅ Viewed</span>
-                ) : (
-                  <button
-                    onClick={() => markSeen(c.id)}
-                    className="bg-orange-400 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-full shadow-md transition-transform hover:scale-105"
-                  >
-                    Mark as Seen
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Bottom Back Button */}
-        <button
-          onClick={() => navigate(-1)}
-          className="w-full bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-3 rounded-full mt-8 shadow-md transition-transform hover:scale-105"
-        >
-          <ArrowLeft className="inline mr-2" /> Back to Dashboard
-        </button>
+      {/* Topic Header */}
+      <div
+        style={{
+          background: "#f9fafb",
+          border: "1px solid #e5e7eb",
+          borderRadius: 10,
+          padding: 24,
+          marginBottom: 32,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+        }}
+      >
+        <h1 style={{ marginBottom: 8, fontSize: 24 }}>📘 {topic.name}</h1>
+        <p style={{ color: "#374151" }}>{topic.description}</p>
       </div>
+
+      {/* Learning Materials Section */}
+      <h2 style={{ marginBottom: 16 }}>📚 Learning Materials</h2>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: 16,
+        }}
+      >
+        {contents.length === 0 && (
+          <p style={{ color: "#6b7280" }}>No materials available yet.</p>
+        )}
+
+        {contents.map((c) => (
+          <div
+            key={c.id}
+            style={{
+              background: "#fff",
+              border: "1px solid #e5e7eb",
+              borderRadius: 10,
+              padding: 16,
+              boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+              transition: "transform 0.2s ease, box-shadow 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "scale(1.03)";
+              e.currentTarget.style.boxShadow = "0 4px 8px rgba(0,0,0,0.15)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
+              e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.1)";
+            }}
+          >
+            <h3
+              style={{
+                marginBottom: 8,
+                fontWeight: "bold",
+                cursor: "pointer",
+                color: "#1d4ed8",
+              }}
+              onClick={() =>
+                setExpanded(expanded === c.id ? null : c.id)
+              }
+            >
+              {c.title}
+            </h3>
+            <p style={{ fontSize: 14, color: "#374151", marginBottom: 12 }}>
+              {c.description}
+            </p>
+
+            {expanded === c.id && (
+              <div
+                style={{
+                  background: "#f9fafb",
+                  borderRadius: 8,
+                  padding: 8,
+                  marginBottom: 10,
+                }}
+              >
+                <iframe
+                  src={c.link}
+                  title={c.title}
+                  width="100%"
+                  height="200"
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 8,
+                  }}
+                ></iframe>
+              </div>
+            )}
+
+            {seen.includes(c.id) ? (
+              <span style={{ color: "green", fontWeight: "bold" }}>
+                ✅ Viewed
+              </span>
+            ) : (
+              <button
+                onClick={() => markSeen(c.id)}
+                style={{
+                  background: "#f59e0b",
+                  color: "white",
+                  border: "none",
+                  padding: "6px 10px",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: "bold",
+                }}
+              >
+                Mark as Seen
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Bottom Back Button */}
+      <button
+        onClick={() => navigate(-1)}
+        style={{
+          display: "block",
+          width: "100%",
+          background: "#facc15",
+          border: "none",
+          color: "white",
+          fontWeight: "bold",
+          padding: "12px",
+          borderRadius: 10,
+          cursor: "pointer",
+          marginTop: 40,
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+        }}
+      >
+        ← Back to Dashboard
+      </button>
     </div>
   );
 }
