@@ -10,23 +10,19 @@ export default function StudentTopicContent() {
   const [topic, setTopic] = useState(null);
   const [contents, setContents] = useState([]);
   const [seen, setSeen] = useState([]);
-  const [expanded, setExpanded] = useState(null);
+  const [activeVideo, setActiveVideo] = useState(null); // 👈 For pop-out modal
 
   useEffect(() => {
     async function load() {
       try {
-        // Load topic details
         const topicRes = await fetch(`${API_BASE}/topics/list`);
         const topicList = await topicRes.json();
-        const found = topicList.find((t) => t.id === topicId);
-        setTopic(found);
+        setTopic(topicList.find((t) => t.id === topicId));
 
-        // Load topic content
         const res = await fetch(`${API_BASE}/content/${topicId}`);
         const json = await res.json();
         setContents(json);
 
-        // Load student's seen content
         const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
         const stuJson = await stuRes.json();
         setSeen(stuJson.content_seen || []);
@@ -51,17 +47,33 @@ export default function StudentTopicContent() {
     }
   }
 
+  function getEmbedLink(link) {
+    if (!link) return "";
+    if (link.includes("youtube.com/watch?v=")) {
+      const id = link.split("v=")[1].split("&")[0];
+      return `https://www.youtube.com/embed/${id}`;
+    }
+    return link;
+  }
+
   if (!topic) return <div style={{ padding: 20 }}>Loading topic...</div>;
 
   return (
-    <div style={{ padding: "40px 60px" }}>
+    <div
+      style={{
+        background: "linear-gradient(to bottom, #eaf6ff, #fff6f8)",
+        minHeight: "100vh",
+        padding: "40px 60px",
+        position: "relative",
+      }}
+    >
       {/* Top Back Button */}
       <button
         onClick={() => navigate(-1)}
         style={{
           display: "block",
           width: "100%",
-          background: "#facc15",
+          background: "#4db6ac",
           border: "none",
           color: "white",
           fontWeight: "bold",
@@ -78,92 +90,69 @@ export default function StudentTopicContent() {
       {/* Topic Header */}
       <div
         style={{
-          background: "#f9fafb",
-          border: "1px solid #e5e7eb",
-          borderRadius: 10,
+          background: "#ffffff",
+          border: "1px solid #dbeafe",
+          borderRadius: 12,
           padding: 24,
           marginBottom: 32,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          boxShadow: "0 3px 6px rgba(0,0,0,0.05)",
         }}
       >
-        <h1 style={{ marginBottom: 8, fontSize: 24 }}>📘 {topic.name}</h1>
-        <p style={{ color: "#374151" }}>{topic.description}</p>
+        <h1 style={{ marginBottom: 8, fontSize: 26, color: "#1e3a8a" }}>
+          📘 {topic.name}
+        </h1>
+        <p style={{ color: "#334155" }}>{topic.description}</p>
       </div>
 
       {/* Learning Materials Section */}
-      <h2 style={{ marginBottom: 16 }}>📚 Learning Materials</h2>
+      <h2 style={{ marginBottom: 16, color: "#2563eb" }}>
+        🎨 Learning Materials
+      </h2>
+
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-          gap: 16,
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+          gap: 20,
         }}
       >
-        {contents.length === 0 && (
-          <p style={{ color: "#6b7280" }}>No materials available yet.</p>
-        )}
-
         {contents.map((c) => (
           <div
             key={c.id}
             style={{
-              background: "#fff",
-              border: "1px solid #e5e7eb",
-              borderRadius: 10,
+              background: "#ffffff",
+              border: "1px solid #e0e7ff",
+              borderRadius: 12,
               padding: 16,
-              boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+              boxShadow: "0 3px 6px rgba(0,0,0,0.08)",
               transition: "transform 0.2s ease, box-shadow 0.2s ease",
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = "scale(1.03)";
-              e.currentTarget.style.boxShadow = "0 4px 8px rgba(0,0,0,0.15)";
+              e.currentTarget.style.boxShadow = "0 5px 10px rgba(0,0,0,0.1)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = "scale(1)";
-              e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.1)";
+              e.currentTarget.style.boxShadow = "0 3px 6px rgba(0,0,0,0.08)";
             }}
           >
             <h3
               style={{
                 marginBottom: 8,
                 fontWeight: "bold",
+                color: "#2563eb",
                 cursor: "pointer",
-                color: "#1d4ed8",
               }}
-              onClick={() =>
-                setExpanded(expanded === c.id ? null : c.id)
-              }
+              onClick={() => setActiveVideo(getEmbedLink(c.link))} // 👈 open modal
             >
-              {c.title}
+              ▶ {c.title}
             </h3>
-            <p style={{ fontSize: 14, color: "#374151", marginBottom: 12 }}>
+            <p style={{ fontSize: 14, color: "#475569", marginBottom: 12 }}>
               {c.description}
             </p>
 
-            {expanded === c.id && (
-              <div
-                style={{
-                  background: "#f9fafb",
-                  borderRadius: 8,
-                  padding: 8,
-                  marginBottom: 10,
-                }}
-              >
-                <iframe
-                  src={c.link}
-                  title={c.title}
-                  width="100%"
-                  height="200"
-                  style={{
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 8,
-                  }}
-                ></iframe>
-              </div>
-            )}
-
             {seen.includes(c.id) ? (
-              <span style={{ color: "green", fontWeight: "bold" }}>
+              <span style={{ color: "#16a34a", fontWeight: "bold" }}>
                 ✅ Viewed
               </span>
             ) : (
@@ -193,7 +182,7 @@ export default function StudentTopicContent() {
         style={{
           display: "block",
           width: "100%",
-          background: "#facc15",
+          background: "#4db6ac",
           border: "none",
           color: "white",
           fontWeight: "bold",
@@ -206,6 +195,69 @@ export default function StudentTopicContent() {
       >
         ← Back to Dashboard
       </button>
+
+      {/* 🎥 Pop-out Video Modal */}
+      {activeVideo && (
+        <div
+          onClick={() => setActiveVideo(null)}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.7)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#fff",
+              padding: 12,
+              borderRadius: 12,
+              maxWidth: "90%",
+              width: "800px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+              position: "relative",
+            }}
+          >
+            <button
+              onClick={() => setActiveVideo(null)}
+              style={{
+                position: "absolute",
+                top: 10,
+                right: 12,
+                background: "#ef4444",
+                color: "white",
+                border: "none",
+                borderRadius: "50%",
+                width: 32,
+                height: 32,
+                fontSize: 18,
+                cursor: "pointer",
+              }}
+            >
+              ✖
+            </button>
+            <iframe
+              src={activeVideo}
+              title="Video Player"
+              width="100%"
+              height="450"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              style={{
+                border: "none",
+                borderRadius: 10,
+              }}
+            ></iframe>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
