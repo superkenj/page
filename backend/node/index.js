@@ -224,27 +224,63 @@ app.post("/students/:id/content_seen", async (req, res) => {
       return res.status(400).json({ error: "content_id is required" });
 
     const studentRef = db.collection("students").doc(id);
-    const doc = await studentRef.get();
-
-    if (!doc.exists)
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists)
       return res.status(404).json({ error: "Student not found" });
 
-    const data = doc.data();
-    const seen = Array.isArray(data.content_seen) ? [...data.content_seen] : [];
+    const studentData = studentDoc.data();
+    const seen = Array.isArray(studentData.content_seen)
+      ? [...studentData.content_seen]
+      : [];
 
-    // Add only if not already included
+    // Add content_id if not already seen
     if (!seen.includes(content_id)) {
       seen.push(content_id);
       await studentRef.update({ content_seen: seen });
     }
 
-    res.status(200).json({ success: true, content_seen: seen });
+    // ✅ Step 1: Get content info (to know which topic it belongs to)
+    const contentDoc = await db.collection("contents").doc(content_id).get();
+    if (contentDoc.exists) {
+      const { topic_id } = contentDoc.data();
+
+      // ✅ Step 2: Get all contents under this topic
+      const topicContentsSnap = await db
+        .collection("contents")
+        .where("topic_id", "==", topic_id)
+        .get();
+      const topicContentIds = topicContentsSnap.docs.map((d) => d.id);
+
+      // ✅ Step 3: Check if student has seen all contents for this topic
+      const allSeen = topicContentIds.every((cid) => seen.includes(cid));
+
+      if (allSeen) {
+        // ✅ Step 4: Add topic_id to mastered if not already there
+        const mastered = Array.isArray(studentData.mastered)
+          ? [...studentData.mastered]
+          : [];
+
+        if (!mastered.includes(topic_id)) {
+          mastered.push(topic_id);
+          await studentRef.update({ mastered });
+        }
+      }
+    }
+
+    // ✅ Respond with updated content_seen (and optionally mastered)
+    const updatedDoc = await studentRef.get();
+    const updatedData = updatedDoc.data();
+
+    res.status(200).json({
+      success: true,
+      content_seen: updatedData.content_seen || [],
+      mastered: updatedData.mastered || [],
+    });
   } catch (err) {
     console.error("Error updating content_seen:", err);
     res.status(500).json({ error: "Failed to update content_seen" });
   }
 });
-
 
 // ✅ Delete topic and its contents
 app.delete("/topics/:id", async (req, res) => {

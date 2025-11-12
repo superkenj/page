@@ -12,15 +12,19 @@ export default function StudentDashboard() {
   const [path, setPath] = useState({ mastered: [], recommended: [], inProgress: [], upcoming: [] });
   const [loading, setLoading] = useState(true);
 
-  // fetch topics + path + student (for content_seen)
+  // -------------------------------
+  // FETCH + REFRESH LOGIC
+  // -------------------------------
   async function loadAll() {
     try {
       setLoading(true);
+
       const [tRes, pRes, sRes] = await Promise.all([
         fetch(`${API_BASE}/topics/list`),
         fetch(`${API_BASE}/students/${id}/path`),
         fetch(`${API_BASE}/students/${id}`),
       ]);
+
       const tJson = await tRes.json();
       const pJson = await pRes.json();
       const sJson = await sRes.json();
@@ -35,14 +39,18 @@ export default function StudentDashboard() {
         upcoming: Array.isArray(pJson.upcoming) ? pJson.upcoming : [],
       };
 
-      // fallback: if student.content_seen contains items from a topic and topic not mastered -> mark inProgress client-side
+      // ✅ Detect progress based on seen content
       const seenSet = new Set(sJson.content_seen || []);
-
-      // For performance: only fetch content lists for topics not mastered
-      const notMastered = allTopics.filter((t) => !p.mastered.some((m) => (m?.id || m) === t.id));
-      const fetches = notMastered.map((t) =>
-        fetch(`${API_BASE}/content/${t.id}`).then((r) => r.json()).then((list) => ({ topicId: t.id, list }))
+      const notMastered = allTopics.filter(
+        (t) => !p.mastered.some((m) => (m?.id || m) === t.id)
       );
+
+      const fetches = notMastered.map((t) =>
+        fetch(`${API_BASE}/content/${t.id}`)
+          .then((r) => r.json())
+          .then((list) => ({ topicId: t.id, list }))
+      );
+
       const results = await Promise.all(fetches);
 
       const derivedInProgressIds = new Set(p.inProgress.map((x) => (x?.id || x)));
@@ -59,10 +67,23 @@ export default function StudentDashboard() {
     }
   }
 
+  // -------------------------------
+  // AUTO REFRESH ON CONTENT SEEN
+  // -------------------------------
   useEffect(() => {
-    loadAll();
-    window.addEventListener("contentSeenUpdated", loadAll);
-    return () => window.removeEventListener("contentSeenUpdated", loadAll);
+    loadAll(); // initial load
+
+    // ✅ Listen for updates triggered by StudentTopicContent
+    const handleRefresh = () => {
+      console.log("🔄 Detected contentSeenUpdated — refreshing dashboard...");
+      loadAll();
+    };
+
+    window.addEventListener("contentSeenUpdated", handleRefresh);
+
+    return () => {
+      window.removeEventListener("contentSeenUpdated", handleRefresh);
+    };
   }, [id]);
 
   function getStatus(topicId) {
