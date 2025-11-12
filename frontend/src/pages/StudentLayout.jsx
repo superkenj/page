@@ -76,11 +76,11 @@ export default function StudentLayout() {
   // ✅ Child-friendly avatars
   const gender = (student?.gender || student?.sex || "").toLowerCase().trim();
   const avatarUrl =
-    ["male", "m", "boy", "1", "true"].includes(gender)
-      ? "https://cdn-icons-png.flaticon.com/512/3006/3006876.png" // boy
-      : ["female", "f", "girl", "0", "false"].includes(gender)
-      ? "https://cdn-icons-png.flaticon.com/512/3006/3006878.png" // girl
-      : "https://cdn-icons-png.flaticon.com/512/1995/1995574.png"; // default
+    ["male", "m", "boy"].includes(gender)
+      ? "https://cdn-icons-png.flaticon.com/512/706/706797.png" // boy avatar
+      : ["female", "f", "girl"].includes(gender)
+      ? "https://cdn-icons-png.flaticon.com/512/706/706830.png" // girl avatar
+      : "https://cdn-icons-png.flaticon.com/512/706/706797.png"; // neutral child
 
   return (
     <div

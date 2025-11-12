@@ -187,7 +187,7 @@ export default function StudentTopicContent() {
         ← Back to Dashboard
       </button>
 
-      {/* 🎥 Universal Pop-out Modal */}
+      {/* Pop-out Modal */}
       {activeContent && (
         <div
           onClick={() => setActiveContent(null)}
@@ -199,9 +199,8 @@ export default function StudentTopicContent() {
             height: "100vh",
             background: "rgba(0,0,0,0.7)",
             display: "flex",
-            alignItems: "flex-start",
+            alignItems: "center",
             justifyContent: "center",
-            paddingTop: "6vh",
             zIndex: 1000,
           }}
         >
@@ -209,43 +208,40 @@ export default function StudentTopicContent() {
             onClick={(e) => e.stopPropagation()}
             style={{
               background: "#fff",
-              padding: 16,
               borderRadius: 12,
-              maxWidth: "90%",
-              width: "800px",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-              position: "relative",
+              padding: 16,
+              width: "80%",
+              maxWidth: 800,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+              textAlign: "center",
             }}
           >
-            <h2 style={{ marginBottom: 8 }}>{activeContent.title}</h2>
-            <p style={{ marginBottom: 12 }}>{activeContent.description}</p>
-
-            {/* Embedded viewer for all content types */}
+            {/* Embed content only */}
             <iframe
               src={getEmbedLink(activeContent.link)}
-              title="Content Viewer"
+              title="Learning Content"
               width="100%"
               height="450"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
-              style={{ border: "none", borderRadius: 10 }}
+              style={{ border: "none", borderRadius: 10, marginBottom: 20 }}
             ></iframe>
 
-            {/* Mark as Seen & Close */}
-            <div style={{ marginTop: 16, textAlign: "right" }}>
+            {/* Functional buttons */}
+            <div style={{ display: "flex", justifyContent: "center", gap: 10 }}>
               <button
                 onClick={() => markSeen(activeContent.id)}
                 style={{
                   background: "#16a34a",
                   color: "white",
                   border: "none",
-                  padding: "8px 14px",
+                  padding: "10px 16px",
                   borderRadius: 8,
                   cursor: "pointer",
-                  marginRight: 10,
+                  fontWeight: "bold",
                 }}
               >
-                Mark as Seen & Close
+                ✅ Mark as Seen & Close
               </button>
               <button
                 onClick={() => setActiveContent(null)}
@@ -253,12 +249,13 @@ export default function StudentTopicContent() {
                   background: "#ef4444",
                   color: "white",
                   border: "none",
-                  padding: "8px 14px",
+                  padding: "10px 16px",
                   borderRadius: 8,
                   cursor: "pointer",
+                  fontWeight: "bold",
                 }}
               >
-                Close
+                ✖ Close
               </button>
             </div>
           </div>
