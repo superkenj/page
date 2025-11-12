@@ -52,9 +52,7 @@ export default function StudentLayout() {
 
   const progressPercent =
     topics.length > 0 ? Math.round((mastered.length / topics.length) * 100) : 0;
-
-  // robust gender normalization
-  const gender = normalizeGender(student?.gender);
+  
   const avatarUrl = student?.gender === "male"  ? boyImg : girlImg;
 
   function handleLogout() {
