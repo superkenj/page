@@ -92,7 +92,7 @@ function App() {
         </Route>
 
         <Route 
-          path="/student-dashboard/:id/topic/:topic_id" 
+          path="/student-dashboard/:id/topic/:topicId" 
           element={<StudentTopicContent />} 
         />
 
