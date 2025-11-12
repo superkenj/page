@@ -108,16 +108,25 @@ export default function StudentTopicContent() {
             ) : (
               <button
                 onClick={(e) => {
-                  e.stopPropagation();
-                  markSeen(c.id).then(() => {
-                    // notify dashboard to refresh the path (in-progress)
-                    window.dispatchEvent(new Event("contentSeenUpdated"));
-                  }).catch(()=>{});
+                  e.stopPropagation(); // ✅ stop parent click
+                  e.preventDefault();  // ✅ prevent focus loss
+                  markSeen(c.id)
+                    .then(() => {
+                      window.dispatchEvent(new Event("contentSeenUpdated"));
+                    })
+                    .catch(() => {});
                 }}
                 style={{
-                  background: "#f59e0b", color: "white", border: "none",
-                  padding: "6px 10px", borderRadius: 6, cursor: "pointer",
-                  fontSize: 13, fontWeight: "bold"
+                  background: "#f59e0b",
+                  color: "white",
+                  border: "none",
+                  padding: "6px 10px",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: "bold",
+                  position: "relative", // ✅ ensures button has its own layer
+                  zIndex: 10,           // ✅ ensures button receives clicks
                 }}
               >
                 Mark as Seen

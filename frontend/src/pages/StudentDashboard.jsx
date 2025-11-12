@@ -107,7 +107,7 @@ export default function StudentDashboard() {
   if (loading) return <div style={{ padding: 20 }}>Loading dashboard...</div>;
 
   // sort by the required order
-  const order = { Recommended: 1, "In Progress": 2, Mastered: 3, Upcoming: 4 };
+  const order = { "In Progress": 1, Recommended: 2, Mastered: 3, Upcoming: 4 };
   const sorted = [...topics].sort((a, b) => order[getStatus(a.id)] - order[getStatus(b.id)]);
 
   return (

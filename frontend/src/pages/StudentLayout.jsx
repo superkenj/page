@@ -5,13 +5,13 @@ import { useEffect, useState } from "react";
 const API_BASE = "https://page-jirk.onrender.com";
 
 export default function StudentLayout() {
-  const params = useParams();
-  const routeId = params.id;
+  const { id: routeId } = useParams();
+  const navigate = useNavigate();
+
   const [student, setStudent] = useState(null);
   const [topics, setTopics] = useState([]);
   const [mastered, setMastered] = useState([]);
   const [recommended, setRecommended] = useState([]);
-  const navigate = useNavigate();
 
   const studentId = routeId || localStorage.getItem("studentId");
 
@@ -27,13 +27,12 @@ export default function StudentLayout() {
         setMastered(masteredTopics);
 
         const topicRes = await fetch(`${API_BASE}/topics/list`);
-        const topicsJson = await topicRes.json();
-        const allTopics = Array.isArray(topicsJson)
-          ? topicsJson
-          : topicsJson.topics || [];
+        const topicJson = await topicRes.json();
+        const allTopics = Array.isArray(topicJson)
+          ? topicJson
+          : topicJson.topics || [];
         setTopics(allTopics);
 
-        // compute recommended (same logic as before)
         const computed = computeRecommended(allTopics, masteredTopics);
         setRecommended(computed);
       } catch (err) {
@@ -57,13 +56,18 @@ export default function StudentLayout() {
   const progressPercent =
     topics.length > 0 ? Math.round((mastered.length / topics.length) * 100) : 0;
 
-  // childlike avatars (replace with your own images if you prefer)
+  // ✅ Gender-safe normalization
+  const gender = student?.gender
+    ? student.gender.toString().trim().toLowerCase()
+    : "";
+
+  // ✅ Childlike avatars with fallback
   const avatarUrl =
-    student?.gender === "male"
-      ? "https://cdn-icons-png.flaticon.com/512/4740/4740595.png" // childlike male
-      : student?.gender === "female"
-      ? "https://cdn-icons-png.flaticon.com/512/4740/4740584.png" // childlike female
-      : "https://cdn-icons-png.flaticon.com/512/1995/1995574.png"; // neutral kid
+    gender === "male"
+      ? "https://cdn-icons-png.flaticon.com/512/4740/4740595.png"
+      : gender === "female"
+      ? "https://cdn-icons-png.flaticon.com/512/4740/4740584.png"
+      : "https://cdn-icons-png.flaticon.com/512/1995/1995574.png";
 
   function handleLogout() {
     localStorage.removeItem("studentId");
@@ -72,7 +76,15 @@ export default function StudentLayout() {
   }
 
   return (
-    <div style={{ display: "flex", background: "#f0f9ff", minHeight: "100vh" }}>
+    <div
+      style={{
+        display: "flex",
+        background: "#f0f9ff",
+        minHeight: "100vh",
+        overflow: "hidden",
+      }}
+    >
+      {/* Sidebar */}
       <aside
         style={{
           width: 280,
@@ -82,13 +94,13 @@ export default function StudentLayout() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          height: "100vh",
-          position: "sticky",
-          top: 0,
+          height: "85vh", // ✅ shorter sidebar
+          margin: "auto 0", // centers vertically
+          borderRadius: "0 0 12px 0",
           boxShadow: "4px 0 10px rgba(0,0,0,0.05)",
-          overflowY: "auto", // safe if sidebar grows
         }}
       >
+        {/* Top Section */}
         <div>
           <div style={{ textAlign: "center", marginBottom: "1.25rem" }}>
             <img
@@ -106,7 +118,9 @@ export default function StudentLayout() {
             <h2 style={{ margin: 0, fontSize: "1.2rem" }}>
               {student ? `Hi, ${student.name}!` : "Hello!"}
             </h2>
-            <p style={{ fontSize: "0.9rem", opacity: 0.95 }}>Keep up the great work! 🌟</p>
+            <p style={{ fontSize: "0.9rem", opacity: 0.95 }}>
+              Keep up the great work! 🌟
+            </p>
           </div>
 
           <div style={{ marginBottom: "1rem" }}>
@@ -151,12 +165,15 @@ export default function StudentLayout() {
                   </li>
                 ))
               ) : (
-                <li style={{ color: "rgba(255,255,255,0.9)" }}>No recommendations yet</li>
+                <li style={{ color: "rgba(255,255,255,0.9)" }}>
+                  No recommendations yet
+                </li>
               )}
             </ul>
           </div>
         </div>
 
+        {/* Bottom Section (Logout) */}
         <button
           onClick={handleLogout}
           style={{
@@ -168,13 +185,21 @@ export default function StudentLayout() {
             fontWeight: "bold",
             cursor: "pointer",
             fontSize: "1rem",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
           }}
         >
           Logout
         </button>
       </aside>
 
-      <main style={{ flex: 1, padding: "1.5rem 2rem", overflowY: "auto" }}>
+      {/* Main content */}
+      <main
+        style={{
+          flex: 1,
+          padding: "1.5rem 2rem",
+          overflowY: "auto",
+        }}
+      >
         <Outlet />
       </main>
     </div>
