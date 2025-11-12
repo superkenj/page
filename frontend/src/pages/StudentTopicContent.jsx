@@ -158,8 +158,11 @@ export default function StudentTopicContent() {
             ) : (
               <button
                 onClick={(e) => {
-                  e.stopPropagation(); // ✅ prevents click event conflict
-                  markSeen(c.id);
+                  e.stopPropagation();
+                  markSeen(c.id).then(() => {
+                    // 👇 notify dashboard to refresh in-progress
+                    window.dispatchEvent(new Event("contentSeenUpdated"));
+                  });
                 }}
                 style={{
                   background: "#f59e0b",

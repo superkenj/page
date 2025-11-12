@@ -14,52 +14,50 @@ export default function StudentDashboard() {
     inProgress: [],
     upcoming: [],
   });
-  const [seen, setSeen] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  async function fetchPath() {
+    try {
+      const res = await fetch(`${API_BASE}/students/${id}/path`);
+      const data = await res.json();
+      setPath({
+        mastered: data.mastered || [],
+        recommended: data.recommended || [],
+        inProgress: data.inProgress || [],
+        upcoming: data.upcoming || [],
+      });
+    } catch (e) {
+      console.error("Path fetch failed:", e);
+    }
+  }
+
   useEffect(() => {
-    async function loadAll() {
+    async function load() {
       try {
-        const [topicRes, pathRes, stuRes] = await Promise.all([
-          fetch(`${API_BASE}/topics/list`),
-          fetch(`${API_BASE}/students/${id}/path`),
-          fetch(`${API_BASE}/students/${id}`),
-        ]);
-
-        const tJson = await topicRes.json();
-        const pJson = await pathRes.json();
-        const sJson = await stuRes.json();
-
+        const tRes = await fetch(`${API_BASE}/topics/list`);
+        const tJson = await tRes.json();
         setTopics(Array.isArray(tJson) ? tJson : tJson.topics || []);
-        setSeen(sJson.content_seen || []);
-
-        setPath({
-          mastered: Array.isArray(pJson.mastered) ? pJson.mastered : [],
-          recommended: Array.isArray(pJson.recommended) ? pJson.recommended : [],
-          inProgress: Array.isArray(pJson.inProgress) ? pJson.inProgress : [],
-          upcoming: Array.isArray(pJson.upcoming) ? pJson.upcoming : [],
-        });
+        await fetchPath(); // ✅ load once
       } catch (err) {
         console.error("Dashboard load error:", err);
       } finally {
         setLoading(false);
       }
     }
-    loadAll();
+    load();
   }, [id]);
+
+  // ✅ refresh path when “Mark as Seen” is clicked in content
+  useEffect(() => {
+    window.addEventListener("contentSeenUpdated", fetchPath);
+    return () => window.removeEventListener("contentSeenUpdated", fetchPath);
+  }, []);
 
   function getCardColor(topicId) {
     if (path.mastered.some((t) => t.id === topicId)) return "#dcfce7";
-    if (path.recommended.some((t) => t.id === topicId)) return "#fef9c3";
     if (path.inProgress.some((t) => t.id === topicId)) return "#dbeafe";
+    if (path.recommended.some((t) => t.id === topicId)) return "#fef9c3";
     return "#f3f4f6";
-  }
-
-  function getCardBorder(topicId) {
-    if (path.mastered.some((t) => t.id === topicId)) return "2px solid #16a34a";
-    if (path.recommended.some((t) => t.id === topicId)) return "2px solid #ca8a04";
-    if (path.inProgress.some((t) => t.id === topicId)) return "2px solid #2563eb";
-    return "1px solid #e5e7eb";
   }
 
   function getStatus(topicId) {
@@ -69,45 +67,11 @@ export default function StudentDashboard() {
     return "Upcoming";
   }
 
-  function getStatusColor(status) {
-    switch (status) {
-      case "Recommended":
-        return "#facc15";
-      case "Mastered":
-        return "#16a34a";
-      case "In Progress":
-        return "#3b82f6";
-      default:
-        return "#9ca3af";
-    }
-  }
-
-  // fix sorting (Recommended → In Progress → Mastered → Upcoming)
-  function getSortedTopics() {
-    const allTopics = topics.map((t) => ({
-      ...t,
-      category: getStatus(t.id),
-    }));
-
-    const order = {
-      Recommended: 1,
-      "In Progress": 2,
-      Mastered: 3,
-      Upcoming: 4,
-    };
-
-    return allTopics.sort((a, b) => order[a.category] - order[b.category]);
-  }
-
-  const sortedTopics = getSortedTopics();
-
-  if (loading) return <div style={{ padding: 20 }}>Loading dashboard...</div>;
+  if (loading) return <div>Loading...</div>;
 
   return (
     <div style={{ padding: "20px 40px" }}>
-      <p style={{ marginBottom: 32 }}>
-        Click a card to start learning a topic.
-      </p>
+      <p>Click a card to start learning a topic.</p>
 
       <div
         style={{
@@ -116,46 +80,45 @@ export default function StudentDashboard() {
           gap: 16,
         }}
       >
-        {sortedTopics.map((topic) => {
+        {topics.map((topic) => {
           const status = getStatus(topic.id);
-          const labelColor = getStatusColor(status);
-
           return (
             <div
               key={topic.id}
               onClick={() => navigate(`/student-dashboard/${id}/topic/${topic.id}`)}
               style={{
                 background: getCardColor(topic.id),
-                border: getCardBorder(topic.id),
+                border: "2px solid rgba(0,0,0,0.1)",
                 borderRadius: 10,
                 padding: 16,
                 cursor: "pointer",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
                 position: "relative",
-                transition: "transform 0.2s ease",
               }}
             >
-              <div
+              <span
                 style={{
                   position: "absolute",
                   top: 10,
                   right: 10,
-                  background: labelColor,
+                  background:
+                    status === "Mastered"
+                      ? "#16a34a"
+                      : status === "In Progress"
+                      ? "#3b82f6"
+                      : status === "Recommended"
+                      ? "#facc15"
+                      : "#9ca3af",
                   color: "white",
                   fontSize: 12,
                   fontWeight: "bold",
                   padding: "3px 8px",
                   borderRadius: "12px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
                 }}
               >
                 {status}
-              </div>
-
-              <h3 style={{ marginBottom: 8 }}>{topic.name}</h3>
-              <p style={{ fontSize: 14, color: "#374151" }}>
-                {topic.description}
-              </p>
+              </span>
+              <h3>{topic.name}</h3>
+              <p>{topic.description}</p>
             </div>
           );
         })}

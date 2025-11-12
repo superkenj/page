@@ -1,10 +1,11 @@
 // frontend/src/pages/StudentLayout.jsx
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 
 const API_BASE = "https://page-jirk.onrender.com";
 
 export default function StudentLayout() {
+  const { id } = useParams(); // 👈 ensures correct ID reference
   const [student, setStudent] = useState(null);
   const [topics, setTopics] = useState([]);
   const [mastered, setMastered] = useState([]);
@@ -14,9 +15,6 @@ export default function StudentLayout() {
 
   useEffect(() => {
     async function loadData() {
-      const id = localStorage.getItem("studentId");
-      if (!id) return;
-
       try {
         const stuRes = await fetch(`${API_BASE}/students/${id}`);
         const stuJson = await stuRes.json();
@@ -48,10 +46,9 @@ export default function StudentLayout() {
       "Learning is your superpower! 💪",
     ];
     setQuote(quotes[Math.floor(Math.random() * quotes.length)]);
-  }, []);
+  }, [id]);
 
   function computeRecommended(allTopics, masteredList) {
-    if (!Array.isArray(allTopics) || !Array.isArray(masteredList)) return [];
     const masteredSet = new Set(masteredList);
     return allTopics
       .filter(
@@ -67,26 +64,19 @@ export default function StudentLayout() {
       ? Math.round((mastered.length / topics.length) * 100)
       : 0;
 
+  const avatarUrl =
+    student?.gender === "male"
+      ? "https://cdn-icons-png.flaticon.com/512/4140/4140048.png"
+      : "https://cdn-icons-png.flaticon.com/512/706/706830.png";
+
   function handleLogout() {
     localStorage.removeItem("studentId");
     localStorage.removeItem("role");
     navigate("/");
   }
 
-  const avatarUrl =
-    student?.gender === "male"
-      ? "https://cdn-icons-png.flaticon.com/512/4140/4140048.png"
-      : "https://cdn-icons-png.flaticon.com/512/706/706830.png";
-
   return (
-    <div
-      style={{
-        display: "flex",
-        minHeight: "100vh",
-        background: "#f0f9ff",
-      }}
-    >
-      {/* Sidebar - fills entire viewport */}
+    <div style={{ display: "flex", background: "#f0f9ff", minHeight: "100vh" }}>
       <aside
         style={{
           width: 280,
@@ -97,12 +87,10 @@ export default function StudentLayout() {
           flexDirection: "column",
           justifyContent: "space-between",
           height: "100vh",
-          position: "sticky",
-          top: 0,
+          overflowY: "auto", // ✅ fixes logout cutoff
         }}
       >
         <div>
-          {/* Profile */}
           <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
             <img
               src={avatarUrl}
@@ -130,8 +118,8 @@ export default function StudentLayout() {
               style={{
                 background: "rgba(255,255,255,0.3)",
                 borderRadius: "10px",
-                overflow: "hidden",
                 height: 14,
+                overflow: "hidden",
                 marginBottom: 4,
               }}
             >
@@ -147,17 +135,10 @@ export default function StudentLayout() {
             <p style={{ fontSize: "0.85rem" }}>{progressPercent}% Complete</p>
           </div>
 
-          {/* Recommended Topics */}
+          {/* Recommended */}
           <div>
             <p style={{ fontWeight: "bold" }}>⭐ Recommended Topics</p>
-            <ul
-              style={{
-                listStyle: "none",
-                paddingLeft: 0,
-                fontSize: "0.9rem",
-                marginBottom: "1rem",
-              }}
-            >
+            <ul style={{ listStyle: "none", paddingLeft: 0 }}>
               {recommended.length ? (
                 recommended.map((r) => (
                   <li
@@ -176,15 +157,13 @@ export default function StudentLayout() {
                 <li>No recommendations yet</li>
               )}
             </ul>
-
-            {/* Daily Quote */}
             <div
               style={{
                 background: "rgba(255,255,255,0.2)",
                 borderRadius: "10px",
                 padding: "10px",
-                fontSize: "0.85rem",
                 fontStyle: "italic",
+                fontSize: "0.85rem",
               }}
             >
               💬 “{quote}”
@@ -192,11 +171,9 @@ export default function StudentLayout() {
           </div>
         </div>
 
-        {/* Logout Button */}
         <button
           onClick={handleLogout}
           style={{
-            width: "100%",
             background: "#ef4444",
             border: "none",
             color: "white",
@@ -204,10 +181,8 @@ export default function StudentLayout() {
             borderRadius: "10px",
             fontWeight: "bold",
             cursor: "pointer",
-            transition: "background 0.2s ease",
+            marginTop: "1rem",
           }}
-          onMouseOver={(e) => (e.currentTarget.style.background = "#dc2626")}
-          onMouseOut={(e) => (e.currentTarget.style.background = "#ef4444")}
         >
           Logout
         </button>
