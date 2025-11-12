@@ -18,26 +18,20 @@ export default function StudentLayout() {
       if (!id) return;
 
       try {
-        // ✅ Fetch student info
         const stuRes = await fetch(`${API_BASE}/students/${id}`);
         const stuJson = await stuRes.json();
         setStudent(stuJson);
 
-        // ✅ Get mastered topics
         const masteredTopics = stuJson.mastered || [];
         setMastered(masteredTopics);
 
-        // ✅ Fetch all topics
         const topicRes = await fetch(`${API_BASE}/topics/list`);
         const topicsJson = await topicRes.json();
-
-        // normalize data
         const allTopics = Array.isArray(topicsJson)
           ? topicsJson
           : topicsJson.topics || [];
         setTopics(allTopics);
 
-        // ✅ Compute recommended
         const computed = computeRecommended(allTopics, masteredTopics);
         setRecommended(computed);
       } catch (err) {
@@ -47,7 +41,6 @@ export default function StudentLayout() {
 
     loadData();
 
-    // ✅ Rotating quote
     const quotes = [
       "Mathematics is the language of the universe!",
       "Every problem has a solution — let’s find it!",
@@ -57,43 +50,29 @@ export default function StudentLayout() {
     setQuote(quotes[Math.floor(Math.random() * quotes.length)]);
   }, []);
 
-  // ✅ Function to compute recommended topics
   function computeRecommended(allTopics, masteredList) {
     if (!Array.isArray(allTopics) || !Array.isArray(masteredList)) return [];
     const masteredSet = new Set(masteredList);
-
     return allTopics
-      .filter((topic) => {
-        // Skip if already mastered
-        if (masteredSet.has(topic.id)) return false;
-
-        // If no prerequisites, skip (assume basic topic already known)
-        if (!topic.prerequisites || topic.prerequisites.length === 0)
-          return false;
-
-        // Recommend only if all prerequisites are mastered
-        return topic.prerequisites.every((p) => masteredSet.has(p));
-      })
-      .map((t) => ({
-        id: t.id,
-        name: t.name,
-      }));
+      .filter(
+        (topic) =>
+          !masteredSet.has(topic.id) &&
+          topic.prerequisites?.every((p) => masteredSet.has(p))
+      )
+      .map((t) => ({ id: t.id, name: t.name }));
   }
 
-  // ✅ Compute progress
   const progressPercent =
     topics.length > 0
       ? Math.round((mastered.length / topics.length) * 100)
       : 0;
 
-  // ✅ Logout handler
   function handleLogout() {
     localStorage.removeItem("studentId");
     localStorage.removeItem("role");
     navigate("/");
   }
 
-  // ✅ Avatar by gender
   const avatarUrl =
     student?.gender === "male"
       ? "https://cdn-icons-png.flaticon.com/512/4140/4140048.png"
@@ -107,7 +86,7 @@ export default function StudentLayout() {
         background: "#f0f9ff",
       }}
     >
-      {/* Sidebar */}
+      {/* Sidebar - fills entire viewport */}
       <aside
         style={{
           width: 280,
@@ -117,11 +96,9 @@ export default function StudentLayout() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          boxShadow: "4px 0 10px rgba(0,0,0,0.1)",
-          borderRadius: "0 20px 20px 0",
+          height: "100vh",
           position: "sticky",
           top: 0,
-          height: "100vh",
         }}
       >
         <div>
@@ -226,7 +203,6 @@ export default function StudentLayout() {
             padding: "10px 0",
             borderRadius: "10px",
             fontWeight: "bold",
-            marginTop: "1.5rem",
             cursor: "pointer",
             transition: "background 0.2s ease",
           }}
@@ -237,8 +213,7 @@ export default function StudentLayout() {
         </button>
       </aside>
 
-      {/* Main Dashboard */}
-      <main style={{ flex: 1, padding: "1.5rem" }}>
+      <main style={{ flex: 1, padding: "2rem", overflowY: "auto" }}>
         <Outlet />
       </main>
     </div>

@@ -157,7 +157,10 @@ export default function StudentTopicContent() {
               </span>
             ) : (
               <button
-                onClick={() => markSeen(c.id)}
+                onClick={(e) => {
+                  e.stopPropagation(); // ✅ prevents click event conflict
+                  markSeen(c.id);
+                }}
                 style={{
                   background: "#f59e0b",
                   color: "white",
