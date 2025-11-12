@@ -93,7 +93,7 @@ export default function StudentDashboard() {
         background: "linear-gradient(90deg,#3b82f6,#06b6d4)", color: "white",
         padding: "10px 20px", borderRadius: 10, boxShadow: "0 3px 6px rgba(0,0,0,0.15)"
       }}>
-        💬 Click a card to start learning a topic.
+        💬 Choose a recommended card to start your learning adventure!
       </h2>
 
       <div style={{

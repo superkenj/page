@@ -76,7 +76,9 @@ export default function StudentLayout() {
           alignSelf: "flex-start",     // required so sticky behaves inside flex container
           position: "sticky",
           top: 0,
-          height: "100vh",            // full viewport height so it sticks
+          minHeight: "92vh",    // ✅ responsive height
+          maxHeight: "100vh",
+          overflowY: "auto",    // ✅ ensures Logout is visible
           boxShadow: "4px 0 10px rgba(0,0,0,0.05)",
         }}
       >
