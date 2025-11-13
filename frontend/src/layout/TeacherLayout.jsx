@@ -2,10 +2,10 @@ import TeacherSidebar from "./TeacherSidebar";
 
 export default function TeacherLayout({ children }) {
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div style={{ display: "flex", minHeight: "100vh", background: "#f9fafb" }}>
       <TeacherSidebar />
 
-      <div className="flex-1 p-6">
+      <div style={{ flex: 1, padding: "2rem" }}>
         {children}
       </div>
     </div>
