@@ -118,15 +118,13 @@ export default function TeacherDashboard() {
     flex: 1,
     background: "#fff",
     borderRadius: "12px",
-    padding: "1rem",
+    padding: "1.5rem",
     boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
     cursor: "pointer",
-    transition: "transform 0.2s ease",
+    transition: "0.2s",
     display: "flex",
-    flexDirection: "row",
+    flexDirection: "column",
     alignItems: "center",
-    justifyContent: "flex-start",
-    gap: "20px",
     textAlign: "center"
   };
 
@@ -155,14 +153,16 @@ export default function TeacherDashboard() {
           onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
           onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <FaUserGraduate style={{ ...iconStyle, color: "#3b82f6", marginBottom: 0 }} />
-            <div>
-              <div style={{ ...numberStyle, color: "#3b82f6", marginBottom: 0 }}>
-                {summary.students_total}
-              </div>
-              <div style={{ fontWeight: 600 }}>Students</div>
-            </div>
+          <FaUserGraduate size={40} color="#3b82f6" />
+          <h2 style={{ color: "#3b82f6" }}>{summary.students_total}</h2>
+          <p>Students</p>
+          <div style={{ marginTop: 10 }}>
+            <span style={{ color: "#16a34a", marginRight: 10 }}>
+              ✔ {summary.students_pass} pass
+            </span>
+            <span style={{ color: "#dc2626" }}>
+              ✘ {summary.students_fail} fail
+            </span>
           </div>
         </div>
 
@@ -173,15 +173,9 @@ export default function TeacherDashboard() {
           onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
           onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <FaBook style={{ ...iconStyle, color: "#f59e0b", marginBottom: 0 }} />
-            <div>
-              <div style={{ ...numberStyle, color: "#f59e0b", marginBottom: 0 }}>
-                {summary.topic_count}
-              </div>
-              <div style={{ fontWeight: 600 }}>Topics</div>
-            </div>
-          </div>
+          <FaBook size={40} color="#f59e0b" />
+          <h2 style={{ color: "#f59e0b" }}>{summary.topic_count}</h2>
+          <p>Topics</p>
         </div>
       </div>
 
