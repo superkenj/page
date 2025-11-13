@@ -19,7 +19,7 @@ export default function TeacherLayout({ children }) {
           margin: "0 auto",
         }}
       >
-        {children}
+        <Outlet />
       </main>
     </div>
   );
