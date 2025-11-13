@@ -75,8 +75,8 @@ export default function StudentLayout() {
           justifyContent: "space-between",
           position: "sticky",
           top: 0,
-          minHeight: "100vh",   // ✅ ensures it fills screen visually
-          maxHeight: "100vh",   // ✅ prevent overflow beyond viewport
+          minHeight: "95vh",   // ✅ ensures it fills screen visually
+          maxHeight: "95vh",   // ✅ prevent overflow beyond viewport
           overflowY: "auto",    // ✅ allows internal scrolling when content exceeds
           boxShadow: "4px 0 10px rgba(0,0,0,0.05)",
         }}
