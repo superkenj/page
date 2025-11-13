@@ -231,38 +231,6 @@ app.get("/students/:id/path", async (req, res) => {
   }
 });
 
-// ✅ Helper: Promote dependent topics to "recommended"
-async function updateRecommendedAfterMastered(studentId, newlyMasteredTopicId) {
-  const studentRef = db.collection("students").doc(studentId);
-  const studentDoc = await studentRef.get();
-  if (!studentDoc.exists) return;
-
-  const studentData = studentDoc.data();
-  const mastered = Array.isArray(studentData.mastered)
-    ? studentData.mastered.map((m) => (typeof m === "object" ? m.id : m))
-    : [];
-  let recommended = Array.isArray(studentData.recommended)
-    ? studentData.recommended.map((r) => (typeof r === "object" ? r.id : r))
-    : [];
-
-  const topicsSnap = await db.collection("topics").get();
-  const allTopics = topicsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-  for (const topic of allTopics) {
-    const prereqs = Array.isArray(topic.prerequisites) ? topic.prerequisites : [];
-    if (prereqs.includes(newlyMasteredTopicId)) {
-      // All prerequisites must be mastered before recommending
-      const allMet = prereqs.every((p) => mastered.includes(p));
-      if (allMet && !recommended.includes(topic.id) && !mastered.includes(topic.id)) {
-        recommended.push(topic.id);
-        console.log(`🌟 Topic ${topic.id} is now recommended for ${studentId}`);
-      }
-    }
-  }
-
-  await studentRef.update({ recommended });
-}
-
 // ------------------------------------------------
 // 🔹 TOPICS ROUTES
 // ------------------------------------------------
@@ -398,48 +366,6 @@ app.post("/students/:id/master_topic", async (req, res) => {
     }
 
     // 🔄 Update dependent topics as recommended
-    await updateRecommendedAfterMastered(id, topic_id);
-
-    const updated = (await studentRef.get()).data();
-    res.status(200).json({
-      success: true,
-      mastered: updated.mastered || [],
-      recommended: updated.recommended || [],
-    });
-  } catch (err) {
-    console.error("Error manually mastering topic:", err);
-    res.status(500).json({ error: "Failed to manually master topic" });
-  }
-});
-
-// ✅ Manually force a topic to Mastered (for fixing stale cards)
-app.post("/students/:id/master_topic", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { topic_id } = req.body;
-
-    if (!topic_id) {
-      return res.status(400).json({ error: "topic_id is required" });
-    }
-
-    const studentRef = db.collection("students").doc(id);
-    const studentDoc = await studentRef.get();
-    if (!studentDoc.exists) {
-      return res.status(404).json({ error: "Student not found" });
-    }
-
-    const studentData = studentDoc.data();
-    let mastered = Array.isArray(studentData.mastered)
-      ? studentData.mastered.map((m) => (typeof m === "object" ? m.id : m))
-      : [];
-
-    if (!mastered.includes(topic_id)) {
-      mastered.push(topic_id);
-      await studentRef.update({ mastered });
-      console.log(`✅ Manually marked topic ${topic_id} as mastered for ${id}`);
-    }
-
-    // Trigger dependent topic update (handled below)
     await updateRecommendedAfterMastered(id, topic_id);
 
     const updated = (await studentRef.get()).data();
