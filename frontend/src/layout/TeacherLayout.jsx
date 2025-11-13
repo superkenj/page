@@ -1,13 +1,14 @@
 // frontend/src/layout/TeacherLayout.jsx
+import { Outlet } from "react-router-dom";
 import TeacherSidebar from "./TeacherSidebar";
 
-export default function TeacherLayout({ children }) {
+export default function TeacherLayout() {
   return (
     <div
       style={{
         display: "flex",
         background: "linear-gradient(to bottom, #eef7ff, #ffffff)",
-        minHeight: "100vh",
+        minHeight: "95vh",
       }}
     >
       <TeacherSidebar />
