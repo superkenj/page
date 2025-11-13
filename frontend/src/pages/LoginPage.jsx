@@ -5,15 +5,16 @@ const API_BASE = "https://page-jirk.onrender.com";
 
 export default function LoginPage() {
   const [id, setId] = useState("");
+  const [password, setPassword] = useState(""); // 👈 placeholder only
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true); // 🌟 new state for wake-up
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // 🌟 Wake up Render backend on page load
+  // 🌟 Wake up Render backend
   useEffect(() => {
     async function wakeServer() {
       try {
-        const res = await fetch(`${API_BASE}/health`); // or just "/"
+        const res = await fetch(`${API_BASE}/`);
         console.log("Backend wake-up status:", res.status);
       } catch (err) {
         console.warn("Backend wake-up failed:", err);
@@ -32,7 +33,7 @@ export default function LoginPage() {
       const res = await fetch(`${API_BASE}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ id }), // password ignored for now
       });
 
       const json = await res.json();
@@ -48,11 +49,17 @@ export default function LoginPage() {
     }
   }
 
-  // 🌟 Show friendly waiting message while backend wakes up
   if (loading) {
     return (
-      <div style={{ textAlign: "center", marginTop: "120px", color: "#555" }}>
-        <h2>Warming up the server 🔄</h2>
+      <div
+        style={{
+          textAlign: "center",
+          marginTop: "120px",
+          color: "#334155",
+          fontFamily: "Poppins, sans-serif",
+        }}
+      >
+        <h2>Warming up the PaGe server 🔄</h2>
         <p>Please wait a few seconds...</p>
       </div>
     );
@@ -61,48 +68,110 @@ export default function LoginPage() {
   return (
     <div
       style={{
-        maxWidth: 400,
-        margin: "100px auto",
-        textAlign: "center",
-        border: "1px solid #ccc",
-        borderRadius: 10,
-        padding: 20,
+        minHeight: "100vh",
+        background: "linear-gradient(180deg, #dbeafe 0%, #f0fdfa 100%)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        fontFamily: "Poppins, sans-serif",
       }}
     >
-      <h1>Welcome to PaGe</h1>
-      <p style={{ color: "#555" }}>Enter your ID to continue</p>
+      <div
+        style={{
+          background: "#ffffff",
+          padding: "40px 35px",
+          borderRadius: "16px",
+          boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
+          textAlign: "center",
+          width: "100%",
+          maxWidth: "400px",
+          transition: "transform 0.3s ease",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-4px)")}
+        onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
+      >
+        <h1 style={{ marginBottom: "8px", color: "#1d4ed8" }}>🌟 Welcome to PaGe</h1>
+        <p style={{ color: "#6b7280", marginBottom: 24 }}>
+          Enter your ID and password to begin your learning journey!
+        </p>
 
-      <form onSubmit={handleLogin}>
-        <input
-          type="text"
-          placeholder="Enter your ID"
-          value={id}
-          onChange={(e) => setId(e.target.value)}
-          style={{
-            width: "100%",
-            padding: 10,
-            borderRadius: 6,
-            border: "1px solid #ccc",
-            marginBottom: 10,
-          }}
-        />
-        <button
-          type="submit"
-          style={{
-            width: "100%",
-            padding: 10,
-            borderRadius: 6,
-            background: "#16a34a",
-            color: "#fff",
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
-          Login
-        </button>
-      </form>
+        <form onSubmit={handleLogin}>
+          <input
+            type="text"
+            placeholder="Enter your ID"
+            value={id}
+            onChange={(e) => setId(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "12px",
+              borderRadius: "10px",
+              border: "1px solid #cbd5e1",
+              marginBottom: "12px",
+              fontSize: "15px",
+              outlineColor: "#3b82f6",
+            }}
+          />
 
-      {error && <p style={{ color: "red", marginTop: 10 }}>{error}</p>}
+          <input
+            type="password"
+            placeholder="Enter your password (optional)"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "12px",
+              borderRadius: "10px",
+              border: "1px solid #cbd5e1",
+              marginBottom: "20px",
+              fontSize: "15px",
+              outlineColor: "#3b82f6",
+            }}
+          />
+
+          <button
+            type="submit"
+            style={{
+              width: "100%",
+              padding: "12px",
+              borderRadius: "10px",
+              background: "linear-gradient(90deg,#16a34a,#22c55e)",
+              color: "white",
+              border: "none",
+              cursor: "pointer",
+              fontWeight: "bold",
+              fontSize: "16px",
+              transition: "all 0.3s ease",
+            }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.background =
+                "linear-gradient(90deg,#22c55e,#16a34a)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.background =
+                "linear-gradient(90deg,#16a34a,#22c55e)")
+            }
+          >
+            🚀 Login
+          </button>
+        </form>
+
+        {error && (
+          <p
+            style={{
+              color: "#ef4444",
+              marginTop: "12px",
+              fontWeight: "500",
+              fontSize: "14px",
+            }}
+          >
+            {error}
+          </p>
+        )}
+
+        <div style={{ marginTop: 24, fontSize: 14, color: "#64748b" }}>
+          <p>✨ Learning made fun and personal — with PaGe!</p>
+        </div>
+      </div>
     </div>
   );
 }
