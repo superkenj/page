@@ -1,4 +1,4 @@
-// frontend/src/pages/TeacherContentView.jsx
+// frontend/src/teacher/TeacherContentView.jsx
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 

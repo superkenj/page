@@ -1,4 +1,4 @@
-// frontend/src/pages/StudentLayout.jsx
+// frontend/src/layout/StudentLayout.jsx
 import { Outlet, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import boyImg from "../assets/images/boy.png";

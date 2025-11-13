@@ -1,102 +1,59 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import TeacherLayout from "./pages/TeacherLayout";
-import StudentLayout from "./pages/StudentLayout";
 
-// Teacher pages
-import Dashboard from "./pages/Dashboard";
-import Topics from "./pages/Topics";
-import TopicsGraph from "./pages/TopicsGraph";
-import TeacherContent from "./pages/TeacherContent";
-import Students from "./pages/Students";
-import StudentPath from "./pages/StudentPath";
-import TeacherTopicContents from "./pages/TeacherTopicContents";
+/* Layouts */
+import TeacherLayout from "./layout/TeacherLayout";
+import StudentLayout from "./layout/StudentLayout";
 
-// Student pages
-import StudentDashboard from "./pages/StudentDashboard";
-import StudentTopicContent from "./pages/StudentTopicContent";
+/* Teacher Pages */
+import TeacherDashboard from "./teacher/TeacherDashboard";
+import Topics from "./teacher/Topics";
+import TopicsGraph from "./teacher/TopicsGraph";
+import TeacherContent from "./teacher/TeacherContent";
+import Students from "./teacher/Students";
+import StudentPath from "./teacher/StudentPath";
+import TeacherTopicContents from "./teacher/TeacherTopicContents";
 
-// Common login
+/* Student Pages */
+import StudentDashboard from "./student/StudentDashboard";
+import StudentTopicContent from "./student/StudentTopicContent";
+
+/* Login */
 import LoginPage from "./pages/LoginPage";
 
 function App() {
   return (
     <Router>
       <Routes>
-        {/* 🧑‍🏫 Teacher Routes */}
-        <Route
-          path="/teacher/dashboard"
-          element={
-            <TeacherLayout>
-              <Dashboard />
-            </TeacherLayout>
-          }
-        />
-        <Route
-          path="/teacher/students"
-          element={
-            <TeacherLayout>
-              <Students />
-            </TeacherLayout>
-          }
-        />
-        <Route
-          path="/teacher/students/:id/path"
-          element={
-            <TeacherLayout>
-              <StudentPath />
-            </TeacherLayout>
-          }
-        />
-        <Route
-          path="/students/:id/path"
-          element={
-            <TeacherLayout>
-              <StudentPath />
-            </TeacherLayout>
-          }
-        />
-        <Route
-          path="/teacher/topics"
-          element={
-            <TeacherLayout>
-              <Topics />
-            </TeacherLayout>
-          }
-        />
-        <Route
-          path="/teacher/topics/graph"
-          element={
-            <TeacherLayout>
-              <TopicsGraph />
-            </TeacherLayout>
-          }
-        />
-        <Route
-          path="/teacher/content"
-          element={
-            <TeacherLayout>
-              <TeacherContent />
-            </TeacherLayout>
-          }
-        />
-        <Route 
-          path="/teacher/content/:topicId" 
-          element={
-            <TeacherTopicContents />
-          } 
-        />
 
-        {/* 👩‍🎓 Student Routes */}
+        {/* ======================================
+         🧑‍🏫 TEACHER ROUTES (Nested under layout)
+        =======================================*/}
+        <Route path="/teacher" element={<TeacherLayout />}>
+          <Route path="dashboard" element={<TeacherDashboard />} />
+          <Route path="students" element={<Students />} />
+          <Route path="students/:id/path" element={<StudentPath />} />
+          <Route path="topics" element={<Topics />} />
+          <Route path="topics/graph" element={<TopicsGraph />} />
+          <Route path="content" element={<TeacherContent />} />
+          <Route path="content/:topicId" element={<TeacherTopicContents />} />
+        </Route>
+
+        {/* ======================================
+         👩‍🎓 STUDENT ROUTES (Nested under layout)
+        =======================================*/}
         <Route path="/student-dashboard/:id" element={<StudentLayout />}>
           <Route index element={<StudentDashboard />} />
         </Route>
 
-        <Route 
-          path="/student-dashboard/:id/topic/:topicId" 
-          element={<StudentTopicContent />} 
+        {/* Student Content Page */}
+        <Route
+          path="/student-dashboard/:id/topic/:topicId"
+          element={<StudentTopicContent />}
         />
 
-        {/* Common login */}
+        {/* ======================================
+         🔐 LOGIN
+        =======================================*/}
         <Route path="/" element={<LoginPage />} />
       </Routes>
     </Router>

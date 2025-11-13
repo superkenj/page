@@ -1,4 +1,4 @@
-// frontend/src/components/StudentSidebar.jsx
+// frontend/src/layout/StudentSidebar.jsx
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
