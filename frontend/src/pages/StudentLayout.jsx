@@ -73,10 +73,11 @@ export default function StudentLayout() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          alignSelf: "flex-start",     // required so sticky behaves inside flex container
           position: "sticky",
           top: 0,
-          height: "100vh",            // full viewport height so it sticks
+          minHeight: "100vh",   // ✅ ensures it fills screen visually
+          maxHeight: "100vh",   // ✅ prevent overflow beyond viewport
+          overflowY: "auto",    // ✅ allows internal scrolling when content exceeds
           boxShadow: "4px 0 10px rgba(0,0,0,0.05)",
         }}
       >
