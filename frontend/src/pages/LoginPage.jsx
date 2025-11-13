@@ -95,7 +95,7 @@ export default function LoginPage() {
           Enter your ID and password to begin your learning journey!
         </p>
 
-        <form onSubmit={handleLogin}>
+        <form onSubmit={handleLogin} style={{ width: "100%" }}>
           <input
             type="text"
             placeholder="Enter your ID"
@@ -103,12 +103,16 @@ export default function LoginPage() {
             onChange={(e) => setId(e.target.value)}
             style={{
               width: "100%",
-              padding: "12px",
+              height: "48px", // ✅ exact height match
+              padding: "0 14px", // ✅ horizontal text padding only
               borderRadius: "10px",
               border: "1px solid #cbd5e1",
               marginBottom: "12px",
-              fontSize: "15px",
+              fontSize: "16px",
+              lineHeight: "48px", // ✅ vertical centering for text
+              boxSizing: "border-box",
               outlineColor: "#3b82f6",
+              fontFamily: "Poppins, sans-serif",
             }}
           />
 
@@ -119,12 +123,16 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             style={{
               width: "100%",
-              padding: "12px",
+              height: "48px", // ✅ same height as above
+              padding: "0 14px",
               borderRadius: "10px",
               border: "1px solid #cbd5e1",
               marginBottom: "20px",
-              fontSize: "15px",
+              fontSize: "16px",
+              lineHeight: "48px",
+              boxSizing: "border-box",
               outlineColor: "#3b82f6",
+              fontFamily: "Poppins, sans-serif",
             }}
           />
 
@@ -132,15 +140,18 @@ export default function LoginPage() {
             type="submit"
             style={{
               width: "100%",
-              padding: "12px",
+              height: "48px", // ✅ identical height to inputs
+              padding: "0 14px",
               borderRadius: "10px",
               background: "linear-gradient(90deg,#16a34a,#22c55e)",
               color: "white",
-              border: "none",
+              border: "1px solid transparent",
               cursor: "pointer",
-              fontWeight: "bold",
+              fontWeight: "600",
               fontSize: "16px",
+              boxSizing: "border-box",
               transition: "all 0.3s ease",
+              fontFamily: "Poppins, sans-serif",
             }}
             onMouseEnter={(e) =>
               (e.currentTarget.style.background =
