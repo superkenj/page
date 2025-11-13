@@ -123,9 +123,12 @@ export default function TeacherDashboard() {
     cursor: "pointer",
     transition: "0.2s",
     display: "flex",
-    flexDirection: "column",
+    flexDirection: "row",
     alignItems: "center",
-    textAlign: "center"
+    justifyContent: "flex-start",
+    textAlign: "left",
+    gap: "14px",
+    padding: "1rem 1.2rem"
   };
 
   const gridStyle = {
@@ -153,16 +156,12 @@ export default function TeacherDashboard() {
           onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
           onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
         >
-          <FaUserGraduate size={40} color="#3b82f6" />
-          <h2 style={{ color: "#3b82f6" }}>{summary.students_total}</h2>
-          <p>Students</p>
-          <div style={{ marginTop: 10 }}>
-            <span style={{ color: "#16a34a", marginRight: 10 }}>
-              ✔ {summary.students_pass} pass
-            </span>
-            <span style={{ color: "#dc2626" }}>
-              ✘ {summary.students_fail} fail
-            </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <FaUserGraduate size={40} color="#3b82f6" />
+            <div>
+              <h2 style={{ color: "#3b82f6", margin: 0 }}>{summary.students_total}</h2>
+              <p style={{ margin: 0 }}>Students</p>
+            </div>
           </div>
         </div>
 
@@ -173,9 +172,13 @@ export default function TeacherDashboard() {
           onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
           onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
         >
-          <FaBook size={40} color="#f59e0b" />
-          <h2 style={{ color: "#f59e0b" }}>{summary.topic_count}</h2>
-          <p>Topics</p>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <FaBook size={40} color="#f59e0b" />
+            <div>
+              <h2 style={{ color: "#f59e0b", margin: 0 }}>{summary.topic_count}</h2>
+              <p style={{ margin: 0 }}>Topics</p>
+            </div>
+          </div>
         </div>
       </div>
 
