@@ -211,75 +211,39 @@ export default function TeacherContent() {
             </select>
 
             {modalLinks.map((it, i) => (
-              <div
-                key={i}
-                style={{
-                  marginTop: 12,
-                  background: "#fff",
-                  padding: 10,
-                  borderRadius: 8,
-                  border: "1px solid #e6eefc"
-                }}
-              >
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 120px",
-                    gap: "8px",
-                    marginBottom: "8px"
-                  }}
-                >
-                  {/* LINK INPUT */}
+              <div key={i} style={{ marginTop: 12, background: "#fff", padding: 10, borderRadius: 8, border: "1px solid #e6eefc" }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                   <input
-                    type="text"
                     placeholder={`Resource link #${i + 1}`}
                     value={it.link}
-                    onChange={(e) =>
-                      updateModalLink(i, { ...it, link: e.target.value })
-                    }
-                    style={{
-                      padding: 8,
-                      borderRadius: 6,
-                      border: "1px solid #ccc",
-                      width: "100%"
-                    }}
+                    onChange={e => updateModalLink(i, { ...it, link: e.target.value })}
+                    style={{ flex: 1, padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
                   />
-
-                  {/* TYPE DROPDOWN */}
                   <select
                     value={it.type}
-                    onChange={(e) =>
-                      updateModalLink(i, { ...it, type: e.target.value })
-                    }
-                    style={{
-                      padding: 8,
-                      borderRadius: 6,
-                      width: "100%"
-                    }}
+                    onChange={e => updateModalLink(i, { ...it, type: e.target.value })}
+                    style={{ padding: 8, borderRadius: 6 }}
                   >
                     <option value="video">Video</option>
                     <option value="presentation">Presentation</option>
                     <option value="pdf">PDF</option>
                     <option value="link">Link</option>
                   </select>
-
-                  {/* DESCRIPTION — aligned nicely under both */}
-                  <textarea
-                    placeholder="Short description..."
-                    value={it.description}
-                    onChange={(e) =>
-                      updateModalLink(i, { ...it, description: e.target.value })
-                    }
-                    style={{
-                      gridColumn: "1 / span 2",
-                      width: "100%",
-                      padding: 8,
-                      borderRadius: 6,
-                      border: "1px solid #ccc",
-                      resize: "vertical"
-                    }}
-                  />
+                  {modalLinks.length > 1 && (
+                    <button
+                      onClick={() => removeModalLink(i)}
+                      style={{ background: "#ef4444", color: "white", border: "none", borderRadius: 6, padding: "6px 8px", cursor: "pointer" }}
+                    >
+                      ✖
+                    </button>
+                  )}
                 </div>
+                <textarea
+                  placeholder="Short description..."
+                  value={it.description}
+                  onChange={e => updateModalLink(i, { ...it, description: e.target.value })}
+                  style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc", resize: "vertical" }}
+                />
               </div>
             ))}
 
