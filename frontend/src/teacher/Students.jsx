@@ -57,6 +57,7 @@ function Students() {
     }
     const payload = {
       name: form.name,
+      gender: form.gender,
       score: Number(form.score),
       final: Number(form.final),
       scores: { general: Number(form.score) },
@@ -81,7 +82,13 @@ function Students() {
 
   function startEdit(s) {
     setEditing(true);
-    setForm({ id: s.id, name: s.name, score: s.score ?? "", final: s.final ?? "" });
+    setForm({
+      id: s.id,
+      name: s.name,
+      gender: s.gender ?? "",
+      score: s.score ?? "",
+      final: s.final ?? ""
+    });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -213,8 +220,6 @@ function Students() {
     if (!s) return false;
     const q = query.trim().toLowerCase();
     if (q && !(s.id?.toLowerCase().includes(q) || s.name?.toLowerCase().includes(q))) return false;
-    if (filter === "pass") return s.status === "PASS";
-    if (filter === "fail") return s.status === "FAIL";
     return true;
   });
 
@@ -227,18 +232,6 @@ function Students() {
       <h1>Students</h1>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
-        <div style={{ background: "#fff", padding: 12, borderRadius: 8, boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontSize: 14, color: "#666" }}>Total</div>
-          <div style={{ fontSize: 20, fontWeight: 700 }}>{totalStudents}</div>
-        </div>
-        <div style={{ background: "#fff", padding: 12, borderRadius: 8, boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontSize: 14, color: "#666" }}>Pass</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#16a34a" }}>{totalPass}</div>
-        </div>
-        <div style={{ background: "#fff", padding: 12, borderRadius: 8, boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontSize: 14, color: "#666" }}>Fail</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#dc2626" }}>{totalFail}</div>
-        </div>
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           <input
@@ -258,10 +251,29 @@ function Students() {
       <form onSubmit={saveStudent} style={{ marginBottom: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
         <input placeholder="Student ID" value={form.id} onChange={e=>setField("id", e.target.value)} />
         <input placeholder="Name" value={form.name} onChange={e=>setField("name", e.target.value)} />
-        <input type="number" placeholder="Score" value={form.score} onChange={e=>setField("score", e.target.value)} />
-        <input type="number" placeholder="Final" value={form.final} onChange={e=>setField("final", e.target.value)} />
+        <select
+          value={form.gender || ""}
+          onChange={(e) => setField("gender", e.target.value)}
+          style={{ padding: 8 }}
+        >
+          <option value="">Gender</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+        </select>
+        <input
+          type="number"
+          placeholder="Pre-test Score"
+          value={form.score}
+          onChange={(e) => setField("score", e.target.value)}
+        />
+        <input
+          type="number"
+          placeholder="Pre-test Total"
+          value={form.final}
+          onChange={(e) => setField("final", e.target.value)}
+        />
         <button type="submit" style={{ padding: "8px 12px" }}>{editing ? "Update" : "Add"}</button>
-        <button type="button" onClick={() => { setEditing(false); setForm({ id: "", name: "", score: "", final: "" }); }} style={{ padding: "8px 12px" }}>
+        <button type="button" onClick={() => { setEditing(false); setForm({ id: "", name: "", gender: "", score: "", final: "" }); }} style={{ padding: "8px 12px" }}>
           Reset
         </button>
       </form>
@@ -301,9 +313,9 @@ function Students() {
             <tr>
               <th style={{textAlign:"left", padding:8}}>ID</th>
               <th style={{textAlign:"left", padding:8}}>Name</th>
-              <th style={{textAlign:"right", padding:8}}>Score</th>
-              <th style={{textAlign:"right", padding:8}}>Final</th>
-              <th style={{textAlign:"center", padding:8}}>Status</th>
+              <th style={{textAlign:"left", padding:8}}>Gender</th>
+              <th style={{textAlign:"right", padding:8}}>Pre-test Score</th>
+              <th style={{textAlign:"right", padding:8}}>Pre-test Total</th>
               <th style={{padding:8}}>Actions</th>
             </tr>
           </thead>
@@ -314,13 +326,7 @@ function Students() {
                 <td style={{padding:8}}>{s.name}</td>
                 <td style={{padding:8, textAlign:"right"}}>{s.score ?? "-"}</td>
                 <td style={{padding:8, textAlign:"right"}}>{s.final ?? "-"}</td>
-                <td style={{padding:8, textAlign:"center"}}>
-                  {s.status === "PASS" ? (
-                    <span style={{ background: "#ecfdf5", color: "#16a34a", padding: "4px 8px", borderRadius: 6 }}>PASS</span>
-                  ) : (
-                    <span style={{ background: "#fff1f2", color: "#dc2626", padding: "4px 8px", borderRadius: 6 }}>FAIL</span>
-                  )}
-                </td>
+                <td style={{padding:8}}>{s.gender ?? "-"}</td>
                 <td style={{padding:8}}>
                   <button type="button" onClick={()=>startEdit(s)} style={{marginRight:8}}>Edit</button>
                   <button type="button" onClick={()=>removeStudent(s.id)} style={{marginRight:8}}>Delete</button>
@@ -334,10 +340,10 @@ function Students() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => getRecommendationInline(s.id)}
-                    disabled={!!recommendLoading[s.id]}
+                    disabled
+                    style={{ opacity: 0.5, cursor: "not-allowed" }}
                   >
-                    {recommendLoading[s.id] ? "Loading…" : "Quick Recommend"}
+                    Quick Recommend (Disabled)
                   </button>
                 </td>
               </tr>
