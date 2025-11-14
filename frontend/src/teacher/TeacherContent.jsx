@@ -1,138 +1,125 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-
+// frontend/src/teacher/TeacherContent.jsx
+import { useEffect, useState, useMemo } from "react";
 const API_BASE = "https://page-jirk.onrender.com";
 
 export default function TeacherContent() {
   const [topics, setTopics] = useState([]);
-  const [selectedTopic, setSelectedTopic] = useState("");
-  const [links, setLinks] = useState([{ link: "", type: "video", description: "" }]);
   const [contents, setContents] = useState([]);
+  const [expanded, setExpanded] = useState({}); // { topicId: bool }
+  const [loading, setLoading] = useState(true);
+
+  // Add Content Modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [modalTopic, setModalTopic] = useState(""); // preselect topic id
+  const [modalLinks, setModalLinks] = useState([{ link: "", type: "video", description: "" }]);
+
+  // Inline edit for content items
   const [editingId, setEditingId] = useState(null);
-  const [editData, setEditData] = useState({ link: "", type: "", description: "" });
-  const navigate = useNavigate();
+  const [editData, setEditData] = useState({ link: "", type: "video", description: "" });
 
-  // Load topics
+  // Search
+  const [query, setQuery] = useState("");
+
   useEffect(() => {
-    async function loadTopics() {
-      const res = await fetch(`${API_BASE}/topics/list`);
-      const json = await res.json();
-      setTopics(Array.isArray(json) ? json : json.topics || []);
-    }
-    loadTopics();
+    loadAll();
   }, []);
 
-  // Load contents
-  useEffect(() => {
-    async function loadContents() {
-      const res = await fetch(`${API_BASE}/content`);
-      const json = await res.json();
-      setContents(Array.isArray(json) ? json : json.contents || []);
-    }
-    loadContents();
-  }, []);
-
-  function addLinkField() {
-    setLinks([...links, { link: "", type: "video", description: "" }]);
-  }
-
-  function removeLinkField(index) {
-    setLinks(links.filter((_, i) => i !== index));
-  }
-
-  function updateLink(index, value) {
-    const newLinks = [...links];
-    newLinks[index] = value;
-    setLinks(newLinks);
-  }
-
-  // Add new content
-  async function handleAddContent() {
-    if (!selectedTopic) {
-      alert("Please select a topic first.");
-      return;
-    }
-
-    const validLinks = links.filter((i) => i.link.trim() !== "");
-    if (validLinks.length === 0) {
-      alert("Add at least one valid resource link.");
-      return;
-    }
-
-    for (const item of validLinks) {
-      await fetch(`${API_BASE}/content`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topic_id: selectedTopic,
-          title: topics.find((t) => t.id === selectedTopic)?.name || "Untitled",
-          description: item.description || "",
-          link: item.link,
-          type: item.type,
-          created_by: "teacher",
-        }),
-      });
-    }
-
-    alert("Content added successfully!");
-    setLinks([{ link: "", type: "video", description: "" }]);
-    const res = await fetch(`${API_BASE}/content`);
-    setContents(await res.json());
-  }
-
-  // Delete individual content
-  async function deleteContent(itemId) {
-    if (!window.confirm("Are you sure you want to delete this content?")) return;
+  async function loadAll() {
+    setLoading(true);
     try {
-      await fetch(`${API_BASE}/content/${itemId}`, { method: "DELETE" });
-      setContents(contents.filter((c) => c.id !== itemId));
+      const [tRes, cRes] = await Promise.all([
+        fetch(`${API_BASE}/topics/list`),
+        fetch(`${API_BASE}/content`)
+      ]);
+      const tJson = await tRes.json();
+      const cJson = await cRes.json();
+      setTopics(Array.isArray(tJson) ? tJson : tJson.topics || []);
+      setContents(Array.isArray(cJson) ? cJson : cJson.contents || []);
     } catch (err) {
-      console.error(err);
-      alert("Failed to delete content.");
+      console.error("Failed to load topics/contents:", err);
+      alert("Failed to load data. See console.");
+    } finally {
+      setLoading(false);
     }
   }
 
-  // Delete entire topic and its contents
-  async function deleteTopic(topicId) {
-    if (
-      !window.confirm(
-        "Deleting this topic will also remove all its related contents. Continue?"
-      )
-    )
-      return;
+  // Group contents by topic (keep topics order sorted by prerequisites like Topics.jsx)
+  const sortedTopics = useMemo(() => {
+    return [...topics].sort((a, b) => {
+      const ap = a.prerequisites?.length || 0;
+      const bp = b.prerequisites?.length || 0;
+      return ap - bp;
+    });
+  }, [topics]);
 
-    try {
-      const topicContents = contents.filter((c) => c.topic_id === topicId);
-      for (const c of topicContents) {
-        await fetch(`${API_BASE}/content/${c.id}`, { method: "DELETE" });
-      }
+  const grouped = useMemo(() => {
+    return sortedTopics.map((t) => ({
+      ...t,
+      materials: contents.filter((c) => c.topic_id === t.id)
+    }));
+  }, [sortedTopics, contents]);
 
-      await fetch(`${API_BASE}/topics/${topicId}`, { method: "DELETE" });
+  // Visible topics by search
+  const visible = grouped.filter(t =>
+    t.name.toLowerCase().includes(query.toLowerCase()) ||
+    t.id.toLowerCase().includes(query.toLowerCase())
+  );
 
-      setTopics(topics.filter((t) => t.id !== topicId));
-      setContents(contents.filter((c) => c.topic_id !== topicId));
-      alert("Topic and all associated contents deleted successfully!");
-    } catch (err) {
-      console.error(err);
-      alert("Failed to delete topic.");
-    }
+  // Modal helpers
+  function addModalLink() {
+    setModalLinks((s) => [...s, { link: "", type: "video", description: "" }]);
   }
-
-  // Editing logic
-  function startEdit(item) {
-    setEditingId(item.id);
-    setEditData({
-      link: item.link || "",
-      type: item.type || "video",
-      description: item.description || "",
+  function removeModalLink(i) {
+    setModalLinks((s) => s.filter((_, idx) => idx !== i));
+  }
+  function updateModalLink(i, val) {
+    setModalLinks((s) => {
+      const copy = [...s];
+      copy[i] = val;
+      return copy;
     });
   }
 
-  function cancelEdit() {
-    setEditingId(null);
-    setEditData({ link: "", type: "", description: "" });
+  async function handleAddContentSave() {
+    if (!modalTopic) { alert("Choose a topic."); return; }
+    const valid = modalLinks.filter(l => l.link.trim());
+    if (!valid.length) { alert("Add at least one link."); return; }
+
+    try {
+      for (const item of valid) {
+        await fetch(`${API_BASE}/content`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topic_id: modalTopic,
+            title: topics.find(t => t.id === modalTopic)?.name || "Untitled",
+            description: item.description || "",
+            link: item.link,
+            type: item.type,
+            created_by: "teacher",
+          })
+        });
+      }
+      setShowAddModal(false);
+      setModalLinks([{ link: "", type: "video", description: "" }]);
+      setModalTopic("");
+      await loadAll();
+      alert("Content added.");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to add content.");
+    }
   }
 
+  // Inline editing
+  function startEdit(m) {
+    setEditingId(m.id);
+    setEditData({ link: m.link || "", type: m.type || "video", description: m.description || "" });
+  }
+  function cancelEdit() {
+    setEditingId(null);
+    setEditData({ link: "", type: "video", description: "" });
+  }
   async function saveEdit(itemId) {
     try {
       await fetch(`${API_BASE}/content/${itemId}`, {
@@ -140,339 +127,298 @@ export default function TeacherContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editData),
       });
-      alert("Content updated successfully!");
+      await loadAll();
       setEditingId(null);
-
-      const res = await fetch(`${API_BASE}/content`);
-      const json = await res.json();
-      setContents(json);
+      alert("Updated");
     } catch (err) {
       console.error(err);
-      alert("Failed to update content.");
+      alert("Failed to update");
     }
   }
 
-  // Group contents by topic
-  const groupedContents = topics
-    .map((topic) => ({
-      ...topic,
-      materials: contents.filter((c) => c.topic_id === topic.id),
-    }))
-    .filter((t) => t.materials.length > 0);
+  async function deleteContent(itemId) {
+    if (!confirm("Delete this content?")) return;
+    try {
+      await fetch(`${API_BASE}/content/${itemId}`, { method: "DELETE" });
+      setContents((s) => s.filter(c => c.id !== itemId));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete content");
+    }
+  }
+
+  async function deleteTopic(topicId) {
+    if (!confirm("Delete this topic and all its contents?")) return;
+    try {
+      // delete topic via backend (which also deletes its contents)
+      await fetch(`${API_BASE}/topics/${topicId}`, { method: "DELETE" });
+      await loadAll();
+      alert("Deleted topic");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete topic");
+    }
+  }
+
+  if (loading) return <div style={{ padding: 20 }}>Loading...</div>;
 
   return (
-    <div style={{ padding: 20 }}>
-      <h1 style={{ marginBottom: 20 }}>📚 Manage Learning Materials</h1>
+    <div style={{ padding: 20, maxWidth: 1400, margin: "0 auto" }}>
+      <h1 style={{ marginBottom: 10 }}>📚 Manage Learning Materials</h1>
 
-      {/* Add new content */}
-      <div
-        style={{
-          background: "#f9fafb",
-          padding: 20,
-          borderRadius: 12,
-          marginBottom: 40,
-          boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
-        }}
-      >
-        <h3 style={{ marginBottom: 16 }}>Add New Content</h3>
-
-        <label style={{ fontWeight: 600 }}>Topic</label>
-        <select
-          value={selectedTopic}
-          onChange={(e) => setSelectedTopic(e.target.value)}
-          style={{ display: "block", marginBottom: 16, padding: 8, width: "100%" }}
-        >
-          <option value="">-- Select Topic --</option>
-          {topics.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-
-        {links.map((item, i) => (
-          <div
-            key={i}
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 18 }}>
+        <input
+          placeholder="Search topics..."
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          style={{ padding: 10, borderRadius: 8, border: "1px solid #ccc", width: 320 }}
+        />
+        <div style={{ marginLeft: "auto" }}>
+          <button
+            onClick={() => {
+              setModalTopic("");
+              setModalLinks([{ link: "", type: "video", description: "" }]);
+              setShowAddModal(true);
+            }}
             style={{
-              background: "#fff",
-              border: "1px solid #e5e7eb",
+              background: "#2563eb",
+              color: "white",
+              padding: "8px 12px",
+              border: "none",
               borderRadius: 8,
-              padding: 10,
-              marginBottom: 10,
+              cursor: "pointer"
             }}
           >
-            <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
-              <input
-                type="text"
-                placeholder={`Resource link #${i + 1}`}
-                value={item.link}
-                onChange={(e) => updateLink(i, { ...item, link: e.target.value })}
-                style={{ flex: 1, padding: 8 }}
-              />
-              <select
-                value={item.type}
-                onChange={(e) => updateLink(i, { ...item, type: e.target.value })}
-                style={{ padding: 8 }}
-              >
-                <option value="video">Video</option>
-                <option value="presentation">Presentation</option>
-                <option value="pdf">PDF</option>
-                <option value="link">Link</option>
-              </select>
-              {links.length > 1 && (
-                <button
-                  onClick={() => removeLinkField(i)}
-                  style={{
-                    background: "#ef4444",
-                    color: "white",
-                    border: "none",
-                    borderRadius: 4,
-                    padding: "6px 8px",
-                  }}
-                >
-                  ✖
-                </button>
-              )}
-            </div>
-            <textarea
-              rows={2}
-              placeholder="Short description for this resource..."
-              value={item.description}
-              onChange={(e) =>
-                updateLink(i, { ...item, description: e.target.value })
-              }
-              style={{ width: "100%", padding: 8, resize: "vertical" }}
-            />
-          </div>
-        ))}
-
-        <button
-          onClick={addLinkField}
-          style={{
-            background: "#3b82f6",
-            color: "white",
-            border: "none",
-            padding: "6px 12px",
-            borderRadius: 6,
-            marginBottom: 12,
-          }}
-        >
-          ➕ Add Another Resource
-        </button>
-
-        <button
-          onClick={handleAddContent}
-          style={{
-            background: "#16a34a",
-            color: "white",
-            border: "none",
-            padding: "10px 14px",
-            borderRadius: 6,
-            cursor: "pointer",
-          }}
-        >
-          Save Content
-        </button>
+            + Add Content
+          </button>
+        </div>
       </div>
 
-      {/* All grouped contents */}
-      <h3 style={{ marginBottom: 20 }}>📁 All Contents by Topic</h3>
-      {groupedContents.length === 0 ? (
-        <p>No contents added yet.</p>
-      ) : (
-        groupedContents.map((topic) => (
-          <div
-            key={topic.id}
-            className="topic-card"
-            onClick={(e) => {
-              // Prevent navigation if clicking delete button
-              if (e.target.tagName !== "BUTTON") navigate(`/teacher/content/${topic.id}`);
-            }}
-            style={{
-              background: "#fff",
-              marginBottom: 20,
-              padding: 20,
-              borderRadius: 10,
-              boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-              position: "relative",
-              cursor: "pointer",
-              transition: "transform 0.2s ease, box-shadow 0.2s ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = "scale(1.01)";
-              e.currentTarget.style.boxShadow = "0 4px 10px rgba(0,0,0,0.1)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = "scale(1)";
-              e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.05)";
-            }}
-          >
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                deleteTopic(topic.id);
-              }}
-              style={{
-                position: "absolute",
-                top: 10,
-                right: 10,
-                background: "#dc2626",
-                color: "white",
-                border: "none",
-                padding: "6px 10px",
-                borderRadius: 6,
-                cursor: "pointer",
-              }}
+      {/* Add Content Modal (reused for adding any topic; preselect by clicking card button) */}
+      {showAddModal && (
+        <div style={modalOverlay}>
+          <div style={modalCard}>
+            <h3 style={{ marginTop: 0 }}>{modalTopic ? `Add content to "${topics.find(t=>t.id===modalTopic)?.name || modalTopic}"` : "Add Content"}</h3>
+
+            <label style={labelStyle}>Topic</label>
+            <select
+              value={modalTopic}
+              onChange={e => setModalTopic(e.target.value)}
+              style={inputStyle}
             >
-              🗑️ Delete Topic
-            </button>
+              <option value="">-- Select Topic --</option>
+              {topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
 
-            <h2 style={{ marginBottom: 10, color: "#1e40af" }}>{topic.name}</h2>
-            <p style={{ color: "#555", marginBottom: 15 }}>{topic.description}</p>
-
-            <ul style={{ listStyle: "none", paddingLeft: 0 }}>
-              {topic.materials.map((m) => (
-                <li
-                  key={m.id}
-                  style={{
-                    background: "#f3f4f6",
-                    padding: 10,
-                    marginBottom: 8,
-                    borderRadius: 6,
-                    maxWidth: 720,
-                  }}
-                >
-                  {editingId === m.id ? (
-                    <>
-                      <h4>Editing Resource</h4>
-                      <input
-                        type="text"
-                        value={editData.link}
-                        placeholder="Link"
-                        onChange={(e) =>
-                          setEditData({ ...editData, link: e.target.value })
-                        }
-                        style={{
-                          width: "100%",
-                          marginBottom: 8,
-                          padding: 6,
-                          borderRadius: 4,
-                          border: "1px solid #ccc",
-                        }}
-                      />
-                      <select
-                        value={editData.type}
-                        onChange={(e) =>
-                          setEditData({ ...editData, type: e.target.value })
-                        }
-                        style={{
-                          width: "100%",
-                          marginBottom: 8,
-                          padding: 6,
-                          borderRadius: 4,
-                        }}
-                      >
-                        <option value="video">Video</option>
-                        <option value="presentation">Presentation</option>
-                        <option value="pdf">PDF</option>
-                        <option value="link">Link</option>
-                      </select>
-                      <textarea
-                        rows={2}
-                        value={editData.description}
-                        placeholder="Description"
-                        onChange={(e) =>
-                          setEditData({
-                            ...editData,
-                            description: e.target.value,
-                          })
-                        }
-                        style={{
-                          width: "100%",
-                          padding: 6,
-                          borderRadius: 4,
-                          border: "1px solid #ccc",
-                          marginBottom: 10,
-                        }}
-                      />
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          saveEdit(m.id);
-                        }}
-                        style={{
-                          background: "#16a34a",
-                          color: "white",
-                          border: "none",
-                          padding: "6px 12px",
-                          borderRadius: 6,
-                          marginRight: 8,
-                        }}
-                      >
-                        💾 Save
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          cancelEdit();
-                        }}
-                        style={{
-                          background: "#9ca3af",
-                          color: "white",
-                          border: "none",
-                          padding: "6px 12px",
-                          borderRadius: 6,
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <strong>{m.type.toUpperCase()}</strong>
-                      <p style={{ margin: "4px 0", fontSize: 14 }}>{m.link}</p>
-                      <p style={{ margin: "4px 0", color: "#555" }}>{m.description}</p>
-                      <div style={{ marginTop: 8 }}>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            startEdit(m);
-                          }}
-                          style={{
-                            background: "#3b82f6",
-                            color: "white",
-                            border: "none",
-                            padding: "4px 10px",
-                            borderRadius: 6,
-                            marginRight: 6,
-                          }}
-                        >
-                          ✏️ Edit
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteContent(m.id);
-                          }}
-                          style={{
-                            background: "#dc2626",
-                            color: "white",
-                            border: "none",
-                            padding: "4px 10px",
-                            borderRadius: 6,
-                          }}
-                        >
-                          🗑️ Delete
-                        </button>
-                      </div>
-                    </>
+            {modalLinks.map((it, i) => (
+              <div key={i} style={{ marginTop: 12, background: "#fff", padding: 10, borderRadius: 8, border: "1px solid #e6eefc" }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <input
+                    placeholder={`Resource link #${i + 1}`}
+                    value={it.link}
+                    onChange={e => updateModalLink(i, { ...it, link: e.target.value })}
+                    style={{ flex: 1, padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
+                  />
+                  <select
+                    value={it.type}
+                    onChange={e => updateModalLink(i, { ...it, type: e.target.value })}
+                    style={{ padding: 8, borderRadius: 6 }}
+                  >
+                    <option value="video">Video</option>
+                    <option value="presentation">Presentation</option>
+                    <option value="pdf">PDF</option>
+                    <option value="link">Link</option>
+                  </select>
+                  {modalLinks.length > 1 && (
+                    <button
+                      onClick={() => removeModalLink(i)}
+                      style={{ background: "#ef4444", color: "white", border: "none", borderRadius: 6, padding: "6px 8px", cursor: "pointer" }}
+                    >
+                      ✖
+                    </button>
                   )}
-                </li>
-              ))}
-            </ul>
+                </div>
+                <textarea
+                  placeholder="Short description..."
+                  value={it.description}
+                  onChange={e => updateModalLink(i, { ...it, description: e.target.value })}
+                  style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc", resize: "vertical" }}
+                />
+              </div>
+            ))}
+
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button onClick={addModalLink} style={{ background: "#2563eb", color: "white", border: "none", padding: "8px 12px", borderRadius: 8 }}>➕ Add Another</button>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+                <button onClick={() => setShowAddModal(false)} style={{ background: "#ddd", border: "none", padding: "8px 12px", borderRadius: 8 }}>Cancel</button>
+                <button onClick={handleAddContentSave} style={{ background: "#16a34a", color: "white", border: "none", padding: "8px 12px", borderRadius: 8 }}>Save</button>
+              </div>
+            </div>
           </div>
-        ))
+        </div>
       )}
+
+      {/* Topics cards grid */}
+      <div style={cardsWrapper}>
+        {visible.map((topic) => (
+          <div key={topic.id} style={topicCard}>
+            <div onClick={() => setExpanded(prev => ({ ...prev, [topic.id]: !prev[topic.id] }))} style={{ cursor: "pointer" }}>
+              <h3 style={{ margin: 0 }}>{topic.name}</h3>
+              <p style={{ color: "#555", marginTop: 8 }}>{topic.description}</p>
+            </div>
+
+            {/* Expand content area */}
+            {expanded[topic.id] && (
+              <div style={{ marginTop: 12 }}>
+                {/* Mini cards for materials */}
+                {topic.materials.length === 0 ? (
+                  <div style={{ color: "#6b7280", padding: 12 }}>No materials yet.</div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+                    {topic.materials.map((m) => (
+                      <div key={m.id} style={miniCard}>
+                        {editingId === m.id ? (
+                          <>
+                            <div style={{ marginBottom: 8 }}>
+                              <select value={editData.type} onChange={e => setEditData(d => ({ ...d, type: e.target.value }))} style={{ padding: 6, borderRadius: 6 }}>
+                                <option value="video">Video</option>
+                                <option value="presentation">Presentation</option>
+                                <option value="pdf">PDF</option>
+                                <option value="link">Link</option>
+                              </select>
+                            </div>
+                            <input value={editData.link} onChange={e => setEditData(d => ({ ...d, link: e.target.value }))} style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc", marginBottom: 8 }} />
+                            <textarea value={editData.description} onChange={e => setEditData(d => ({ ...d, description: e.target.value }))} rows={3} style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc", marginBottom: 8 }} />
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button onClick={() => saveEdit(m.id)} style={{ background: "#16a34a", color: "white", border: "none", padding: "6px 10px", borderRadius: 6 }}>💾 Save</button>
+                              <button onClick={cancelEdit} style={{ background: "#9ca3af", color: "white", border: "none", padding: "6px 10px", borderRadius: 6 }}>Cancel</button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <strong style={{ textTransform: "uppercase", fontSize: 12 }}>{m.type || "LINK"}</strong>
+                              <div style={{ display: "flex", gap: 6 }}>
+                                <button onClick={(e) => { e.stopPropagation(); startEdit(m); }} style={miniEditBtn}>✏️</button>
+                                <button onClick={(e) => { e.stopPropagation(); deleteContent(m.id); }} style={miniDeleteBtn}>🗑️</button>
+                              </div>
+                            </div>
+                            <a href={m.link} target="_blank" rel="noreferrer" style={{ wordBreak: "break-all", display: "block", marginTop: 8, color: "#1e40af" }}>{m.link}</a>
+                            <p style={{ marginTop: 8, color: "#444" }}>{m.description}</p>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* action row under materials */}
+                <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center" }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setModalTopic(topic.id); setShowAddModal(true); }}
+                    style={{ background: "#2563eb", color: "white", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer" }}
+                  >
+                    ➕ Add Resource
+                  </button>
+
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteTopic(topic.id); }}
+                    style={{ background: "#ef4444", color: "white", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer" }}
+                  >
+                    🗑️ Delete Topic
+                  </button>
+
+                  <div style={{ marginLeft: "auto", fontSize: 13, color: "#666" }}>
+                    {topic.materials.length} resource{topic.materials.length !== 1 ? "s" : ""}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* collapse hint */}
+            {!expanded[topic.id] && (
+              <div style={{ marginTop: 12, color: "#6b7280", fontSize: 13 }}>
+                Click the card to view materials
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
+
+/* ---------- Styles ---------- */
+
+const cardsWrapper = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+  gap: 24,
+  paddingTop: 12,
+  paddingBottom: 40,
+};
+
+const topicCard = {
+  background: "white",
+  padding: 20,
+  borderRadius: 12,
+  border: "1px solid #e5e7eb",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+  transition: "transform 0.18s ease, box-shadow 0.18s ease",
+  display: "flex",
+  flexDirection: "column",
+  cursor: "default",
+};
+
+const miniCard = {
+  background: "#fff",
+  padding: 12,
+  borderRadius: 10,
+  border: "1px solid #eef2ff",
+  boxShadow: "0 1px 6px rgba(0,0,0,0.04)",
+  display: "flex",
+  flexDirection: "column",
+};
+
+const miniEditBtn = {
+  background: "#2563eb",
+  color: "white",
+  border: "none",
+  padding: "6px 8px",
+  borderRadius: 6,
+  cursor: "pointer"
+};
+
+const miniDeleteBtn = {
+  background: "#ef4444",
+  color: "white",
+  border: "none",
+  padding: "6px 8px",
+  borderRadius: 6,
+  cursor: "pointer"
+};
+
+const modalOverlay = {
+  position: "fixed",
+  top: 0, left: 0,
+  width: "100vw", height: "100vh",
+  background: "rgba(0,0,0,0.45)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 9999
+};
+
+const modalCard = {
+  background: "#fff",
+  padding: 20,
+  borderRadius: 14,
+  width: "640px",
+  maxHeight: "90vh",
+  overflowY: "auto",
+  boxShadow: "0 10px 30px rgba(0,0,0,0.12)",
+  boxSizing: "border-box"
+};
+
+const labelStyle = { display: "block", fontWeight: 600, marginTop: 8, marginBottom: 6 };
+const inputStyle = { width: "100%", padding: 10, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box" };
