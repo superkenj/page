@@ -239,16 +239,18 @@ export default function Topics() {
           >
             <div>
               <h3 style={{ marginTop: 0, fontSize: "18px", fontWeight: 600 }}>{t.name}</h3>
-              <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>{t.id}</div>
               <p style={{ fontSize: 14, lineHeight: "20px", color: "#444" }}>{t.description}</p>
               <div style={{ fontSize: 13 }}>
                 <strong>Prerequisites:</strong> {t.prerequisites?.join(", ") || "None"}
               </div>
             </div>
 
-            <div style={cardBtns}>
-              <button onClick={() => editTopic(t)} style={editBtn}>Edit</button>
-              <button onClick={() => delTopic(t.id)} style={deleteBtn}>Delete</button>
+            <div>
+              <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>{t.id}</div>
+              <div style={cardBtns}>
+                <button onClick={() => editTopic(t)} style={editBtn}>Edit</button>
+                <button onClick={() => delTopic(t.id)} style={deleteBtn}>Delete</button>
+              </div>
             </div>
           </div>
         ))}
