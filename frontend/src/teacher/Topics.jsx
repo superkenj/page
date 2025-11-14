@@ -87,7 +87,12 @@ export default function Topics() {
   );
 
   return (
-    <div style={{ padding: 20 }}>
+    <div style={{ 
+      padding: 20,
+      maxWidth: "1400px",
+      margin: "0 auto",
+      width: "100%" 
+    }}>
       <h1>Topics</h1>
 
       {/* SEARCH */}
@@ -224,18 +229,18 @@ export default function Topics() {
             key={t.id}
             style={topicCard}
             onMouseEnter={(e) => {
-              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.10)";
-              e.currentTarget.style.transform = "translateY(-3px)";
+              e.currentTarget.style.transform = "translateY(-4px)";
+              e.currentTarget.style.boxShadow = "0 6px 18px rgba(0,0,0,0.12)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.04)";
               e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.05)";
             }}
           >
             <div>
-              <h3 style={{ marginTop: 0 }}>{t.name}</h3>
-              <div style={{ fontSize: 13, color: "#666" }}>{t.id}</div>
-              <p>{t.description}</p>
+              <h3 style={{ marginTop: 0, fontSize: "18px", fontWeight: 600 }}>{t.name}</h3>
+              <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>{t.id}</div>
+              <p style={{ fontSize: 14, lineHeight: "20px", color: "#444" }}>{t.description}</p>
               <div style={{ fontSize: 13 }}>
                 <strong>Prerequisites:</strong> {t.prerequisites?.join(", ") || "None"}
               </div>
@@ -295,25 +300,24 @@ const inputStyle = {
 
 const cardsWrapper = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-  gap: "20px",
-  paddingTop: "10px",
-  paddingBottom: "30px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+  gap: "24px",
+  paddingTop: "20px",
+  paddingBottom: "40px",
 };
 
 /* ★ Improved card appearance */
 const topicCard = {
-  width: "100%",
   background: "white",
-  padding: 20,
-  borderRadius: 12,
+  padding: "20px",
+  borderRadius: "14px",
   border: "1px solid #e5e7eb",
-  boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-  transition: "0.2s",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+  transition: "0.25s ease",
   display: "flex",
   flexDirection: "column",
   minHeight: "260px",
-  cursor: "pointer"
+  cursor: "default",
 };
 
 const cardBtns = {
