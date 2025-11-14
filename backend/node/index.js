@@ -250,37 +250,81 @@ app.get("/topics/list", async (req, res) => {
   }
 });
 
-// Topic graph for visualization
+// Topic graph for visualization (DAG With Levels)
 app.get("/topics/graph", async (req, res) => {
   try {
     const snapshot = await db.collection("topics").get();
-
-    if (snapshot.empty) {
-      return res.status(200).json({ nodes: [], edges: [] });
-    }
 
     const topics = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
 
+    // Build adjacency & indegree
+    const indegree = {};
+    const prereqMap = {};
+
+    topics.forEach((t) => {
+      indegree[t.id] = 0;
+      prereqMap[t.id] = Array.isArray(t.prerequisites)
+        ? t.prerequisites
+        : [];
+    });
+
+    // Count indegree
+    topics.forEach((t) => {
+      prereqMap[t.id].forEach((p) => {
+        indegree[t.id] = (indegree[t.id] || 0) + 1;
+      });
+    });
+
+    // Topological level calculation
+    const level = {};
+    const queue = [];
+
+    // Start with topics that have NO prerequisites
+    topics.forEach((t) => {
+      if (indegree[t.id] === 0) {
+        level[t.id] = 0;
+        queue.push(t.id);
+      }
+    });
+
+    while (queue.length) {
+      const curr = queue.shift();
+      const currLevel = level[curr];
+
+      // For each topic that lists curr as a prerequisite
+      topics.forEach((t) => {
+        if (prereqMap[t.id].includes(curr)) {
+          indegree[t.id]--;
+
+          if (indegree[t.id] === 0) {
+            level[t.id] = currLevel + 1;
+            queue.push(t.id);
+          }
+        }
+      });
+    }
+
+    // Build nodes with level
     const nodes = topics.map((t) => ({
       id: t.id,
       title: t.name || t.title || t.id,
       description: t.description || "",
-      level: typeof t.level === "number" ? t.level : 0,
+      level: level[t.id] ?? 0,
     }));
 
+    // Build edges
     const edges = [];
-
     topics.forEach((t) => {
-      const prereqs = Array.isArray(t.prerequisites) ? t.prerequisites : [];
-      prereqs.forEach((p) => {
+      (t.prerequisites || []).forEach((p) => {
         edges.push([p, t.id]); // p → t
       });
     });
 
-    res.status(200).json({ nodes, edges });
+    res.json({ nodes, edges });
+
   } catch (err) {
     console.error("Error generating topic graph:", err);
     res.status(500).json({ error: "Failed to build topic graph" });
