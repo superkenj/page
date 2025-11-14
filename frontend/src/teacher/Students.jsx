@@ -109,7 +109,7 @@ function Students() {
 
   // Navigate to StudentPath page (graph + full UI)
   function openStudentPath(studentId) {
-    navigate(`/students/${studentId}/path`);
+    navigate(`/teacher/students/${studentId}/path`);
   }
 
   // Quick inline recommendation (keeps current behavior)
