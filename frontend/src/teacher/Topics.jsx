@@ -245,12 +245,9 @@ export default function Topics() {
               </div>
             </div>
 
-            <div>
-              <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>{t.id}</div>
-              <div style={cardBtns}>
-                <button onClick={() => editTopic(t)} style={editBtn}>Edit</button>
-                <button onClick={() => delTopic(t.id)} style={deleteBtn}>Delete</button>
-              </div>
+            <div style={cardBtns}>
+              <button onClick={() => editTopic(t)} style={editBtn}>Edit</button>
+              <button onClick={() => delTopic(t.id)} style={deleteBtn}>Delete</button>
             </div>
           </div>
         ))}
