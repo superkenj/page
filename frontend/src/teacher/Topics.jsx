@@ -146,7 +146,7 @@ export default function Topics() {
               />
 
               {/* ID */}
-              <label style={{ marginTop: 10 }}>Topic ID</label>
+              <label style={{ fontSize: 14, fontWeight: "bold", marginTop: 12, display: "block" }}>Topic ID</label>
               <input
                 style={inputStyle}
                 value={form.id}
@@ -154,7 +154,7 @@ export default function Topics() {
               />
 
               {/* DESCRIPTION */}
-              <label style={{ marginTop: 10 }}>Description</label>
+              <label style={{ fontSize: 14, fontWeight: "bold", marginTop: 12, display: "block" }}>Description</label>
               <textarea
                 style={{ ...inputStyle, height: 80 }}
                 value={form.description}
@@ -162,7 +162,7 @@ export default function Topics() {
               />
 
               {/* PREREQUISITES */}
-              <label style={{ marginTop: 10 }}>Prerequisites</label>
+              <label style={{ fontSize: 14, fontWeight: "bold", marginTop: 12, display: "block" }}>Prerequisites</label>
               <select
                 multiple
                 value={form.prerequisites}
@@ -170,9 +170,9 @@ export default function Topics() {
                   const opts = Array.from(e.target.selectedOptions).map(o => o.value);
                   setField("prerequisites", opts);
                 }}
-                style={{ ...inputStyle, height: 140 }}
+                style={{ ...inputStyle, marginTop: 6, minHeight: "140px" }}
               >
-                {topics.map(t => (
+                {[...sortedTopics].reverse().map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name} ({t.id})
                   </option>
@@ -206,6 +206,9 @@ export default function Topics() {
               <button onClick={() => editTopic(t)} style={editBtn}>Edit</button>
               <button onClick={() => delTopic(t.id)} style={deleteBtn}>Delete</button>
             </div>
+
+            onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.12)")}
+            onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.04)")}
           </div>
         ))}
       </div>
@@ -242,7 +245,7 @@ const inputStyle = {
   padding: "10px",
   borderRadius: 8,
   border: "1px solid #ccc",
-  marginTop: 5,
+  marginTop: 6,
   boxSizing: "border-box"
 };
 
@@ -257,7 +260,9 @@ const topicCard = {
   background: "white",
   padding: 20,
   borderRadius: 12,
-  boxShadow: "0 4px 10px rgba(0,0,0,0.08)",
+  border: "1px solid #e5e7eb",
+  boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+  transition: "0.2s",
   display: "flex",
   flexDirection: "column",
   height: "260px"
