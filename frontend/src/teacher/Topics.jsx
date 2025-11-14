@@ -165,21 +165,47 @@ export default function Topics() {
 
               {/* ★ PREREQUISITES (sorted reverse) */}
               <label style={labelStyle}>Prerequisites</label>
-              <select
-                multiple
-                value={form.prerequisites}
-                onChange={e => {
-                  const opts = Array.from(e.target.selectedOptions).map(o => o.value);
-                  setField("prerequisites", opts);
-                }}
-                style={{ ...inputStyle, height: 140 }}
-              >
+              <div style={{ 
+                ...inputStyle, 
+                height: 160, 
+                overflowY: "auto", 
+                padding: "10px", 
+                borderRadius: 8 
+              }}>
                 {[...sortedTopics].reverse().map(t => (
-                  <option key={t.id} value={t.id}>
+                  <label 
+                    key={t.id}
+                    style={{ 
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "6px 0",
+                      cursor: "pointer"
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form.prerequisites.includes(t.id)}
+                      onChange={() => {
+                        if (form.prerequisites.includes(t.id)) {
+                          setField(
+                            "prerequisites",
+                            form.prerequisites.filter(p => p !== t.id)
+                          );
+                        } else {
+                          setField("prerequisites", [...form.prerequisites, t.id]);
+                        }
+                      }}
+                      style={{
+                        width: 16,
+                        height: 16,
+                        cursor: "pointer"
+                      }}
+                    />
                     {t.name} ({t.id})
-                  </option>
+                  </label>
                 ))}
-              </select>
+              </div>
 
               {/* BUTTONS */}
               <div style={modalBtns}>
@@ -239,11 +265,12 @@ const modalOverlay = {
 const modalContent = {
   background: "#fff",
   padding: 20,
-  borderRadius: 12,
-  width: "500px",
+  borderRadius: "20px",
+  width: "520px",
   maxHeight: "90vh",
   overflowY: "auto",
-  boxSizing: "border-box"
+  boxSizing: "border-box",
+  boxShadow: "0 6px 20px rgba(0,0,0,0.15)"
 };
 
 const inputStyle = {
@@ -257,15 +284,15 @@ const inputStyle = {
 
 /* ★ Ensure 3 cards per row */
 const cardsWrapper = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 20,
-  justifyContent: "space-between"
+  display: "grid",
+  gridTemplateColumns: "repeat(3, 1fr)",
+  gap: "20px",
+  alignItems: "stretch"
 };
 
 /* ★ Improved card appearance */
 const topicCard = {
-  width: "30%",
+  width: "100%",
   minWidth: "260px",
   background: "white",
   padding: 20,
