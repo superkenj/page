@@ -20,6 +20,7 @@ export default function Topics() {
     setForm(prev => ({ ...prev, [k]: v }));
   }
 
+  // ★ Improved auto ID (editable, 3 letters per word)
   function generateIdFromName(name) {
     return name
       .toLowerCase()
@@ -70,7 +71,7 @@ export default function Topics() {
     await load();
   }
 
-  // ------ SORT BY PREREQUISITE COUNT -------
+  // ★ Sort topics by prerequisites ASC
   const sortedTopics = useMemo(() => {
     return [...topics].sort((a, b) => {
       const ap = a.prerequisites?.length || 0;
@@ -79,7 +80,7 @@ export default function Topics() {
     });
   }, [topics]);
 
-  // ------ SEARCH FILTER ------
+  // ★ SEARCH FILTER
   const visibleTopics = sortedTopics.filter(t =>
     t.name.toLowerCase().includes(query.toLowerCase()) ||
     t.id.toLowerCase().includes(query.toLowerCase())
@@ -89,7 +90,7 @@ export default function Topics() {
     <div style={{ padding: 20 }}>
       <h1>Topics</h1>
 
-      {/* SEARCH BAR */}
+      {/* SEARCH */}
       <input
         placeholder="Search topic..."
         value={query}
@@ -129,8 +130,9 @@ export default function Topics() {
             <h2>{editing ? "Edit Topic" : "Add Topic"}</h2>
 
             <form onSubmit={save}>
+
               {/* NAME */}
-              <label>Topic Name</label>
+              <label style={labelStyle}>Topic Name</label>
               <input
                 style={inputStyle}
                 value={form.name}
@@ -145,8 +147,8 @@ export default function Topics() {
                 placeholder="Enter topic name"
               />
 
-              {/* ID */}
-              <label style={{ fontSize: 14, fontWeight: "bold", marginTop: 12, display: "block" }}>Topic ID</label>
+              {/* ID — editable */}
+              <label style={labelStyle}>Topic ID</label>
               <input
                 style={inputStyle}
                 value={form.id}
@@ -154,15 +156,15 @@ export default function Topics() {
               />
 
               {/* DESCRIPTION */}
-              <label style={{ fontSize: 14, fontWeight: "bold", marginTop: 12, display: "block" }}>Description</label>
+              <label style={labelStyle}>Description</label>
               <textarea
                 style={{ ...inputStyle, height: 80 }}
                 value={form.description}
                 onChange={e => setField("description", e.target.value)}
               />
 
-              {/* PREREQUISITES */}
-              <label style={{ fontSize: 14, fontWeight: "bold", marginTop: 12, display: "block" }}>Prerequisites</label>
+              {/* ★ PREREQUISITES (sorted reverse) */}
+              <label style={labelStyle}>Prerequisites</label>
               <select
                 multiple
                 value={form.prerequisites}
@@ -170,9 +172,9 @@ export default function Topics() {
                   const opts = Array.from(e.target.selectedOptions).map(o => o.value);
                   setField("prerequisites", opts);
                 }}
-                style={{ ...inputStyle, marginTop: 6, minHeight: "140px" }}
+                style={{ ...inputStyle, height: 140 }}
               >
-                {[...sortedTopics].reverse().map((t) => (
+                {[...sortedTopics].reverse().map(t => (
                   <option key={t.id} value={t.id}>
                     {t.name} ({t.id})
                   </option>
@@ -206,9 +208,6 @@ export default function Topics() {
               <button onClick={() => editTopic(t)} style={editBtn}>Edit</button>
               <button onClick={() => delTopic(t.id)} style={deleteBtn}>Delete</button>
             </div>
-
-            onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.12)")}
-            onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.04)")}
           </div>
         ))}
       </div>
@@ -217,6 +216,13 @@ export default function Topics() {
 }
 
 /* ---------- Styles ---------- */
+
+const labelStyle = {
+  fontSize: 14,
+  fontWeight: "bold",
+  marginTop: 12,
+  display: "block"
+};
 
 const modalOverlay = {
   position: "fixed",
@@ -249,14 +255,18 @@ const inputStyle = {
   boxSizing: "border-box"
 };
 
+/* ★ Ensure 3 cards per row */
 const cardsWrapper = {
   display: "flex",
   flexWrap: "wrap",
-  gap: 20
+  gap: 20,
+  justifyContent: "space-between"
 };
 
+/* ★ Improved card appearance */
 const topicCard = {
-  width: "260px",
+  width: "30%",
+  minWidth: "260px",
   background: "white",
   padding: 20,
   borderRadius: 12,
