@@ -6,9 +6,10 @@ export default function Topics() {
   const [form, setForm] = useState({ id: "", name: "", description: "", prerequisites: [] });
   const [editing, setEditing] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [query, setQuery] = useState("");
 
-  // ---------- Load Topics ----------
   useEffect(() => { load(); }, []);
+
   async function load() {
     const res = await fetch(`${API_BASE}/topics/list`);
     const data = await res.json();
@@ -19,7 +20,17 @@ export default function Topics() {
     setForm(prev => ({ ...prev, [k]: v }));
   }
 
-  // ---------- Save ----------
+  function generateIdFromName(name) {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z\s]/g, "")
+      .trim()
+      .split(/\s+/)
+      .map(w => w.slice(0, 3))
+      .join("_")
+      .slice(0, 20);
+  }
+
   async function save(e) {
     e.preventDefault();
     if (!form.name) return alert("Topic name required.");
@@ -42,7 +53,6 @@ export default function Topics() {
     await load();
   }
 
-  // ---------- Edit Topic ----------
   function editTopic(t) {
     setEditing(true);
     setForm({
@@ -54,23 +64,45 @@ export default function Topics() {
     setShowModal(true);
   }
 
-  // ---------- Delete ----------
   async function delTopic(id) {
     if (!confirm("Delete " + id + "?")) return;
     await fetch(`${API_BASE}/topics/${id}`, { method: "DELETE" });
     await load();
   }
 
-  // ---------- Group Topics (no cluster) ----------
-  const clusters = useMemo(() => {
-    return { "All Topics": topics };
+  // ------ SORT BY PREREQUISITE COUNT -------
+  const sortedTopics = useMemo(() => {
+    return [...topics].sort((a, b) => {
+      const ap = a.prerequisites?.length || 0;
+      const bp = b.prerequisites?.length || 0;
+      return ap - bp;
+    });
   }, [topics]);
+
+  // ------ SEARCH FILTER ------
+  const visibleTopics = sortedTopics.filter(t =>
+    t.name.toLowerCase().includes(query.toLowerCase()) ||
+    t.id.toLowerCase().includes(query.toLowerCase())
+  );
 
   return (
     <div style={{ padding: 20 }}>
       <h1>Topics</h1>
 
-      {/* ADD TOPIC BUTTON */}
+      {/* SEARCH BAR */}
+      <input
+        placeholder="Search topic..."
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        style={{
+          width: 300,
+          padding: 10,
+          borderRadius: 8,
+          border: "1px solid #ccc",
+          marginBottom: 18
+        }}
+      />
+
       <button
         onClick={() => {
           setEditing(false);
@@ -83,7 +115,7 @@ export default function Topics() {
           padding: "10px 16px",
           border: "none",
           borderRadius: 8,
-          marginBottom: 18,
+          marginLeft: 10,
           cursor: "pointer"
         }}
       >
@@ -92,31 +124,11 @@ export default function Topics() {
 
       {/* ---------- MODAL ---------- */}
       {showModal && (
-        <div style={{
-          position: "fixed",
-          top: 0, left: 0,
-          width: "100vw",
-          height: "100vh",
-          background: "rgba(0,0,0,0.4)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 9999
-        }}>
-          <div style={{
-            background: "#fff",
-            padding: 20,
-            borderRadius: 12,
-            width: "500px",
-            maxHeight: "90vh",
-            overflowY: "auto"
-          }}>
-            <h2 style={{ marginTop: 0 }}>
-              {editing ? "Edit Topic" : "Add Topic"}
-            </h2>
+        <div style={modalOverlay}>
+          <div style={modalContent}>
+            <h2>{editing ? "Edit Topic" : "Add Topic"}</h2>
 
             <form onSubmit={save}>
-
               {/* NAME */}
               <label>Topic Name</label>
               <input
@@ -127,13 +139,7 @@ export default function Topics() {
                   setField("name", name);
 
                   if (!editing) {
-                    const suggested = name
-                      .toLowerCase()
-                      .replace(/[^a-z ]/g, "")
-                      .trim()
-                      .replace(/\s+/g, "_")
-                      .slice(0, 20);
-                    setField("id", suggested);
+                    setField("id", generateIdFromName(name));
                   }
                 }}
                 placeholder="Enter topic name"
@@ -142,10 +148,9 @@ export default function Topics() {
               {/* ID */}
               <label style={{ marginTop: 10 }}>Topic ID</label>
               <input
-                style={{ ...inputStyle, background: "#f8f8f8" }}
+                style={inputStyle}
                 value={form.id}
                 onChange={e => setField("id", e.target.value)}
-                placeholder="Auto-generated"
               />
 
               {/* DESCRIPTION */}
@@ -175,22 +180,18 @@ export default function Topics() {
               </select>
 
               {/* BUTTONS */}
-              <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <button type="button" onClick={() => setShowModal(false)} style={cancelBtn}>
-                  Cancel
-                </button>
-                <button type="submit" style={saveBtn}>
-                  Save
-                </button>
+              <div style={modalBtns}>
+                <button type="button" onClick={() => setShowModal(false)} style={cancelBtn}>Cancel</button>
+                <button type="submit" style={saveBtn}>Save</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* ---------- TOPIC LIST ---------- */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
-        {topics.map(t => (
+      {/* ---------- TOPIC CARDS ---------- */}
+      <div style={cardsWrapper}>
+        {visibleTopics.map(t => (
           <div key={t.id} style={topicCard}>
             <div>
               <h3 style={{ marginTop: 0 }}>{t.name}</h3>
@@ -201,8 +202,7 @@ export default function Topics() {
               </div>
             </div>
 
-            {/* BUTTONS at the BOTTOM */}
-            <div style={{ marginTop: "auto", display: "flex", gap: 10 }}>
+            <div style={cardBtns}>
               <button onClick={() => editTopic(t)} style={editBtn}>Edit</button>
               <button onClick={() => delTopic(t.id)} style={deleteBtn}>Delete</button>
             </div>
@@ -213,17 +213,47 @@ export default function Topics() {
   );
 }
 
-// ---------- Styles ----------
+/* ---------- Styles ---------- */
+
+const modalOverlay = {
+  position: "fixed",
+  top: 0, left: 0,
+  width: "100vw",
+  height: "100vh",
+  background: "rgba(0,0,0,0.4)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 9999
+};
+
+const modalContent = {
+  background: "#fff",
+  padding: 20,
+  borderRadius: 12,
+  width: "500px",
+  maxHeight: "90vh",
+  overflowY: "auto",
+  boxSizing: "border-box"
+};
+
 const inputStyle = {
   width: "100%",
   padding: "10px",
   borderRadius: 8,
   border: "1px solid #ccc",
-  marginTop: 5
+  marginTop: 5,
+  boxSizing: "border-box"
+};
+
+const cardsWrapper = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 20
 };
 
 const topicCard = {
-  width: "300px",
+  width: "260px",
   background: "white",
   padding: 20,
   borderRadius: 12,
@@ -231,6 +261,12 @@ const topicCard = {
   display: "flex",
   flexDirection: "column",
   height: "260px"
+};
+
+const cardBtns = {
+  marginTop: "auto",
+  display: "flex",
+  gap: 10
 };
 
 const editBtn = {
@@ -253,6 +289,15 @@ const deleteBtn = {
   flex: 1
 };
 
+const saveBtn = {
+  padding: "8px 14px",
+  background: "#2563eb",
+  color: "white",
+  borderRadius: 8,
+  border: "none",
+  cursor: "pointer"
+};
+
 const cancelBtn = {
   padding: "8px 14px",
   background: "#ddd",
@@ -261,11 +306,9 @@ const cancelBtn = {
   cursor: "pointer"
 };
 
-const saveBtn = {
-  padding: "8px 14px",
-  background: "#2563eb",
-  color: "white",
-  borderRadius: 8,
-  border: "none",
-  cursor: "pointer"
+const modalBtns = {
+  marginTop: 20,
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: 10
 };
