@@ -212,31 +212,48 @@ export default function TeacherContent() {
 
             {modalLinks.map((it, i) => (
               <div key={i} style={{ marginTop: 12, background: "#fff", padding: 10, borderRadius: 8, border: "1px solid #e6eefc" }}>
-                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 120px",
+                    gap: "8px",
+                    marginBottom: "8px"
+                  }}
+                >
                   <input
+                    type="text"
                     placeholder={`Resource link #${i + 1}`}
-                    value={it.link}
-                    onChange={e => updateModalLink(i, { ...it, link: e.target.value })}
-                    style={{ flex: 1, padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
+                    value={item.link}
+                    onChange={(e) => updateLink(i, { ...item, link: e.target.value })}
+                    style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc", width: "100%" }}
                   />
                   <select
-                    value={it.type}
-                    onChange={e => updateModalLink(i, { ...it, type: e.target.value })}
-                    style={{ padding: 8, borderRadius: 6 }}
+                    value={item.type}
+                    onChange={(e) => updateLink(i, { ...item, type: e.target.value })}
+                    style={{ padding: 8, borderRadius: 6, width: "100%" }}
                   >
                     <option value="video">Video</option>
                     <option value="presentation">Presentation</option>
                     <option value="pdf">PDF</option>
                     <option value="link">Link</option>
                   </select>
-                  {modalLinks.length > 1 && (
-                    <button
-                      onClick={() => removeModalLink(i)}
-                      style={{ background: "#ef4444", color: "white", border: "none", borderRadius: 6, padding: "6px 8px", cursor: "pointer" }}
-                    >
-                      ✖
-                    </button>
-                  )}
+
+                  {/* Short description aligned under the input, NOT the dropdown */}
+                  <textarea
+                    placeholder="Short description..."
+                    value={item.description}
+                    onChange={(e) =>
+                      updateLink(i, { ...item, description: e.target.value })
+                    }
+                    style={{
+                      gridColumn: "1 / span 2",        // spans both grid columns
+                      width: "100%",
+                      padding: 8,
+                      borderRadius: 6,
+                      border: "1px solid #ccc",
+                      resize: "vertical"
+                    }}
+                  />
                 </div>
                 <textarea
                   placeholder="Short description..."
