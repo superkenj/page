@@ -211,7 +211,16 @@ export default function TeacherContent() {
             </select>
 
             {modalLinks.map((it, i) => (
-              <div key={i} style={{ marginTop: 12, background: "#fff", padding: 10, borderRadius: 8, border: "1px solid #e6eefc" }}>
+              <div
+                key={i}
+                style={{
+                  marginTop: 12,
+                  background: "#fff",
+                  padding: 10,
+                  borderRadius: 8,
+                  border: "1px solid #e6eefc"
+                }}
+              >
                 <div
                   style={{
                     display: "grid",
@@ -220,17 +229,33 @@ export default function TeacherContent() {
                     marginBottom: "8px"
                   }}
                 >
+                  {/* LINK INPUT */}
                   <input
                     type="text"
                     placeholder={`Resource link #${i + 1}`}
-                    value={item.link}
-                    onChange={(e) => updateLink(i, { ...item, link: e.target.value })}
-                    style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc", width: "100%" }}
+                    value={it.link}
+                    onChange={(e) =>
+                      updateModalLink(i, { ...it, link: e.target.value })
+                    }
+                    style={{
+                      padding: 8,
+                      borderRadius: 6,
+                      border: "1px solid #ccc",
+                      width: "100%"
+                    }}
                   />
+
+                  {/* TYPE DROPDOWN */}
                   <select
-                    value={item.type}
-                    onChange={(e) => updateLink(i, { ...item, type: e.target.value })}
-                    style={{ padding: 8, borderRadius: 6, width: "100%" }}
+                    value={it.type}
+                    onChange={(e) =>
+                      updateModalLink(i, { ...it, type: e.target.value })
+                    }
+                    style={{
+                      padding: 8,
+                      borderRadius: 6,
+                      width: "100%"
+                    }}
                   >
                     <option value="video">Video</option>
                     <option value="presentation">Presentation</option>
@@ -238,15 +263,15 @@ export default function TeacherContent() {
                     <option value="link">Link</option>
                   </select>
 
-                  {/* Short description aligned under the input, NOT the dropdown */}
+                  {/* DESCRIPTION — aligned nicely under both */}
                   <textarea
                     placeholder="Short description..."
-                    value={item.description}
+                    value={it.description}
                     onChange={(e) =>
-                      updateLink(i, { ...item, description: e.target.value })
+                      updateModalLink(i, { ...it, description: e.target.value })
                     }
                     style={{
-                      gridColumn: "1 / span 2",        // spans both grid columns
+                      gridColumn: "1 / span 2",
                       width: "100%",
                       padding: 8,
                       borderRadius: 6,
@@ -255,12 +280,6 @@ export default function TeacherContent() {
                     }}
                   />
                 </div>
-                <textarea
-                  placeholder="Short description..."
-                  value={it.description}
-                  onChange={e => updateModalLink(i, { ...it, description: e.target.value })}
-                  style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc", resize: "vertical" }}
-                />
               </div>
             ))}
 
