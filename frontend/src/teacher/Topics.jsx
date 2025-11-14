@@ -20,7 +20,6 @@ export default function Topics() {
     setForm(prev => ({ ...prev, [k]: v }));
   }
 
-  // ★ Improved auto ID (editable, 3 letters per word)
   function generateIdFromName(name) {
     return name
       .toLowerCase()
@@ -71,7 +70,6 @@ export default function Topics() {
     await load();
   }
 
-  // ★ Sort topics by prerequisites ASC
   const sortedTopics = useMemo(() => {
     return [...topics].sort((a, b) => {
       const ap = a.prerequisites?.length || 0;
@@ -80,19 +78,20 @@ export default function Topics() {
     });
   }, [topics]);
 
-  // ★ SEARCH FILTER
   const visibleTopics = sortedTopics.filter(t =>
     t.name.toLowerCase().includes(query.toLowerCase()) ||
     t.id.toLowerCase().includes(query.toLowerCase())
   );
 
+  /* ✅ MAP OF ID → NAME FOR PREREQUISITE DISPLAY */
+  const topicNameMap = useMemo(() => {
+    const map = {};
+    topics.forEach(t => { map[t.id] = t.name; });
+    return map;
+  }, [topics]);
+
   return (
-    <div style={{ 
-      padding: 20,
-      maxWidth: "1400px",
-      margin: "0 auto",
-      width: "100%" 
-    }}>
+    <div style={{ padding: 20, maxWidth: "1400px", margin: "0 auto", width: "100%" }}>
       <h1>Topics</h1>
 
       {/* SEARCH */}
@@ -128,14 +127,13 @@ export default function Topics() {
         + Add Topic
       </button>
 
-      {/* ---------- MODAL ---------- */}
+      {/* MODAL */}
       {showModal && (
         <div style={modalOverlay}>
           <div style={modalContent}>
             <h2>{editing ? "Edit Topic" : "Add Topic"}</h2>
 
             <form onSubmit={save}>
-
               {/* NAME */}
               <label style={labelStyle}>Topic Name</label>
               <input
@@ -152,7 +150,7 @@ export default function Topics() {
                 placeholder="Enter topic name"
               />
 
-              {/* ID — editable */}
+              {/* ID */}
               <label style={labelStyle}>Topic ID</label>
               <input
                 style={inputStyle}
@@ -168,44 +166,25 @@ export default function Topics() {
                 onChange={e => setField("description", e.target.value)}
               />
 
-              {/* ★ PREREQUISITES (sorted reverse) */}
+              {/* PREREQUISITES */}
               <label style={labelStyle}>Prerequisites</label>
-              <div style={{ 
-                ...inputStyle, 
-                height: 160, 
-                overflowY: "auto", 
-                padding: "10px", 
-                borderRadius: 8 
-              }}>
+              <div style={{ ...inputStyle, height: 160, overflowY: "auto", padding: "10px", borderRadius: 8 }}>
                 {[...sortedTopics].reverse().map(t => (
-                  <label 
+                  <label
                     key={t.id}
-                    style={{ 
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      padding: "6px 0",
-                      cursor: "pointer"
-                    }}
+                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", cursor: "pointer" }}
                   >
                     <input
                       type="checkbox"
                       checked={form.prerequisites.includes(t.id)}
                       onChange={() => {
                         if (form.prerequisites.includes(t.id)) {
-                          setField(
-                            "prerequisites",
-                            form.prerequisites.filter(p => p !== t.id)
-                          );
+                          setField("prerequisites", form.prerequisites.filter(p => p !== t.id));
                         } else {
                           setField("prerequisites", [...form.prerequisites, t.id]);
                         }
                       }}
-                      style={{
-                        width: 16,
-                        height: 16,
-                        cursor: "pointer"
-                      }}
+                      style={{ width: 16, height: 16, cursor: "pointer" }}
                     />
                     {t.name} ({t.id})
                   </label>
@@ -222,7 +201,7 @@ export default function Topics() {
         </div>
       )}
 
-      {/* ---------- TOPIC CARDS ---------- */}
+      {/* TOPIC CARDS */}
       <div style={cardsWrapper}>
         {visibleTopics.map(t => (
           <div
@@ -238,11 +217,19 @@ export default function Topics() {
             }}
           >
             <div>
-              <h3 style={{ marginTop: 0, fontSize: "18px", fontWeight: 600 }}>{t.name}</h3>
-              <p style={{ fontSize: 14, lineHeight: "20px", color: "#444" }}>{t.description}</p>
-              <div style={{ fontSize: 13 }}>
-                <strong>Prerequisites:</strong> {t.prerequisites?.join(", ") || "None"}
-              </div>
+              <h3 style={{ marginTop: 0 }}>{t.name}</h3>
+
+              <p style={{ fontSize: 14, color: "#555", lineHeight: "20px" }}>
+                {t.description}
+              </p>
+            </div>
+
+            {/* ✅ PREREQUISITE NAMES HERE */}
+            <div style={{ marginTop: "auto", fontSize: 13, color: "#444" }}>
+              <strong>Prerequisites:</strong>{" "}
+              {t.prerequisites?.length
+                ? t.prerequisites.map(id => topicNameMap[id] || id).join(", ")
+                : "None"}
             </div>
 
             <div style={cardBtns}>
@@ -305,7 +292,6 @@ const cardsWrapper = {
   paddingBottom: "40px",
 };
 
-/* ★ Improved card appearance */
 const topicCard = {
   background: "white",
   padding: "20px",
