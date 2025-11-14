@@ -250,6 +250,43 @@ app.get("/topics/list", async (req, res) => {
   }
 });
 
+// Topic graph for visualization
+app.get("/topics/graph", async (req, res) => {
+  try {
+    const snapshot = await db.collection("topics").get();
+
+    if (snapshot.empty) {
+      return res.status(200).json({ nodes: [], edges: [] });
+    }
+
+    const topics = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    const nodes = topics.map((t) => ({
+      id: t.id,
+      title: t.name || t.title || t.id,
+      description: t.description || "",
+      level: typeof t.level === "number" ? t.level : 0,
+    }));
+
+    const edges = [];
+
+    topics.forEach((t) => {
+      const prereqs = Array.isArray(t.prerequisites) ? t.prerequisites : [];
+      prereqs.forEach((p) => {
+        edges.push([p, t.id]); // p → t
+      });
+    });
+
+    res.status(200).json({ nodes, edges });
+  } catch (err) {
+    console.error("Error generating topic graph:", err);
+    res.status(500).json({ error: "Failed to build topic graph" });
+  }
+});
+
 // ✅ Mark content as seen for a student
 app.post("/students/:id/content_seen", async (req, res) => {
   try {
