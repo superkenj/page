@@ -1,55 +1,33 @@
-// frontend/src/teacher/Topics.jsx
-
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 const API_BASE = "https://page-jirk.onrender.com";
 
 export default function Topics() {
   const [topics, setTopics] = useState([]);
-  const [form, setForm] = useState({
-    id: "",
-    name: "",
-    description: "",
-    prerequisites: []
-  });
+  const [form, setForm] = useState({ id: "", name: "", description: "", prerequisites: [] });
+  const [editing, setEditing] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
-  const [modalOpen, setModalOpen] = useState(false);
-
-  function setField(k, v) {
-    setForm((prev) => ({ ...prev, [k]: v }));
-  }
-
-  /* -------------------------------
-      LOAD TOPICS
-  ------------------------------- */
+  // ---------- Load Topics ----------
+  useEffect(() => { load(); }, []);
   async function load() {
     const res = await fetch(`${API_BASE}/topics/list`);
     const data = await res.json();
     setTopics(data);
   }
 
-  useEffect(() => {
-    const role = localStorage.getItem("role");
-    if (role !== "teacher") navigate("/");
-  }, []);
+  function setField(k, v) {
+    setForm(prev => ({ ...prev, [k]: v }));
+  }
 
-  useEffect(() => {
-    load();
-  }, []);
-
-  /* -------------------------------
-      SAVE TOPIC
-  ------------------------------- */
+  // ---------- Save ----------
   async function save(e) {
     e.preventDefault();
-    if (!form.id || !form.name) {
-      alert("Topic ID & Name are required.");
-      return;
-    }
+    if (!form.name) return alert("Topic name required.");
 
     const payload = {
       name: form.name,
       description: form.description,
-      prerequisites: form.prerequisites
+      prerequisites: form.prerequisites,
     };
 
     await fetch(`${API_BASE}/topics/${form.id}`, {
@@ -58,184 +36,36 @@ export default function Topics() {
       body: JSON.stringify(payload)
     });
 
-    await load();
-    setModalOpen(false);
+    setShowModal(false);
+    setEditing(false);
     setForm({ id: "", name: "", description: "", prerequisites: [] });
+    await load();
   }
 
-  /* -------------------------------
-      EDIT TOPIC (opens modal)
-  ------------------------------- */
+  // ---------- Edit Topic ----------
   function editTopic(t) {
+    setEditing(true);
     setForm({
       id: t.id,
-      name: t.name || "",
+      name: t.name,
       description: t.description || "",
-      prerequisites: t.prerequisites || []
+      prerequisites: t.prerequisites || [],
     });
-    setModalOpen(true);
+    setShowModal(true);
   }
 
-  /* -------------------------------
-      DELETE TOPIC
-  ------------------------------- */
+  // ---------- Delete ----------
   async function delTopic(id) {
     if (!confirm("Delete " + id + "?")) return;
     await fetch(`${API_BASE}/topics/${id}`, { method: "DELETE" });
     await load();
   }
 
-  /* -------------------------------
-      INPUT STYLE
-  ------------------------------- */
-  const inputStyle = {
-    width: "100%",
-    padding: "10px",
-    borderRadius: "8px",
-    border: "1px solid #ccc",
-    marginTop: 6
-  };
+  // ---------- Group Topics (no cluster) ----------
+  const clusters = useMemo(() => {
+    return { "All Topics": topics };
+  }, [topics]);
 
-  /* =============================
-        MODAL COMPONENT
-  ============================= */
-  const TopicModal = () =>
-    !modalOpen ? null : (
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          width: "100vw",
-          height: "100vh",
-          background: "rgba(0,0,0,0.45)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 2000
-        }}
-      >
-        <div
-          style={{
-            background: "white",
-            padding: 24,
-            borderRadius: 12,
-            width: "480px",
-            maxHeight: "85vh",
-            overflowY: "auto",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.25)"
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>
-            {form.id ? "Edit Topic" : "Add Topic"}
-          </h2>
-
-          <form onSubmit={save}>
-            {/* NAME */}
-            <label style={{ fontWeight: "bold" }}>Topic Name</label>
-            <input
-              style={inputStyle}
-              placeholder="Enter topic name"
-              value={form.name}
-              onChange={(e) => {
-                const name = e.target.value;
-                setField("name", name);
-
-                // auto generate ID when adding a new topic only
-                if (!form.id) {
-                  const suggested = name
-                    .toLowerCase()
-                    .replace(/[^a-z ]/g, "")
-                    .trim()
-                    .replace(/\s+/g, "_")
-                    .slice(0, 20);
-
-                  setField("id", suggested);
-                }
-              }}
-            />
-
-            {/* ID */}
-            <label style={{ fontWeight: "bold", marginTop: 12 }}>
-              Topic ID
-            </label>
-            <input
-              style={{ ...inputStyle, background: "#f7f7f7" }}
-              value={form.id}
-              onChange={(e) => setField("id", e.target.value)}
-              placeholder="Auto-generated"
-            />
-
-            {/* DESCRIPTION */}
-            <label style={{ fontWeight: "bold", marginTop: 12 }}>
-              Description
-            </label>
-            <textarea
-              style={{ ...inputStyle, height: 80 }}
-              value={form.description}
-              onChange={(e) => setField("description", e.target.value)}
-              placeholder="Short description"
-            />
-
-            {/* PREREQUISITES */}
-            <label style={{ fontWeight: "bold", marginTop: 12 }}>
-              Prerequisites
-            </label>
-            <select
-              multiple
-              style={{ ...inputStyle, height: 100 }}
-              value={form.prerequisites}
-              onChange={(e) => {
-                const opts = Array.from(e.target.selectedOptions).map(
-                  (o) => o.value
-                );
-                setField("prerequisites", opts);
-              }}
-            >
-              {topics.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({t.id})
-                </option>
-              ))}
-            </select>
-
-            {/* BUTTONS */}
-            <div style={{ marginTop: 18, textAlign: "right" }}>
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                style={{
-                  padding: "8px 14px",
-                  marginRight: 10,
-                  borderRadius: 6,
-                  border: "1px solid #aaa",
-                  background: "#eee"
-                }}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="submit"
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: 6,
-                  border: "none",
-                  background: "#2563eb",
-                  color: "white"
-                }}
-              >
-                Save
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
-
-  /* =============================
-        RETURN UI
-  ============================= */
   return (
     <div style={{ padding: 20 }}>
       <h1>Topics</h1>
@@ -243,88 +73,199 @@ export default function Topics() {
       {/* ADD TOPIC BUTTON */}
       <button
         onClick={() => {
+          setEditing(false);
           setForm({ id: "", name: "", description: "", prerequisites: [] });
-          setModalOpen(true);
+          setShowModal(true);
         }}
         style={{
-          padding: "10px 16px",
           background: "#2563eb",
           color: "white",
+          padding: "10px 16px",
           border: "none",
-          borderRadius: "8px",
-          marginBottom: 20,
+          borderRadius: 8,
+          marginBottom: 18,
           cursor: "pointer"
         }}
       >
         + Add Topic
       </button>
 
-      {/* TOPIC CARDS */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-          gap: "16px"
-        }}
-      >
-        {topics.map((t) => (
-          <div
-            key={t.id}
-            style={{
-              background: "white",
-              padding: 16,
-              borderRadius: 12,
-              boxShadow: "0 4px 10px rgba(0,0,0,0.08)"
-            }}
-          >
-            <h3 style={{ margin: 0 }}>{t.name}</h3>
-            <div style={{ fontSize: 13, color: "#666" }}>{t.id}</div>
+      {/* ---------- MODAL ---------- */}
+      {showModal && (
+        <div style={{
+          position: "fixed",
+          top: 0, left: 0,
+          width: "100vw",
+          height: "100vh",
+          background: "rgba(0,0,0,0.4)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999
+        }}>
+          <div style={{
+            background: "#fff",
+            padding: 20,
+            borderRadius: 12,
+            width: "500px",
+            maxHeight: "90vh",
+            overflowY: "auto"
+          }}>
+            <h2 style={{ marginTop: 0 }}>
+              {editing ? "Edit Topic" : "Add Topic"}
+            </h2>
 
-            <p style={{ fontSize: 14, marginTop: 10 }}>
-              {t.description || "No description provided."}
-            </p>
+            <form onSubmit={save}>
 
-            <div style={{ fontSize: 12, marginTop: 10, opacity: 0.7 }}>
-              Prerequisites: {t.prerequisites?.join(", ") || "None"}
+              {/* NAME */}
+              <label>Topic Name</label>
+              <input
+                style={inputStyle}
+                value={form.name}
+                onChange={e => {
+                  const name = e.target.value;
+                  setField("name", name);
+
+                  if (!editing) {
+                    const suggested = name
+                      .toLowerCase()
+                      .replace(/[^a-z ]/g, "")
+                      .trim()
+                      .replace(/\s+/g, "_")
+                      .slice(0, 20);
+                    setField("id", suggested);
+                  }
+                }}
+                placeholder="Enter topic name"
+              />
+
+              {/* ID */}
+              <label style={{ marginTop: 10 }}>Topic ID</label>
+              <input
+                style={{ ...inputStyle, background: "#f8f8f8" }}
+                value={form.id}
+                onChange={e => setField("id", e.target.value)}
+                placeholder="Auto-generated"
+              />
+
+              {/* DESCRIPTION */}
+              <label style={{ marginTop: 10 }}>Description</label>
+              <textarea
+                style={{ ...inputStyle, height: 80 }}
+                value={form.description}
+                onChange={e => setField("description", e.target.value)}
+              />
+
+              {/* PREREQUISITES */}
+              <label style={{ marginTop: 10 }}>Prerequisites</label>
+              <select
+                multiple
+                value={form.prerequisites}
+                onChange={e => {
+                  const opts = Array.from(e.target.selectedOptions).map(o => o.value);
+                  setField("prerequisites", opts);
+                }}
+                style={{ ...inputStyle, height: 140 }}
+              >
+                {topics.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({t.id})
+                  </option>
+                ))}
+              </select>
+
+              {/* BUTTONS */}
+              <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <button type="button" onClick={() => setShowModal(false)} style={cancelBtn}>
+                  Cancel
+                </button>
+                <button type="submit" style={saveBtn}>
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- TOPIC LIST ---------- */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
+        {topics.map(t => (
+          <div key={t.id} style={topicCard}>
+            <div>
+              <h3 style={{ marginTop: 0 }}>{t.name}</h3>
+              <div style={{ fontSize: 13, color: "#666" }}>{t.id}</div>
+              <p>{t.description}</p>
+              <div style={{ fontSize: 13 }}>
+                <strong>Prerequisites:</strong> {t.prerequisites?.join(", ") || "None"}
+              </div>
             </div>
 
-            <div style={{ marginTop: 14, display: "flex", gap: 8 }}>
-              <button
-                onClick={() => editTopic(t)}
-                style={{
-                  flex: 1,
-                  padding: "8px 10px",
-                  borderRadius: "6px",
-                  background: "#2563eb",
-                  color: "white",
-                  border: "none",
-                  cursor: "pointer"
-                }}
-              >
-                Edit
-              </button>
-
-              <button
-                onClick={() => delTopic(t.id)}
-                style={{
-                  flex: 1,
-                  padding: "8px 10px",
-                  borderRadius: "6px",
-                  background: "#dc2626",
-                  color: "white",
-                  border: "none",
-                  cursor: "pointer"
-                }}
-              >
-                Delete
-              </button>
+            {/* BUTTONS at the BOTTOM */}
+            <div style={{ marginTop: "auto", display: "flex", gap: 10 }}>
+              <button onClick={() => editTopic(t)} style={editBtn}>Edit</button>
+              <button onClick={() => delTopic(t.id)} style={deleteBtn}>Delete</button>
             </div>
           </div>
         ))}
       </div>
-
-      {/* POPUP MODAL */}
-      <TopicModal />
     </div>
   );
 }
+
+// ---------- Styles ----------
+const inputStyle = {
+  width: "100%",
+  padding: "10px",
+  borderRadius: 8,
+  border: "1px solid #ccc",
+  marginTop: 5
+};
+
+const topicCard = {
+  width: "300px",
+  background: "white",
+  padding: 20,
+  borderRadius: 12,
+  boxShadow: "0 4px 10px rgba(0,0,0,0.08)",
+  display: "flex",
+  flexDirection: "column",
+  height: "260px"
+};
+
+const editBtn = {
+  background: "#2563eb",
+  color: "white",
+  padding: "8px 14px",
+  borderRadius: 8,
+  border: "none",
+  cursor: "pointer",
+  flex: 1
+};
+
+const deleteBtn = {
+  background: "#dc2626",
+  color: "white",
+  padding: "8px 14px",
+  borderRadius: 8,
+  border: "none",
+  cursor: "pointer",
+  flex: 1
+};
+
+const cancelBtn = {
+  padding: "8px 14px",
+  background: "#ddd",
+  borderRadius: 8,
+  border: "none",
+  cursor: "pointer"
+};
+
+const saveBtn = {
+  padding: "8px 14px",
+  background: "#2563eb",
+  color: "white",
+  borderRadius: 8,
+  border: "none",
+  cursor: "pointer"
+};
