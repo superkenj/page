@@ -241,8 +241,18 @@ export default function TeacherContent() {
                 <textarea
                   placeholder="Short description..."
                   value={it.description}
-                  onChange={e => updateModalLink(i, { ...it, description: e.target.value })}
-                  style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc", resize: "vertical" }}
+                  onChange={(e) =>
+                    updateModalLink(i, { ...it, description: e.target.value })
+                  }
+                  style={{
+                    gridColumn: "1 / span 2",
+                    width: "100%",
+                    padding: 8,
+                    borderRadius: 6,
+                    border: "1px solid #ccc",
+                    resize: "vertical",
+                    boxSizing: "border-box"   // ★ prevents overflow
+                  }}
                 />
               </div>
             ))}
