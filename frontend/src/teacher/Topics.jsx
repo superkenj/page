@@ -293,7 +293,6 @@ const cardsWrapper = {
 /* ★ Improved card appearance */
 const topicCard = {
   width: "100%",
-  minWidth: "260px",
   background: "white",
   padding: 20,
   borderRadius: 12,
