@@ -220,7 +220,18 @@ export default function Topics() {
       {/* ---------- TOPIC CARDS ---------- */}
       <div style={cardsWrapper}>
         {visibleTopics.map(t => (
-          <div key={t.id} style={topicCard}>
+          <div
+            key={t.id}
+            style={topicCard}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.10)";
+              e.currentTarget.style.transform = "translateY(-3px)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.04)";
+              e.currentTarget.style.transform = "translateY(0)";
+            }}
+          >
             <div>
               <h3 style={{ marginTop: 0 }}>{t.name}</h3>
               <div style={{ fontSize: 13, color: "#666" }}>{t.id}</div>
@@ -282,12 +293,12 @@ const inputStyle = {
   boxSizing: "border-box"
 };
 
-/* ★ Ensure 3 cards per row */
 const cardsWrapper = {
   display: "grid",
-  gridTemplateColumns: "repeat(3, 1fr)",
+  gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
   gap: "20px",
-  alignItems: "stretch"
+  paddingTop: "10px",
+  paddingBottom: "30px",
 };
 
 /* ★ Improved card appearance */
@@ -301,7 +312,8 @@ const topicCard = {
   transition: "0.2s",
   display: "flex",
   flexDirection: "column",
-  height: "260px"
+  minHeight: "260px",
+  cursor: "pointer"
 };
 
 const cardBtns = {
