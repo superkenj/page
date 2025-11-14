@@ -6,6 +6,7 @@ const API_BASE = "https://page-jirk.onrender.com";
 
 export default function StudentPath() {
   const { id: studentId } = useParams();
+  const [studentName, setStudentName] = useState("");
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [loading, setLoading] = useState(true);
   const [mastered, setMastered] = useState([]);
@@ -39,15 +40,13 @@ export default function StudentPath() {
         // Fetch student path
         const sRes = await fetch(`${API_BASE}/students/${studentId}/path`);
         const sJson = await sRes.json();
+        setStudentName(sJson?.student?.name || "");
 
         const masteredArr = sJson.mastered || [];
         let recommendedArr = sJson.recommended || [];
 
         // Clean duplicates
         const masteredIds = masteredArr.map((m) => m.id);
-        recommendedArr = recommendedArr.filter(
-          (r) => !masteredIds.includes(r.id)
-        );
 
         setMastered(masteredArr);
         setRecommended(recommendedArr);
@@ -139,7 +138,7 @@ export default function StudentPath() {
 
   return (
     <div style={{ padding: "1.5rem" }}>
-      <h1>Recommended Path — {studentId}</h1>
+      <h1>Recommended Path — {studentName || studentId}</h1>
 
       <button
         onClick={() => navigate("/teacher/students")}
@@ -236,6 +235,7 @@ export default function StudentPath() {
                 )}
               </ol>
             </div>
+          </aside>
 
             {/* Legend */}
             <div
@@ -267,7 +267,6 @@ export default function StudentPath() {
                 <span>Recommended</span>
               </div>
             </div>
-          </aside>
 
           {/* Graph Visualization */}
           <div style={{ height: "700px", background: "#fff" }}>
@@ -290,6 +289,21 @@ export default function StudentPath() {
           </div>
         </div>
       )}
+
+      <button
+        onClick={() => navigate("/teacher/students")}
+        style={{
+          marginTop: "1.5rem",
+          background: "#3b82f6",
+          color: "white",
+          border: "none",
+          padding: "8px 14px",
+          borderRadius: "6px",
+          cursor: "pointer",
+        }}
+      >
+        ← Back to Students
+      </button>
     </div>
   );
 }
