@@ -24,7 +24,7 @@ export default function StudentPath() {
       setLoading(true);
       try {
         // Fetch topic graph
-        const gRes = await fetch(`${API_BASE}/topics/graph/details`);
+        const gRes = await fetch(`${API_BASE}/topics/graph`);
         const gJson = await gRes.json();
         const nodesBase = (gJson.nodes || []).map((n) => ({
           id: n.id,
@@ -159,114 +159,97 @@ export default function StudentPath() {
         <div>Loading...</div>
       ) : (
         <div>
-          {/* Top Info Panel */}
-          <aside
+          {/* Info Row */}
+          <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              display: "flex",
+              justifyContent: "space-between",
               gap: "1rem",
+              flexWrap: "nowrap",
               marginBottom: "1.5rem",
+              width: "100%",
             }}
           >
-            {/* Mastered Topics */}
-            <div
-              style={{
-                background: "#f9fafb",
-                padding: "1rem",
-                borderRadius: "10px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-              }}
-            >
-              <h3>✅ Mastered Topics</h3>
-              <ul style={{ listStyle: "none", padding: 0 }}>
-                {mastered.length ? (
-                  mastered.map((m) => (
-                    <li
-                      key={m.id}
-                      style={{
-                        marginBottom: "8px",
-                        paddingBottom: "6px",
-                        borderBottom: "1px solid #eee",
-                      }}
-                    >
-                      <strong>{m.title}</strong>
-                      <div style={{ fontSize: "13px", color: "#555" }}>
-                        {m.description}
-                      </div>
-                    </li>
-                  ))
-                ) : (
-                  <li>No mastered topics yet.</li>
-                )}
-              </ul>
-            </div>
 
-            {/* Recommended Topics */}
-            <div
-              style={{
-                background: "#fffaf0",
-                padding: "1rem",
-                borderRadius: "10px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-              }}
-            >
-              <h3>🟡 Recommended Next</h3>
-              <ol style={{ listStyle: "none", padding: 0 }}>
-                {recommended.length ? (
-                  recommended.map((r) => (
-                    <li
-                      key={r.id}
-                      style={{
-                        marginBottom: "8px",
-                        paddingBottom: "6px",
-                        borderBottom: "1px solid #eee",
-                        cursor: "pointer",
-                      }}
-                      onClick={() => navigate(`/teacher/content/${r.id}`)}
-                    >
-                      <strong>{r.title}</strong>
-                      <div style={{ fontSize: "13px", color: "#555" }}>
-                        {r.description}
-                      </div>
-                    </li>
-                  ))
-                ) : (
-                  <li>No recommended topics yet.</li>
-                )}
-              </ol>
-            </div>
-          </aside>
-
-            {/* Legend */}
+            {/* Mastered */}
             <div
               style={{
                 background: "#f3f4f6",
                 padding: "1rem",
                 borderRadius: "10px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                flex: 1,
+                minWidth: "280px",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
               }}
             >
-              <h3>📘 Legend</h3>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div
-                  style={{ width: 14, height: 14, background: "#16a34a" }}
-                ></div>
-                <span>Mastered</span>
+              <h3 style={{ marginTop: 0 }}>Mastered Topics</h3>
+              {mastered.length ? (
+                <ul style={{ padding: 0, listStyle: "none" }}>
+                  {mastered.map((m) => (
+                    <li key={m.id} style={{ marginBottom: 6 }}>
+                      <strong>{m.title}</strong>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No mastered topics yet.</p>
+              )}
+            </div>
+
+            {/* Recommended */}
+            <div
+              style={{
+                background: "#fff7e6",
+                padding: "1rem",
+                borderRadius: "10px",
+                flex: 1,
+                minWidth: "280px",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+              }}
+            >
+              <h3 style={{ marginTop: 0 }}>Recommended Next</h3>
+              {recommended.length ? (
+                <ul style={{ padding: 0, listStyle: "none" }}>
+                  {recommended.map((r) => (
+                    <li
+                      key={r.id}
+                      onClick={() => navigate(`/teacher/content/${r.id}`)}
+                      style={{ cursor: "pointer", marginBottom: 6 }}
+                    >
+                      <strong>{r.title}</strong>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No recommended topics yet.</p>
+              )}
+            </div>
+
+            {/* Legend */}
+            <div
+              style={{
+                background: "#eef2ff",
+                padding: "1rem",
+                borderRadius: "10px",
+                flex: "0 0 200px",
+                maxWidth: "200px",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+              }}
+            >
+              <h3 style={{ marginTop: 0 }}>Legend</h3>
+
+              <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+                <div style={{ width: 14, height: 14, background: "#16a34a", borderRadius: 3 }} />
+                <span style={{ marginLeft: 8 }}>Mastered</span>
               </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  marginTop: 8,
-                }}
-              >
-                <div
-                  style={{ width: 14, height: 14, background: "#f59e0b" }}
-                ></div>
-                <span>Recommended</span>
+
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <div style={{ width: 14, height: 14, background: "#f59e0b", borderRadius: 3 }} />
+                <span style={{ marginLeft: 8 }}>Recommended</span>
               </div>
             </div>
+
+          </div>
 
           {/* Graph Visualization */}
           <div style={{ height: "700px", background: "#fff" }}>
