@@ -80,7 +80,7 @@ app.get("/students/list", async (req, res) => {
       const score = d.score ?? d.scores?.general ?? 0;
       const final = d.final ?? d.finals?.general ?? 100;
       const status = Number(score) >= Number(final) * 0.5 ? "PASS" : "FAIL";
-      return { id: doc.id, name: d.name, score, final, status };
+      return { id: doc.id, name: d.name, gender: d.gender || "", score, final, status };
     });
 
     res.status(200).json({ students });

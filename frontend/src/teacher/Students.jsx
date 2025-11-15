@@ -11,7 +11,7 @@ function Students() {
   const [uploading, setUploading] = useState(false);
   const [uploadThreshold, setUploadThreshold] = useState(0.5);
   const [students, setStudents] = useState([]);
-  const [form, setForm] = useState({ id: "", name: "", score: "", final: "" });
+  const [form, setForm] = useState({ id: "", name: "", gender: "", score: "", final: "" });
   const [editing, setEditing] = useState(false);
   const [currentPath, setCurrentPath] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -57,7 +57,7 @@ function Students() {
     }
     const payload = {
       name: form.name,
-      gender: form.gender,
+      gender: (form.gender || "").toLowerCase(), // store lowercase per your DB
       score: Number(form.score),
       final: Number(form.final),
       scores: { general: Number(form.score) },
@@ -71,7 +71,8 @@ function Students() {
         const err = await res.json().catch(()=>({error:"unknown"}));
         throw new Error(err.error || "Failed to save");
       }
-      setForm({ id: "", name: "", score: "", final: "" });
+      // reset including gender
+      setForm({ id: "", name: "", gender: "", score: "", final: "" });
       setEditing(false);
       await fetchStudents();
     } catch (err) {
@@ -324,9 +325,9 @@ function Students() {
               <tr key={s.id} style={{ borderTop: "1px solid #f0f0f0" }}>
                 <td style={{padding:8}}>{s.id}</td>
                 <td style={{padding:8}}>{s.name}</td>
+                <td style={{padding:8}}>{s.gender ?? "-"}</td>
                 <td style={{padding:8, textAlign:"right"}}>{s.score ?? "-"}</td>
                 <td style={{padding:8, textAlign:"right"}}>{s.final ?? "-"}</td>
-                <td style={{padding:8}}>{s.gender ?? "-"}</td>
                 <td style={{padding:8}}>
                   <button type="button" onClick={()=>startEdit(s)} style={{marginRight:8}}>Edit</button>
                   <button type="button" onClick={()=>removeStudent(s.id)} style={{marginRight:8}}>Delete</button>
@@ -338,13 +339,7 @@ function Students() {
                   >
                     Open Path
                   </button>
-                  <button
-                    type="button"
-                    disabled
-                    style={{ opacity: 0.5, cursor: "not-allowed" }}
-                  >
-                    Quick Recommend (Disabled)
-                  </button>
+                  {/* Quick Recommend removed */}
                 </td>
               </tr>
             ))}
