@@ -108,7 +108,7 @@ app.get("/students/:id", async (req, res) => {
 // ✅ Create or update student
 app.post("/students/:id", async (req, res) => {
   try {
-    const { name, score, final, scores, finals } = req.body;
+    const { name, gender, score, final, scores, finals } = req.body;
     const status = Number(score) >= Number(final) * 0.5 ? "PASS" : "FAIL";
 
     await db
@@ -117,6 +117,7 @@ app.post("/students/:id", async (req, res) => {
       .set(
         {
           name,
+          gender: gender || "",
           score,
           final,
           status,
@@ -135,6 +136,16 @@ app.post("/students/:id", async (req, res) => {
   } catch (err) {
     console.error("Error saving student:", err);
     res.status(500).json({ error: "Server error while saving student" });
+  }
+});
+
+app.delete("/students/:id", async (req, res) => {
+  try {
+    await db.collection("students").doc(req.params.id).delete();
+    res.status(200).json({ message: "Student deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting student:", err);
+    res.status(500).json({ error: "Failed to delete student" });
   }
 });
 

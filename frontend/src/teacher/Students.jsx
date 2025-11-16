@@ -263,13 +263,13 @@ function Students() {
         </select>
         <input
           type="number"
-          placeholder="Pre-test Score"
+          placeholder="Pre-test"
           value={form.score}
           onChange={(e) => setField("score", e.target.value)}
         />
         <input
           type="number"
-          placeholder="Pre-test Total"
+          placeholder="Post-test"
           value={form.final}
           onChange={(e) => setField("final", e.target.value)}
         />
@@ -325,9 +325,8 @@ function Students() {
               <tr key={s.id} style={{ borderTop: "1px solid #f0f0f0" }}>
                 <td style={{padding:8}}>{s.id}</td>
                 <td style={{padding:8}}>{s.name}</td>
-                <td style={{padding:8}}>{s.gender ?? "-"}</td>
-                <td style={{padding:8, textAlign:"right"}}>{s.score ?? "-"}</td>
-                <td style={{padding:8, textAlign:"right"}}>{s.final ?? "-"}</td>
+                <td style={{padding:8}}>{s.gender === "male" ? "M" : s.gender === "female" ? "F" : "-"}</td>
+                <td style={{padding:8, textAlign:"right"}}>{s.score ?? "-"} / {s.final ?? "-"}</td>
                 <td style={{padding:8}}>
                   <button type="button" onClick={()=>startEdit(s)} style={{marginRight:8}}>Edit</button>
                   <button type="button" onClick={()=>removeStudent(s.id)} style={{marginRight:8}}>Delete</button>
