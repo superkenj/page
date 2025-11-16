@@ -12,7 +12,7 @@ export default function TeacherSidebar() {
 
   const sidebar = {
     width: "240px",
-    height: "90vh",
+    height: "95vh",
     position: "sticky",
     top: 0,
     background: "linear-gradient(180deg, #3b82f6 0%, #2563eb 100%)",
