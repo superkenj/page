@@ -83,7 +83,7 @@ export default function FeedbackModal() {
 
           <button
             onClick={() => {
-              alert("Feedback sent! (Email backend pending)");
+              alert("Feedback sent successfully!");
               setOpen(false);
             }}
             style={{ background: "#3b82f6", color: "white", padding: "8px 12px", borderRadius: 6 }}

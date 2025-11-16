@@ -11,6 +11,14 @@ const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,   // App password
+  },
+});
+
 // ---------------- Express Setup ----------------
 const app = express();
 app.use(
@@ -811,33 +819,23 @@ app.post("/login", async (req, res) => {
   }
 });
 
-app.post("/feedback", async (req, res) => {
+app.post("/send-feedback", async (req, res) => {
   try {
     const { type, message } = req.body;
 
-    if (!type || !message) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
-    await transporter.sendMail({
-      from: `"PaGe Feedback" <${process.env.EMAIL_USER}>`,
-      to: process.env.TO_EMAIL,
-      subject: `New System Feedback: ${type}`,
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: process.env.FEEDBACK_RECEIVER,
+      subject: `PaGe Feedback: ${type}`,
       text: message,
-    });
+    };
 
-    return res.json({ success: true, message: "Feedback sent!" });
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json({ success: true, message: "Feedback sent!" });
   } catch (err) {
-    console.error("Feedback error:", err);
-    return res.status(500).json({ error: "Failed to send feedback" });
+    console.error("Email error:", err);
+    res.status(500).json({ success: false, error: "Failed to send email" });
   }
 });
 
