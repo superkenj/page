@@ -128,7 +128,6 @@ export default function TeacherDashboard() {
     justifyContent: "flex-start",
     textAlign: "left",
     gap: "14px",
-    padding: "1rem 1.2rem"
   };
 
   const gridStyle = {
