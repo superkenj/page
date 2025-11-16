@@ -92,7 +92,7 @@ export default function StudentSidebar() {
         {path.recommended.length ? (
           <ul style={{ fontSize: 14, color: "#e0e7ff" }}>
             {path.recommended.map((r) => (
-              <li key={r}>• {r}</li>
+              <li key={r.id}>• {r.name || r.title}</li>
             ))}
           </ul>
         ) : (
@@ -101,6 +101,21 @@ export default function StudentSidebar() {
           </p>
         )}
       </div>
+      <button
+        onClick={() => window.dispatchEvent(new CustomEvent("openStudentFeedbackModal"))}
+        style={{
+          background: "#0ea5e9",
+          color: "white",
+          border: "none",
+          padding: "12px",
+          borderRadius: "6px",
+          width: "100%",
+          marginTop: "20px",
+          cursor: "pointer"
+        }}
+      >
+        💬 Feedback
+      </button>
     </div>
   );
 }
