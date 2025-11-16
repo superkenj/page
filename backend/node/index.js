@@ -79,7 +79,7 @@ app.get("/students/list", async (req, res) => {
       const d = doc.data();
       const score = d.score ?? d.scores?.general ?? 0;
       const final = d.final ?? d.finals?.general ?? 100;
-      const status = Number(score) >= Number(final) * 0.5 ? "PASS" : "FAIL";
+      const status = "";
       return { id: doc.id, name: d.name, gender: d.gender || "", score, final, status };
     });
 
@@ -109,7 +109,7 @@ app.get("/students/:id", async (req, res) => {
 app.post("/students/:id", async (req, res) => {
   try {
     const { name, gender, score, final, scores, finals } = req.body;
-    const status = Number(score) >= Number(final) * 0.5 ? "PASS" : "FAIL";
+    const status = "";
 
     await db
       .collection("students")

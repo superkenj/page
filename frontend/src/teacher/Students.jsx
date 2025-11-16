@@ -309,25 +309,29 @@ function Students() {
       </div>
 
       {loading ? <div>Loading students...</div> : (
-        <table style={{ width: "100%", borderCollapse: "collapse", background: "#fff", borderRadius: 8 }}>
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            background: "#fff",
+            borderRadius: 8,
+            tableLayout: "fixed"
+          }}
+        >
           <thead>
             <tr>
-              <th style={{ textAlign: "left", padding: 8, width: "140px" }}>ID</th>
-              <th style={{ textAlign: "left", padding: 8, width: "auto" }}>Name</th>
-              <th style={{ textAlign: "center", padding: 8, width: "70px" }}>Gender</th>
+              <th style={{ width: "120px", padding: 8, textAlign: "left" }}>ID</th>
 
-              {/* minimal width */}
-              <th style={{ textAlign: "center", padding: 8, whiteSpace: "nowrap", width: "110px" }}>
-                Pre-test
-              </th>
-              <th style={{ textAlign: "center", padding: 8, whiteSpace: "nowrap", width: "110px" }}>
-                Post-test
-              </th>
-              <th style={{ textAlign: "center", padding: 8, whiteSpace: "nowrap", width: "100px" }}>
-                Status
-              </th>
+              {/* EXPANDING column */}
+              <th style={{ width: "auto", padding: 8, textAlign: "left" }}>Name</th>
 
-              <th style={{ textAlign: "center", padding: 8, width: "220px" }}>Actions</th>
+              <th style={{ width: "60px", padding: 8, textAlign: "center" }}>Gender</th>
+
+              <th style={{ width: "100px", padding: 8, textAlign: "center" }}>Pre-test</th>
+              <th style={{ width: "100px", padding: 8, textAlign: "center" }}>Post-test</th>
+              <th style={{ width: "100px", padding: 8, textAlign: "center" }}>Status</th>
+
+              <th style={{ width: "240px", padding: 8, textAlign: "center" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -336,8 +340,7 @@ function Students() {
 
                 <td style={{ padding: 8 }}>{s.id}</td>
 
-                {/* EXPANDING column */}
-                <td style={{ padding: 8, maxWidth: 0 }}>
+                <td style={{ padding: 8, overflowWrap: "break-word" }}>
                   {s.name}
                 </td>
 
@@ -353,19 +356,19 @@ function Students() {
                   –
                 </td>
 
-                <td style={{ padding: 8, textAlign: "center", whiteSpace: "nowrap" }}>
-                  <span
-                    style={{
+                <td style={{ textAlign: "center", padding: 8 }}>
+                  {s.status ? (
+                    <span style={{
                       padding: "4px 10px",
                       borderRadius: 6,
-                      background: s.status === "PASS" ? "#d1fae5" : "#fee2e2",
-                      color: s.status === "PASS" ? "#065f46" : "#991b1b",
+                      background: "#d1fae5",
+                      color: "#065f46",
                       fontWeight: 600,
                       fontSize: 13
-                    }}
-                  >
-                    {s.status}
-                  </span>
+                    }}>
+                      {s.status}
+                    </span>
+                  ) : "—"}
                 </td>
 
                 <td style={{ padding: 8, textAlign: "center", whiteSpace: "nowrap" }}>
