@@ -13,15 +13,19 @@ export default function TeacherSidebar() {
   const sidebar = {
     width: "240px",
     height: "100vh",
-    position: "sticky",
-    top: 0,
     background: "linear-gradient(180deg, #3b82f6 0%, #2563eb 100%)",
     color: "white",
     padding: "24px 20px",
     display: "flex",
     flexDirection: "column",
-    justifyContent: "space-between",
     boxShadow: "4px 0 12px rgba(0,0,0,0.1)",
+  };
+
+  // NEW: scrollable center section
+  const scrollSection = {
+    flex: 1,
+    overflowY: "auto",
+    paddingRight: "8px",
   };
 
   const navItem = {
@@ -48,118 +52,117 @@ export default function TeacherSidebar() {
     <aside style={sidebar}>
 
       {/* Header */}
-      <div style={{ flex: 1, overflowY: "auto", paddingRight: "6px" }}>
-        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
-          <img
-            src="https://cdn-icons-png.flaticon.com/512/2784/2784598.png"
-            alt="Teacher icon"
-            style={{ width: 70, marginBottom: 10 }}
-          />
-          <h2 style={{ fontSize: "1.3rem", margin: 0, fontWeight: "bold" }}>
-            Teacher Panel
-          </h2>
-        </div>
 
-        {/* Navigation */}
-        <nav>
-          <Link
-            to="/teacher/dashboard"
-            style={{
-              ...navItem,
-              ...(location.pathname.includes("/dashboard") ? activeStyle : {}),
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = hoverStyle.background)}
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = location.pathname.includes("/dashboard")
-                ? activeStyle.background
-                : "transparent")
-            }
-          >
-            📊 Dashboard
-          </Link>
-
-          <Link
-            to="/teacher/students"
-            style={{
-              ...navItem,
-              ...(location.pathname.includes("/students") && !location.pathname.includes("/path")
-                ? activeStyle
-                : {}),
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = hoverStyle.background)}
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background =
-                location.pathname.includes("/students") &&
-                !location.pathname.includes("/path")
-                  ? activeStyle.background
-                  : "transparent")
-            }
-          >
-            👩‍🎓 Students
-          </Link>
-
-          <Link
-            to="/teacher/topics"
-            style={{
-              ...navItem,
-              ...(location.pathname.includes("/topics") &&
-              !location.pathname.includes("/content")
-                ? activeStyle
-                : {}),
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = hoverStyle.background)}
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background =
-                location.pathname.includes("/topics") &&
-                !location.pathname.includes("/content")
-                  ? activeStyle.background
-                  : "transparent")
-            }
-          >
-            📚 Topics
-          </Link>
-
-          <Link
-            to="/teacher/content"
-            style={{
-              ...navItem,
-              ...(location.pathname.includes("/content") ? activeStyle : {}),
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = hoverStyle.background)}
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background =
-                location.pathname.includes("/content")
-                  ? activeStyle.background
-                  : "transparent")
-            }
-          >
-            🧠 Content
-          </Link>
-
-          <Link
-            to="/teacher/reports"
-            style={{
-              ...navItem,
-              ...(location.pathname.includes("/reports") ? activeStyle : {}),
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.background = hoverStyle.background)
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background =
-                location.pathname.includes("/reports")
-                  ? activeStyle.background
-                  : "transparent")
-            }
-          >
-            📑 Reports
-          </Link>
-
-        </nav>
+      <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+        <img
+          src="https://cdn-icons-png.flaticon.com/512/2784/2784598.png"
+          alt="Teacher icon"
+          style={{ width: 70, marginBottom: 10 }}
+        />
+        <h2 style={{ fontSize: "1.3rem", margin: 0, fontWeight: "bold" }}>
+          Teacher Panel
+        </h2>
       </div>
 
+      {/* Navigation */}
+      <nav style={scrollSection}>
+        <Link
+          to="/teacher/dashboard"
+          style={{
+            ...navItem,
+            ...(location.pathname.includes("/dashboard") ? activeStyle : {}),
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = hoverStyle.background)}
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.background = location.pathname.includes("/dashboard")
+              ? activeStyle.background
+              : "transparent")
+          }
+        >
+          📊 Dashboard
+        </Link>
+
+        <Link
+          to="/teacher/students"
+          style={{
+            ...navItem,
+            ...(location.pathname.includes("/students") && !location.pathname.includes("/path")
+              ? activeStyle
+              : {}),
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = hoverStyle.background)}
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.background =
+              location.pathname.includes("/students") &&
+              !location.pathname.includes("/path")
+                ? activeStyle.background
+                : "transparent")
+          }
+        >
+          👩‍🎓 Students
+        </Link>
+
+        <Link
+          to="/teacher/topics"
+          style={{
+            ...navItem,
+            ...(location.pathname.includes("/topics") &&
+            !location.pathname.includes("/content")
+              ? activeStyle
+              : {}),
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = hoverStyle.background)}
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.background =
+              location.pathname.includes("/topics") &&
+              !location.pathname.includes("/content")
+                ? activeStyle.background
+                : "transparent")
+          }
+        >
+          📚 Topics
+        </Link>
+
+        <Link
+          to="/teacher/content"
+          style={{
+            ...navItem,
+            ...(location.pathname.includes("/content") ? activeStyle : {}),
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = hoverStyle.background)}
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.background =
+              location.pathname.includes("/content")
+                ? activeStyle.background
+                : "transparent")
+          }
+        >
+          🧠 Content
+        </Link>
+
+        <Link
+          to="/teacher/reports"
+          style={{
+            ...navItem,
+            ...(location.pathname.includes("/reports") ? activeStyle : {}),
+          }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.background = hoverStyle.background)
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.background =
+              location.pathname.includes("/reports")
+                ? activeStyle.background
+                : "transparent")
+          }
+        >
+          📑 Reports
+        </Link>
+
+      </nav>
+
       {/* Bottom actions */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "1rem" }}>
         
         {/* Feedback Button */}
         <button
