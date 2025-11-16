@@ -8,81 +8,145 @@ export default function StudentFeedbackModal() {
   useEffect(() => {
     const handler = () => setOpen(true);
     window.addEventListener("openStudentFeedbackModal", handler);
-    return () => window.removeEventListener("openStudentFeedbackModal", handler);
+    return () =>
+      window.removeEventListener("openStudentFeedbackModal", handler);
   }, []);
 
   if (!open) return null;
 
+  async function handleSubmit() {
+    if (!message.trim()) {
+      alert("Please enter your feedback.");
+      return;
+    }
+
+    try {
+      const res = await fetch("https://page-jirk.onrender.com/student-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type,
+          message,
+          timestamp: new Date().toISOString(),
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to send feedback");
+
+      alert("Feedback sent!");
+      setOpen(false);
+      setMessage("");
+    } catch (err) {
+      console.error(err);
+      alert("Error sending feedback");
+    }
+  }
+
   return (
-    <div style={overlayStyle}>
-      <div style={modalStyle}>
+    <div style={overlay}>
+      <div style={modal}>
         <h2>Send Feedback</h2>
 
-        <label>Type</label>
-        <select value={type} onChange={(e) => setType(e.target.value)} style={inputStyle}>
-          <option value="Bug">Bug</option>
-          <option value="Suggestion">Suggestion</option>
-          <option value="Other">Other</option>
+        {/* TYPE */}
+        <label style={label}>Type</label>
+        <select
+          value={type}
+          onChange={(e) => setType(e.target.value)}
+          style={input}
+        >
+          <option>Bug</option>
+          <option>Suggestion</option>
+          <option>Other</option>
         </select>
 
+        {/* MESSAGE */}
+        <label style={label}>Message</label>
         <textarea
-          placeholder="Write your feedback..."
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          style={{ ...inputStyle, height: "120px" }}
+          placeholder="Write your feedback..."
+          style={textarea}
         />
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-          <button style={cancelBtn} onClick={() => setOpen(false)}>Cancel</button>
-          <button style={submitBtn}>Submit</button>
+        {/* BUTTONS */}
+        <div style={buttonRow}>
+          <button style={cancelBtn} onClick={() => setOpen(false)}>
+            Cancel
+          </button>
+          <button style={submitBtn} onClick={handleSubmit}>
+            Submit
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-// --- Styles ---
-const overlayStyle = {
+/* ----------------- Styles ----------------- */
+
+const overlay = {
   position: "fixed",
-  top: 0,
-  left: 0,
-  width: "100vw",
-  height: "100vh",
-  background: "rgba(0,0,0,0.4)",
+  inset: 0,
+  background: "rgba(0,0,0,0.45)",
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
-  zIndex: 1000,
+  zIndex: 9999,
 };
 
-const modalStyle = {
+const modal = {
   background: "white",
-  width: "400px",
-  padding: "20px",
+  padding: "24px",
+  width: "420px",
   borderRadius: "10px",
   boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
 };
 
-const inputStyle = {
+const label = {
+  fontWeight: "600",
+  marginTop: "12px",
+  marginBottom: "6px",
+  display: "block",
+};
+
+const input = {
   width: "100%",
   padding: "10px",
   borderRadius: "6px",
-  marginTop: "8px",
-  marginBottom: "15px",
   border: "1px solid #ccc",
+  marginBottom: "10px",
+};
+
+const textarea = {
+  width: "100%",
+  height: "120px",
+  padding: "10px",
+  borderRadius: "6px",
+  border: "1px solid #ccc",
+  resize: "none", // 🔥 Prevents overflow
+  marginBottom: "16px",
+  boxSizing: "border-box",
+};
+
+const buttonRow = {
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: "10px",
 };
 
 const cancelBtn = {
-  padding: "8px 14px",
-  background: "#ddd",
-  border: "none",
+  background: "#e5e7eb",
+  padding: "10px 16px",
   borderRadius: "6px",
+  border: "none",
+  cursor: "pointer",
 };
 
 const submitBtn = {
-  padding: "8px 14px",
   background: "#2563eb",
   color: "white",
-  border: "none",
+  padding: "10px 16px",
   borderRadius: "6px",
+  border: "none",
+  cursor: "pointer",
 };
