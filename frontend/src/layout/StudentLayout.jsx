@@ -3,6 +3,7 @@ import { Outlet, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import boyImg from "../assets/images/boy.png";
 import girlImg from "../assets/images/girl.png";
+import StudentSidebar from "./StudentSidebar";
 
 const API_BASE = "https://page-jirk.onrender.com";
 
@@ -126,6 +127,7 @@ export default function StudentLayout() {
         </div>
 
         <div>
+          <StudentSidebar />
           <button
             onClick={handleLogout}
             style={{
