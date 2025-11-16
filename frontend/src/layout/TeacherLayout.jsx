@@ -1,26 +1,29 @@
+import { Outlet } from "react-router-dom";
+import TeacherSidebar from "./TeacherSidebar";
+
 export default function TeacherLayout() {
   return (
-    <div
-      style={{
-        display: "flex",
-        height: "100vh",
-        width: "100vw",
-        overflow: "hidden",   // IMPORTANT
-      }}
-    >
+    <div style={{
+      display: "flex",
+      height: "100vh",
+      overflow: "hidden"
+    }}>
+      
+      {/* FIXED SIDEBAR */}
       <TeacherSidebar />
 
+      {/* SCROLLABLE MAIN CONTENT */}
       <main
         style={{
           flex: 1,
-          height: "100vh",
-          overflowY: "auto",  // scroll only here
+          overflowY: "auto",
           background: "#f8fbff",
-          padding: "2rem",
+          padding: "2rem"
         }}
       >
         <Outlet />
       </main>
+
     </div>
   );
 }
