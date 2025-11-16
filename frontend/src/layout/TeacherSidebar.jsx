@@ -164,7 +164,7 @@ export default function TeacherSidebar() {
       </nav>
 
       {/* Bottom actions */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "1rem" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "1rem", marginBottom: "5px" }}>
         
         {/* Feedback Button */}
         <button
