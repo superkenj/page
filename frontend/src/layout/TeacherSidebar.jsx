@@ -17,7 +17,7 @@ export default function TeacherSidebar() {
     top: 0,
     background: "linear-gradient(180deg, #3b82f6 0%, #2563eb 100%)",
     color: "white",
-    padding: "16px 12px",
+    padding: "24px 20px",
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
