@@ -5,7 +5,7 @@ export default function TeacherLayout() {
   return (
     <div style={{
       display: "flex",
-      height: "95vh",
+      height: "100vh",
       overflow: "hidden"
     }}>
       
