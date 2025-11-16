@@ -14,6 +14,8 @@ export default function StudentFeedbackModal() {
 
   if (!open) return null;
 
+  const studentId = localStorage.getItem("studentId");
+
   async function handleSubmit() {
     if (!message.trim()) {
       alert("Please enter your feedback.");

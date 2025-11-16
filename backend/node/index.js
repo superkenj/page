@@ -840,24 +840,46 @@ app.post("/send-feedback", async (req, res) => {
 });
 
 app.post("/feedback/student", async (req, res) => {
-  const { studentId, type, message } = req.body;
+  try {
+    const { studentId, type, message } = req.body;
 
-  const student = await Student.findById(studentId);
+    if (!studentId || !type || !message) {
+      return res.status(400).json({ error: "Missing fields" });
+    }
 
-  await Feedback.create({
-    role: "student",
-    studentId,
-    studentName: student?.name || "Unknown",
-    type,
-    message,
-  });
+    const studentDoc = await db.collection("students").doc(studentId).get();
+    const studentData = studentDoc.exists ? studentDoc.data() : null;
 
-  res.json({ success: true });
+    await db.collection("feedback").add({
+      role: "student",
+      studentId,
+      studentName: studentData?.name || "Unknown Student",
+      type,
+      message,
+      createdAt: new Date().toISOString(),
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("🔥 Error saving student feedback:", err);
+    res.status(500).json({ error: "Failed to save feedback" });
+  }
 });
 
 app.get("/feedback/all", async (req, res) => {
-  const all = await Feedback.find().sort({ createdAt: -1 });
-  res.json(all);
+  try {
+    const snap = await db
+      .collection("feedback")
+      .orderBy("createdAt", "desc")
+      .get();
+
+    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json(all);
+
+  } catch (err) {
+    console.error("🔥 Error fetching feedback:", err);
+    res.status(500).json({ error: "Failed to fetch feedback" });
+  }
 });
 
 // ------------------------------------------------
