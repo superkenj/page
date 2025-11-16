@@ -13,6 +13,7 @@ export default function TeacherSidebar() {
   const sidebar = {
     width: "240px",
     height: "100vh",
+    overflowY: "auto",
     position: "sticky",
     top: 0,
     background: "linear-gradient(180deg, #3b82f6 0%, #2563eb 100%)",
@@ -48,7 +49,7 @@ export default function TeacherSidebar() {
     <aside style={sidebar}>
 
       {/* Header */}
-      <div>
+      <div style={{ flex: 1, overflowY: "auto", paddingRight: "6px" }}>
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
           <img
             src="https://cdn-icons-png.flaticon.com/512/2784/2784598.png"
@@ -158,26 +159,51 @@ export default function TeacherSidebar() {
         </nav>
       </div>
 
-      {/* Logout */}
-      <button
-        onClick={handleLogout}
-        style={{
-          background: "#ef4444",
-          color: "white",
-          border: "none",
-          padding: "12px",
-          borderRadius: "8px",
-          fontWeight: 600,
-          cursor: "pointer",
-          width: "100%",
-          letterSpacing: "0.5px",
-          transition: "0.2s",
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = "#dc2626")}
-        onMouseLeave={(e) => (e.currentTarget.style.background = "#ef4444")}
-      >
-        🔓 Logout
-      </button>
+      {/* Bottom actions */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        
+        {/* Feedback Button */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("openFeedbackModal"))}
+          style={{
+            background: "#0ea5e9",
+            color: "white",
+            border: "none",
+            padding: "12px",
+            borderRadius: "8px",
+            fontWeight: 600,
+            cursor: "pointer",
+            width: "100%",
+            letterSpacing: "0.5px",
+            transition: "0.2s",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "#0284c7")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "#0ea5e9")}
+        >
+          💬 Feedback
+        </button>
+
+        {/* Logout */}
+        <button
+          onClick={handleLogout}
+          style={{
+            background: "#ef4444",
+            color: "white",
+            border: "none",
+            padding: "12px",
+            borderRadius: "8px",
+            fontWeight: 600,
+            cursor: "pointer",
+            width: "100%",
+            letterSpacing: "0.5px",
+            transition: "0.2s",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "#dc2626")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "#ef4444")}
+        >
+          🔓 Logout
+        </button>
+      </div>
     </aside>
   );
 }
