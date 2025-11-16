@@ -318,20 +318,24 @@ function Students() {
             tableLayout: "fixed"
           }}
         >
+          <colgroup>
+            <col style={{ width: "130px" }} />   {/* ID */}
+            <col style={{ width: "auto" }} />    {/* NAME (expands) */}
+            <col style={{ width: "70px" }} />    {/* GENDER */}
+            <col style={{ width: "110px" }} />   {/* PRE-TEST */}
+            <col style={{ width: "110px" }} />   {/* POST-TEST */}
+            <col style={{ width: "110px" }} />   {/* STATUS */}
+            <col style={{ width: "260px" }} />   {/* ACTIONS */}
+          </colgroup>
           <thead>
             <tr>
-              <th style={{ width: "120px", padding: 8, textAlign: "left" }}>ID</th>
-
-              {/* EXPANDING column */}
-              <th style={{ width: "auto", padding: 8, textAlign: "left" }}>Name</th>
-
-              <th style={{ width: "60px", padding: 8, textAlign: "center" }}>Gender</th>
-
-              <th style={{ width: "100px", padding: 8, textAlign: "center" }}>Pre-test</th>
-              <th style={{ width: "100px", padding: 8, textAlign: "center" }}>Post-test</th>
-              <th style={{ width: "100px", padding: 8, textAlign: "center" }}>Status</th>
-
-              <th style={{ width: "240px", padding: 8, textAlign: "center" }}>Actions</th>
+              <th style={{ padding: 8, textAlign: "left" }}>ID</th>
+              <th style={{ padding: 8, textAlign: "left" }}>Name</th>
+              <th style={{ padding: 8, textAlign: "center" }}>Gender</th>
+              <th style={{ padding: 8, textAlign: "center" }}>Pre-test</th>
+              <th style={{ padding: 8, textAlign: "center" }}>Post-test</th>
+              <th style={{ padding: 8, textAlign: "center" }}>Status</th>
+              <th style={{ padding: 8, textAlign: "center" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -340,7 +344,7 @@ function Students() {
 
                 <td style={{ padding: 8 }}>{s.id}</td>
 
-                <td style={{ padding: 8, overflowWrap: "break-word" }}>
+                <td style={{ padding: 8, overflowWrap: "break-word", wordBreak: "break-word" }}>
                   {s.name}
                 </td>
 
@@ -357,18 +361,7 @@ function Students() {
                 </td>
 
                 <td style={{ textAlign: "center", padding: 8 }}>
-                  {s.status ? (
-                    <span style={{
-                      padding: "4px 10px",
-                      borderRadius: 6,
-                      background: "#d1fae5",
-                      color: "#065f46",
-                      fontWeight: 600,
-                      fontSize: 13
-                    }}>
-                      {s.status}
-                    </span>
-                  ) : "—"}
+                  {s.status ? s.status : ""}
                 </td>
 
                 <td style={{ padding: 8, textAlign: "center", whiteSpace: "nowrap" }}>
