@@ -21,13 +21,13 @@ export default function StudentFeedbackModal() {
     }
 
     try {
-      const res = await fetch("https://page-jirk.onrender.com/student-feedback", {
+      const res = await fetch(`${API_BASE}/feedback/student`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          studentId,
           type,
           message,
-          timestamp: new Date().toISOString(),
         }),
       });
 
