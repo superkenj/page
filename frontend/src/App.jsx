@@ -12,6 +12,7 @@ import TeacherContent from "./teacher/TeacherContent";
 import Students from "./teacher/Students";
 import StudentPath from "./teacher/StudentPath";
 import TeacherTopicContents from "./teacher/TeacherTopicContents";
+import TeacherReports from "./teacher/TeacherReports";
 
 /* Student Pages */
 import StudentDashboard from "./student/StudentDashboard";
