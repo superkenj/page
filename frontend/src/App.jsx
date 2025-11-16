@@ -25,10 +25,11 @@ import LoginPage from "./pages/LoginPage";
 function App() {
   return (
     <Router>
+
+      <FeedbackModal />
+      
       <Routes>
 
-        <FeedbackModal />
-        
         {/* ======================================
          🧑‍🏫 TEACHER ROUTES (Nested under layout)
         =======================================*/}

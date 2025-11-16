@@ -1,116 +1,93 @@
 import { useState, useEffect } from "react";
 
-const API_BASE = "https://page-jirk.onrender.com";
-
 export default function FeedbackModal() {
   const [open, setOpen] = useState(false);
-  const [type, setType] = useState("");
   const [message, setMessage] = useState("");
+  const [type, setType] = useState("Bug");
 
+  // 🔹 Listen for sidebar event: "openFeedbackModal"
   useEffect(() => {
-    const handler = () => setOpen(true);
-    window.addEventListener("openFeedbackModal", handler);
-    return () => window.removeEventListener("openFeedbackModal", handler);
+    function handleOpen() {
+      setOpen(true);
+    }
+
+    window.addEventListener("openFeedbackModal", handleOpen);
+    return () => window.removeEventListener("openFeedbackModal", handleOpen);
   }, []);
-
-  async function submitFeedback() {
-    if (!type || !message.trim()) {
-      alert("Please select issue type and describe the issue.");
-      return;
-    }
-
-    try {
-      const res = await fetch(`${API_BASE}/feedback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, message }),
-      });
-
-      if (!res.ok) throw new Error("Failed");
-
-      alert("Feedback sent! Thank you.");
-      setOpen(false);
-      setType("");
-      setMessage("");
-    } catch (err) {
-      alert("Failed to send feedback.");
-    }
-  }
 
   if (!open) return null;
 
   return (
-    <div style={overlay}>
-      <div style={modal}>
-        <h2>Submit Feedback</h2>
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100vw",
+        height: "100vh",
+        background: "rgba(0,0,0,0.4)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 9999,
+      }}
+    >
+      <div
+        style={{
+          background: "white",
+          padding: "20px",
+          borderRadius: "10px",
+          width: "400px",
+        }}
+      >
+        <h3>Send Feedback</h3>
 
-        <label>Type of Issue</label>
+        <label style={{ display: "block", marginTop: 10 }}>
+          Feedback Type:
+        </label>
         <select
           value={type}
           onChange={(e) => setType(e.target.value)}
-          style={input}
+          style={{ width: "100%", padding: "8px", marginBottom: 10 }}
         >
-          <option value="">-- Select --</option>
-          <option value="bug">🐞 Bug</option>
-          <option value="ui">🎨 UI Issue</option>
-          <option value="feature">✨ Feature Request</option>
-          <option value="other">Other</option>
+          <option>Bug</option>
+          <option>Feature Request</option>
+          <option>UI Issue</option>
+          <option>Other</option>
         </select>
 
-        <label>Description</label>
         <textarea
+          placeholder="Describe the issue..."
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          rows={5}
-          placeholder="Describe the issue or suggestion..."
-          style={textarea}
+          style={{
+            width: "100%",
+            height: "120px",
+            padding: 10,
+            borderRadius: 8,
+            border: "1px solid #ccc",
+          }}
         />
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-          <button onClick={() => setOpen(false)}>Cancel</button>
-          <button onClick={submitFeedback} style={{ background: "#2563eb", color: "white" }}>
-            Submit
+        <div style={{ marginTop: 15, display: "flex", justifyContent: "space-between" }}>
+          <button
+            onClick={() => setOpen(false)}
+            style={{ background: "#ccc", padding: "8px 12px", borderRadius: 6 }}
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={() => {
+              alert("Feedback sent! (Email backend pending)");
+              setOpen(false);
+            }}
+            style={{ background: "#3b82f6", color: "white", padding: "8px 12px", borderRadius: 6 }}
+          >
+            Send
           </button>
         </div>
       </div>
     </div>
   );
 }
-
-/* Styles */
-const overlay = {
-  position: "fixed",
-  top: 0, left: 0,
-  width: "100vw",
-  height: "100vh",
-  background: "rgba(0,0,0,0.45)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 9999,
-};
-
-const modal = {
-  background: "white",
-  padding: 20,
-  borderRadius: 10,
-  width: 420,
-  boxShadow: "0 8px 20px rgba(0,0,0,0.2)",
-};
-
-const input = {
-  width: "100%",
-  padding: 10,
-  marginBottom: 12,
-  borderRadius: 8,
-  border: "1px solid #ccc",
-};
-
-const textarea = {
-  width: "100%",
-  padding: 10,
-  marginBottom: 12,
-  borderRadius: 8,
-  border: "1px solid #ccc",
-  resize: "vertical",
-};
