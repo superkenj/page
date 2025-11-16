@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from "recharts";
 import jsPDF from "jspdf";
+import "jspdf-autotable";
 import html2canvas from "html2canvas";
 import Papa from "papaparse";
 
