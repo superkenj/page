@@ -12,7 +12,6 @@ export default function TeacherSidebar() {
 
   const sidebar = {
     width: "240px",
-    height: "95vh",
     position: "sticky",
     top: 0,
     background: "linear-gradient(180deg, #3b82f6 0%, #2563eb 100%)",
@@ -164,7 +163,7 @@ export default function TeacherSidebar() {
       </nav>
 
       {/* Bottom actions */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "1rem", marginBottom: "5px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "1rem", marginBottom: "10px" }}>
         
         {/* Feedback Button */}
         <button
