@@ -226,6 +226,70 @@ app.get("/reports/topics", async (req, res) => {
   }
 });
 
+// GET /reports/performance
+// Returns:
+// {
+//   students: [{ id, name, gender, score, final, status, masteryCount, recommendedCount }],
+//   topics: [{ id, name, avgScore, masteryRate, totalMaterials }],
+//   byTopicScores: { topicId: { studentId: score, ... }, ... }  // optional
+// }
+
+app.get("/reports/performance", async (req, res) => {
+  try {
+    const [studentsSnap, topicsSnap, contentsSnap] = await Promise.all([
+      db.collection("students").get(),
+      db.collection("topics").get(),
+      db.collection("contents").get(),
+    ]);
+
+    const topics = topicsSnap.docs.map(d => ({ id: d.id, name: d.data().name, ...d.data() }));
+    const contents = contentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const topicsMap = Object.fromEntries(topics.map(t => [t.id, t]));
+
+    const students = [];
+    studentsSnap.forEach(doc => {
+      const d = doc.data();
+      const score = d.score ?? d.scores?.general ?? 0;
+      const final = d.final ?? d.finals?.general ?? 100;
+      const status = Number(score) >= Number(final) * 0.5 ? "PASS" : "FAIL";
+      const mastered = Array.isArray(d.mastered) ? d.mastered : [];
+      const recommended = Array.isArray(d.recommended) ? d.recommended : [];
+      students.push({
+        id: doc.id,
+        name: d.name || "",
+        gender: d.gender || "",
+        score,
+        final,
+        status,
+        masteredCount: mastered.length,
+        recommendedCount: recommended.length,
+        mastered,
+        recommended
+      });
+    });
+
+    // Example topic aggregates (avg score placeholder logic)
+    const topicStats = topics.map(t => {
+      // naive: compute average using contents -> cannot derive per-topic test scores without more data;
+      // for now count materials + placeholder metrics
+      const totalMaterials = contents.filter(c => c.topic_id === t.id).length;
+      return {
+        id: t.id,
+        name: t.name || t.title || t.id,
+        totalMaterials,
+        // avgScore and masteryRate require more detailed per-student-per-topic scores (extend if you have a 'scores' map).
+        avgScore: null,
+        masteryRate: null
+      };
+    });
+
+    res.json({ students, topics: topicStats });
+  } catch (err) {
+    console.error("reports/performance error", err);
+    res.status(500).json({ error: "Failed to build report" });
+  }
+});
+
 // Student learning path (used by StudentDashboard)
 app.get("/students/:id/path", async (req, res) => {
   try {
