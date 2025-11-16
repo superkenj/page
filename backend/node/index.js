@@ -149,6 +149,83 @@ app.delete("/students/:id", async (req, res) => {
   }
 });
 
+// ────────────────── reports endpoints ──────────────────
+app.get("/reports/class_summary", async (req, res) => {
+  try {
+    const studentsSnap = await db.collection("students").get();
+    const topicsSnap = await db.collection("topics").get();
+    const students = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const topics = topicsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // class metrics
+    const totalStudents = students.length;
+    const pass = students.filter(s => s.status === "PASS").length;
+    const fail = totalStudents - pass;
+    const preScores = students.map(s => Number(s.score ?? s.scores?.general ?? NaN)).filter(Number.isFinite);
+    const postScores = students.map(s => Number(s.post ?? NaN)).filter(Number.isFinite);
+    const avgPre = preScores.length ? preScores.reduce((a,b)=>a+b,0)/preScores.length : null;
+    const avgPost = postScores.length ? postScores.reduce((a,b)=>a+b,0)/postScores.length : null;
+
+    // topic stats
+    const topicStats = topics.map(t => {
+      let attempted = 0, mastered = 0;
+      students.forEach(s => {
+        if (s.scores && s.scores[t.id] != null) attempted++;
+        if (Array.isArray(s.mastered) && s.mastered.includes(t.id)) mastered++;
+      });
+      return { id: t.id, name: t.name || t.title || t.id, attempted, mastered, difficulty: attempted ? (1 - mastered / attempted) : 1 };
+    });
+
+    res.json({ totalStudents, pass, fail, avgPre, avgPost, topicStats });
+  } catch (err) {
+    console.error("reports/class_summary", err);
+    res.status(500).json({ error: "Failed to build class summary" });
+  }
+});
+
+app.get("/reports/student/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const doc = await db.collection("students").doc(id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Student not found" });
+    const s = doc.data();
+    res.json({
+      id,
+      name: s.name,
+      gender: s.gender,
+      pre: s.score ?? null,
+      post: s.post ?? null,
+      improvementPercent: (s.score != null && s.post != null) ? ((s.post - s.score) / s.score) * 100 : null,
+      mastered: s.mastered || [], scores: s.scores || {}, finals: s.finals || {}
+    });
+  } catch (err) {
+    console.error("reports/student", err);
+    res.status(500).json({ error: "Failed to build student report" });
+  }
+});
+
+app.get("/reports/topics", async (req, res) => {
+  try {
+    const studentsSnap = await db.collection("students").get();
+    const topicsSnap = await db.collection("topics").get();
+    const students = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const topics = topicsSnap.docs.map(t => ({ id: t.id, ...t.data() }));
+
+    const report = topics.map(t => {
+      let attempted = 0, mastered = 0;
+      students.forEach(s => {
+        if (s.scores && s.scores[t.id] != null) attempted++;
+        if (Array.isArray(s.mastered) && s.mastered.includes(t.id)) mastered++;
+      });
+      return { id: t.id, name: t.name || t.title || t.id, attempted, mastered, difficulty: attempted ? (1 - mastered / attempted) : 1 };
+    });
+    res.json(report);
+  } catch (err) {
+    console.error("reports/topics", err);
+    res.status(500).json({ error: "Failed to build topics report" });
+  }
+});
+
 // Student learning path (used by StudentDashboard)
 app.get("/students/:id/path", async (req, res) => {
   try {

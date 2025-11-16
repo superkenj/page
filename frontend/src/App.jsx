@@ -36,6 +36,7 @@ function App() {
           <Route path="topics/graph" element={<TopicsGraph />} />
           <Route path="content" element={<TeacherContent />} />
           <Route path="content/:topicId" element={<TeacherTopicContents />} />
+          <Route path="reports" element={<TeacherReports />} />
         </Route>
 
         {/* ======================================
