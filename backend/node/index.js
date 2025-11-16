@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const admin = require("firebase-admin");
 const fetch = require("node-fetch");
+const nodemailer = require("nodemailer");
 
 // ---------------- Firebase Setup ----------------
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
@@ -807,6 +808,36 @@ app.post("/login", async (req, res) => {
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ error: "Server error during login" });
+  }
+});
+
+app.post("/feedback", async (req, res) => {
+  try {
+    const { type, message } = req.body;
+
+    if (!type || !message) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    await transporter.sendMail({
+      from: `"PaGe Feedback" <${process.env.EMAIL_USER}>`,
+      to: process.env.TO_EMAIL,
+      subject: `New System Feedback: ${type}`,
+      text: message,
+    });
+
+    return res.json({ success: true, message: "Feedback sent!" });
+  } catch (err) {
+    console.error("Feedback error:", err);
+    return res.status(500).json({ error: "Failed to send feedback" });
   }
 });
 

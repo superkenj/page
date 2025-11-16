@@ -36,8 +36,10 @@ export default function FeedbackModal() {
         style={{
           background: "white",
           padding: "20px",
-          borderRadius: "10px",
-          width: "400px",
+          borderRadius: "12px",
+          width: "420px",
+          maxWidth: "90vw",
+          margin: "0 auto",
         }}
       >
         <h3>Send Feedback</h3>
@@ -62,10 +64,12 @@ export default function FeedbackModal() {
           onChange={(e) => setMessage(e.target.value)}
           style={{
             width: "100%",
-            height: "120px",
-            padding: 10,
-            borderRadius: 8,
+            resize: "vertical",
+            minHeight: "120px",
+            padding: "10px",
+            borderRadius: "6px",
             border: "1px solid #ccc",
+            boxSizing: "border-box",
           }}
         />
 
