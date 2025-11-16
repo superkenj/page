@@ -160,6 +160,23 @@ export default function TeacherSidebar() {
           📑 Reports
         </Link>
 
+        <Link
+          to="/teacher/feedback"
+          style={{
+            ...navItem,
+            ...(location.pathname.includes("/feedback") ? activeStyle : {}),
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = hoverStyle.background)}
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.background =
+              location.pathname.includes("/feedback")
+                ? activeStyle.background
+                : "transparent")
+          }
+        >
+          📨 Student Feedback
+        </Link>
+
       </nav>
 
       {/* Bottom actions */}

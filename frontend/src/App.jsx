@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import FeedbackModal from "./components/FeedbackModal";
+import StudentFeedbackModal from "./components/StudentFeedbackModal";
 
 /* Layouts */
 import TeacherLayout from "./layout/TeacherLayout";
@@ -14,6 +15,7 @@ import Students from "./teacher/Students";
 import StudentPath from "./teacher/StudentPath";
 import TeacherTopicContents from "./teacher/TeacherTopicContents";
 import TeacherReports from "./teacher/TeacherReports";
+import TeacherFeedback from "./teacher/TeacherFeedback";
 
 /* Student Pages */
 import StudentDashboard from "./student/StudentDashboard";
@@ -27,7 +29,8 @@ function App() {
     <Router>
 
       <FeedbackModal />
-      
+      <StudentFeedbackModal />
+
       <Routes>
 
         {/* ======================================
@@ -42,6 +45,7 @@ function App() {
           <Route path="content" element={<TeacherContent />} />
           <Route path="content/:topicId" element={<TeacherTopicContents />} />
           <Route path="reports" element={<TeacherReports />} />
+          <Route path="feedback" element={<TeacherFeedback />} />
         </Route>
 
         {/* ======================================

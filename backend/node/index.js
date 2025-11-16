@@ -839,6 +839,27 @@ app.post("/send-feedback", async (req, res) => {
   }
 });
 
+app.post("/feedback/student", async (req, res) => {
+  const { studentId, type, message } = req.body;
+
+  const student = await Student.findById(studentId);
+
+  await Feedback.create({
+    role: "student",
+    studentId,
+    studentName: student?.name || "Unknown",
+    type,
+    message,
+  });
+
+  res.json({ success: true });
+});
+
+app.get("/feedback/all", async (req, res) => {
+  const all = await Feedback.find().sort({ createdAt: -1 });
+  res.json(all);
+});
+
 // ------------------------------------------------
 // 🔹 SERVER START
 // ------------------------------------------------
