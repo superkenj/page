@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import FeedbackModal from "./components/FeedbackModal";
 
 /* Layouts */
 import TeacherLayout from "./layout/TeacherLayout";
@@ -26,6 +27,8 @@ function App() {
     <Router>
       <Routes>
 
+        <FeedbackModal />
+        
         {/* ======================================
          🧑‍🏫 TEACHER ROUTES (Nested under layout)
         =======================================*/}
