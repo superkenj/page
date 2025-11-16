@@ -159,7 +159,7 @@ export default function TeacherSidebar() {
       </div>
 
       {/* Bottom actions */}
-      <div style={{ flex: 1, overflowY: "auto", marginBottom: "10px", paddingRight: "6px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         
         {/* Feedback Button */}
         <button
