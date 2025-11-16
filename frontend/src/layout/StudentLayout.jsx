@@ -127,7 +127,6 @@ export default function StudentLayout() {
         </div>
 
         <div>
-          <StudentSidebar />
           <button
             onClick={handleLogout}
             style={{
