@@ -312,72 +312,68 @@ function Students() {
         <table style={{ width: "100%", borderCollapse: "collapse", background: "#fff", borderRadius: 8 }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", padding: 8, width: "120px" }}>ID</th>
-              <th style={{ textAlign: "left", padding: 8 }}>Name</th>
+              <th style={{ textAlign: "left", padding: 8, width: "140px" }}>ID</th>
+              <th style={{ textAlign: "left", padding: 8, width: "auto" }}>Name</th>
               <th style={{ textAlign: "center", padding: 8, width: "70px" }}>Gender</th>
-              <th style={{ textAlign: "center", padding: 8, width: "140px" }}>Pre-test</th>
-              <th style={{ textAlign: "center", padding: 8, width: "140px" }}>Post-test</th>
-              <th style={{ textAlign: "center", padding: 8, width: "120px" }}>Status</th>
+
+              {/* minimal width */}
+              <th style={{ textAlign: "center", padding: 8, whiteSpace: "nowrap", width: "110px" }}>
+                Pre-test
+              </th>
+              <th style={{ textAlign: "center", padding: 8, whiteSpace: "nowrap", width: "110px" }}>
+                Post-test
+              </th>
+              <th style={{ textAlign: "center", padding: 8, whiteSpace: "nowrap", width: "100px" }}>
+                Status
+              </th>
+
               <th style={{ textAlign: "center", padding: 8, width: "220px" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map(s => (
               <tr key={s.id} style={{ borderTop: "1px solid #f0f0f0" }}>
+
                 <td style={{ padding: 8 }}>{s.id}</td>
 
-                <td style={{ padding: 8 }}>{s.name}</td>
+                {/* EXPANDING column */}
+                <td style={{ padding: 8, maxWidth: 0 }}>
+                  {s.name}
+                </td>
 
                 <td style={{ padding: 8, textAlign: "center" }}>
                   {s.gender === "male" ? "M" : s.gender === "female" ? "F" : "-"}
                 </td>
 
-                <td style={{ padding: 8, textAlign: "center" }}>
-                  {s.score ?? "-"} / {s.final ?? "-"}
+                <td style={{ padding: 8, textAlign: "center", whiteSpace: "nowrap" }}>
+                  {s.score} / {s.final}
                 </td>
 
-                {/* Placeholder for future post-test */}
-                <td style={{ padding: 8, textAlign: "center", color: "#888" }}>
+                <td style={{ padding: 8, textAlign: "center", whiteSpace: "nowrap", color: "#888" }}>
                   –
                 </td>
 
-                <td style={{ padding: 8, textAlign: "center" }}>
-                  <span style={{
-                    padding: "4px 10px",
-                    borderRadius: "6px",
-                    background: s.status === "PASS" ? "#d1fae5" : "#fee2e2",
-                    color: s.status === "PASS" ? "#065f46" : "#991b1b",
-                    fontWeight: 600,
-                    fontSize: "13px"
-                  }}>
+                <td style={{ padding: 8, textAlign: "center", whiteSpace: "nowrap" }}>
+                  <span
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: 6,
+                      background: s.status === "PASS" ? "#d1fae5" : "#fee2e2",
+                      color: s.status === "PASS" ? "#065f46" : "#991b1b",
+                      fontWeight: 600,
+                      fontSize: 13
+                    }}
+                  >
                     {s.status}
                   </span>
                 </td>
 
                 <td style={{ padding: 8, textAlign: "center", whiteSpace: "nowrap" }}>
-                  <button
-                    type="button"
-                    onClick={() => startEdit(s)}
-                    style={{ marginRight: 6 }}
-                  >
-                    Edit
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => removeStudent(s.id)}
-                    style={{ marginRight: 6 }}
-                  >
-                    Delete
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => openStudentPath(s.id)}
-                  >
-                    Open Path
-                  </button>
+                  <button style={{ marginRight: 6 }} onClick={() => startEdit(s)}>Edit</button>
+                  <button style={{ marginRight: 6 }} onClick={() => removeStudent(s.id)}>Delete</button>
+                  <button onClick={() => openStudentPath(s.id)}>Open Path</button>
                 </td>
+
               </tr>
             ))}
           </tbody>
