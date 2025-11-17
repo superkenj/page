@@ -826,7 +826,7 @@ app.post("/send-feedback", async (req, res) => {
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: process.env.FEEDBACK_RECEIVER,
-      subject: `PaGe Feedback: ${type}`,
+      subject: `PaGe Teacher Feedback (${new Date().toISOString()})`,
       text: message,
     };
 
