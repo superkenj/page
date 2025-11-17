@@ -85,15 +85,15 @@ export default function FeedbackModal() {
           <button
             onClick={async () => {
                 if (!message.trim()) {
-                alert("Please enter a message.");
-                return;
+                    alert("Please enter a message.");
+                    return;
                 }
 
                 try {
-                const res = await fetch(`${API_BASE}/send-feedback`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ type, message }),
+                    const res = await fetch(`${API_BASE}/send-feedback`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ type, message }),
                 });
 
                 if (!res.ok) throw new Error("Failed to send");
