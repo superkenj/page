@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_BASE } from "../config";
 
 export default function FeedbackModal() {
   const [open, setOpen] = useState(false);
@@ -82,9 +83,28 @@ export default function FeedbackModal() {
           </button>
 
           <button
-            onClick={() => {
-              alert("Feedback sent successfully!");
-              setOpen(false);
+            onClick={async () => {
+                if (!message.trim()) {
+                alert("Please enter a message.");
+                return;
+                }
+
+                try {
+                const res = await fetch(`${API_BASE}/send-feedback`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ type, message }),
+                });
+
+                if (!res.ok) throw new Error("Failed to send");
+
+                alert("Feedback sent!");
+                setOpen(false);
+                setMessage("");
+                } catch (err) {
+                console.error(err);
+                alert("Failed to send email");
+                }
             }}
             style={{ background: "#3b82f6", color: "white", padding: "8px 12px", borderRadius: 6 }}
           >
