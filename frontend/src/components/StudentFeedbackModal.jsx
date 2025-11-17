@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { API_BASE } from "../config";
 
 export default function StudentFeedbackModal() {
   const [open, setOpen] = useState(false);
@@ -39,8 +40,10 @@ export default function StudentFeedbackModal() {
       setOpen(false);
       setMessage("");
     } catch (err) {
-      console.error(err);
-      alert("Error sending feedback");
+      console.error("FEEDBACK ERROR:", err);
+      if (err?.message) alert("Error: " + err.message);
+      else alert("Unknown error");
+      alert("FULL ERROR: " + JSON.stringify(err));
     }
   }
 
