@@ -94,16 +94,16 @@ export default function FeedbackModal() {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ type, message }),
-                });
+                    });
 
-                if (!res.ok) throw new Error("Failed to send");
+                    if (!res.ok) throw new Error("Failed to send");
 
-                alert("Feedback sent!");
-                setOpen(false);
-                setMessage("");
-                } catch (err) {
-                console.error(err);
-                alert("Failed to send email");
+                    alert("Feedback sent!");
+                    setOpen(false);
+                    setMessage("");
+                }   catch (err) {
+                    console.error(err);
+                    alert("Failed to send email");
                 }
             }}
             style={{ background: "#3b82f6", color: "white", padding: "8px 12px", borderRadius: 6 }}
