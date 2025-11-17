@@ -39,7 +39,10 @@ export default function LoginPage() {
       localStorage.setItem("role", json.role);
 
       if (json.role === "teacher") navigate("/teacher/dashboard");
-      else navigate(`/student-dashboard/${json.id}`);
+      else {
+        localStorage.setItem("studentId", json.id);
+        navigate(`/student-dashboard/${json.id}`);
+      }
     } catch (err) {
       setError(err.message);
     }
