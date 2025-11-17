@@ -84,6 +84,7 @@ export default function FeedbackModal() {
 
           <button
             onClick={async () => {
+                console.log("API_BASE =", API_BASE);
                 if (!message.trim()) {
                     alert("Please enter a message.");
                     return;
