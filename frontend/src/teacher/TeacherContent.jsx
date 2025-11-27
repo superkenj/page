@@ -1,5 +1,6 @@
 // frontend/src/teacher/TeacherContent.jsx
 import { useEffect, useState, useMemo } from "react";
+import CompactAssessmentModal from "./CompactAssessmentModal";
 const API_BASE = "https://page-jirk.onrender.com";
 
 export default function TeacherContent() {
@@ -12,6 +13,8 @@ export default function TeacherContent() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [modalTopic, setModalTopic] = useState(""); // preselect topic id
   const [modalLinks, setModalLinks] = useState([{ link: "", type: "video", description: "" }]);
+  const [assessmentModalOpen, setAssessmentModalOpen] = useState(false);
+  const [assessmentTopicId, setAssessmentTopicId] = useState(null);
 
   // Inline edit for content items
   const [editingId, setEditingId] = useState(null);
@@ -78,6 +81,19 @@ export default function TeacherContent() {
       copy[i] = val;
       return copy;
     });
+  }
+
+  function openAssessmentModal(topicId) {
+    setAssessmentTopicId(topicId);
+    setAssessmentModalOpen(true);
+  }
+  function closeAssessmentModal() {
+    setAssessmentTopicId(null);
+    setAssessmentModalOpen(false);
+  }
+  async function onAssessmentSaved() {
+    // optional: refresh list or show toast
+    await loadAll();
   }
 
   async function handleAddContentSave() {
@@ -360,6 +376,13 @@ export default function TeacherContent() {
             )}
           </div>
         ))}
+        {assessmentModalOpen && (
+          <CompactAssessmentModal
+            topicId={assessmentTopicId}
+            onClose={closeAssessmentModal}
+            onSaved={onAssessmentSaved}
+          />
+        )}
       </div>
     </div>
   );
