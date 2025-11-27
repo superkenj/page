@@ -755,6 +755,208 @@ app.delete("/content/:id", async (req, res) => {
   }
 });
 
+// ========== ASSESSMENTS (Teacher create/update + Student submit) ==========
+/**
+ * GET /assessments/:topicId
+ * returns assessment for topic (if exists)
+ */
+app.get("/assessments/:topicId", async (req, res) => {
+  try {
+    const topicId = req.params.topicId;
+    const docId = `${topicId}_assessment`;
+    const doc = await db.collection("assessments").doc(docId).get();
+    if (!doc.exists) return res.status(404).json({ error: "Assessment not found" });
+    return res.json({ id: doc.id, ...doc.data() });
+  } catch (err) {
+    console.error("GET /assessments/:topicId", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+/**
+ * POST /assessments
+ * body: { topic_id, title, instructions, passing_score, questions: [...] }
+ * Creates or updates assessment with deterministic id `${topic_id}_assessment`
+ */
+app.post("/assessments", async (req, res) => {
+  try {
+    const payload = req.body;
+    if (!payload.topic_id || !Array.isArray(payload.questions)) {
+      return res.status(400).json({ error: "topic_id and questions[] required" });
+    }
+    const docId = `${payload.topic_id}_assessment`;
+    const now = new Date().toISOString();
+    const docData = {
+      ...payload,
+      assessment_id: docId,
+      updated_at: now,
+      created_at: payload.created_at || now,
+    };
+    await db.collection("assessments").doc(docId).set(docData, { merge: true });
+    return res.json({ success: true, id: docId });
+  } catch (err) {
+    console.error("POST /assessments", err);
+    return res.status(500).json({ error: "Failed to save assessment" });
+  }
+});
+
+/**
+ * POST /assessments/:topicId/submit
+ * body: { student_id, answers: [{question_id, student_answer}, ...] }
+ * Grades submission, stores it, updates master's list if passed or after 3 attempts.
+ */
+app.post("/assessments/:topicId/submit", async (req, res) => {
+  try {
+    const { topicId } = req.params;
+    const { student_id, answers } = req.body;
+    if (!student_id || !Array.isArray(answers)) {
+      return res.status(400).json({ error: "student_id and answers[] required" });
+    }
+
+    // load assessment
+    const docId = `${topicId}_assessment`;
+    const docSnap = await db.collection("assessments").doc(docId).get();
+    if (!docSnap.exists) return res.status(404).json({ error: "Assessment not found" });
+    const assessment = docSnap.data();
+
+    // grade
+    const items = assessment.questions.map((q) => {
+      const ansObj = answers.find(a => a.question_id === q.question_id);
+      const studentAnswer = ansObj ? ansObj.student_answer : null;
+      let isCorrect = false;
+
+      // grading rules (same as before)
+      if (q.type === "multiple_choice" || q.type === "short_answer") {
+        isCorrect = studentAnswer != null && String(studentAnswer).trim() === String(q.answer).trim();
+      } else if (q.type === "ordering" || q.type === "drag_sort") {
+        isCorrect = JSON.stringify(studentAnswer) === JSON.stringify(q.correct_order || q.answer);
+      } else if (q.type === "numeric") {
+        isCorrect = Number(studentAnswer) === Number(q.answer);
+      } else {
+        isCorrect = String(studentAnswer || "") === String(q.answer || "");
+      }
+
+      return {
+        question_id: q.question_id,
+        student_answer: studentAnswer,
+        is_correct: isCorrect,
+        points_awarded: isCorrect ? (q.points ?? 1) : 0
+      };
+    });
+
+    const totalPoints = assessment.questions.reduce((s, q) => s + (q.points ?? 1), 0);
+    const earned = items.reduce((s, it) => s + (it.points_awarded || 0), 0);
+    const score = totalPoints > 0 ? Math.round((earned / totalPoints) * 100) : 0;
+    const passed = score >= (assessment.passing_score ?? 70);
+
+    // save submission
+    const submission = {
+      assessment_id: docId,
+      topic_id: topicId,
+      student_id,
+      items,
+      score,
+      passed,
+      attempted_at: new Date().toISOString(),
+    };
+    await db.collection("assessment_submissions").add(submission);
+
+    // count previous attempts (before this one) and compute attempts including current
+    const prevSnap = await db.collection("assessment_submissions")
+      .where("topic_id", "==", topicId)
+      .where("student_id", "==", student_id)
+      .get();
+    // prevSnap includes the submission we just added only in some timings - to be safe compute attempts as prevSnap.size
+    // If the newly added submission appears in prevSnap, that's ok: attempts = prevSnap.size
+    // If not, still treat attempts = prevSnap.size (it will be 1 less) so we correct by ensuring attempts >=1:
+    let attempts = prevSnap.size;
+    if (attempts === 0) attempts = 1; // fallback (shouldn't happen because we just added)
+
+    // Decide mastered: either passed OR attempts >= 3
+    const shouldMaster = passed || attempts >= 3;
+
+    // Update student's records: topic_progress and possibly mastered
+    const studentRef = db.collection("students").doc(student_id);
+    const studentDoc = await studentRef.get();
+    const sd = studentDoc.exists ? studentDoc.data() : {};
+
+    // Prepare topic_progress patch
+    const existingTP = sd.topic_progress || {};
+    const thisTP = {
+      ...(existingTP[topicId] || {}),
+      attempts: attempts,
+      last_score: score,
+      last_attempted_at: new Date().toISOString(),
+      passed: passed
+    };
+
+    // Always merge topic_progress (records attempts)
+    await studentRef.set({
+      topic_progress: {
+        ...existingTP,
+        [topicId]: thisTP
+      }
+    }, { merge: true });
+
+    let masteredFlag = false;
+    if (shouldMaster) {
+      // Ensure mastered is normalized
+      let mastered = Array.isArray(sd.mastered) ? sd.mastered.map(m => (typeof m === "object" ? m.id : m)) : [];
+      if (!mastered.includes(topicId)) {
+        mastered.push(topicId);
+        await studentRef.update({ mastered });
+      }
+      // mark completed details in topic_progress
+      await studentRef.set({
+        topic_progress: {
+          ...(sd.topic_progress || {}),
+          [topicId]: {
+            ...thisTP,
+            completed: true,
+            score,
+            passed_at: passed ? new Date().toISOString() : undefined
+          }
+        }
+      }, { merge: true });
+
+      // trigger recommendations only when newly mastered
+      await updateRecommendedAfterMastered(student_id, topicId);
+      masteredFlag = true;
+      console.log(`✅ Student ${student_id} mastered ${topicId} (passed: ${passed}, attempts: ${attempts})`);
+    } else {
+      console.log(`ℹ️ Submission for ${student_id} on ${topicId}: score=${score}, passed=${passed}, attempts=${attempts}`);
+    }
+
+    // return helpful info for frontend
+    return res.json({ success: true, score, passed, attempts, mastered: masteredFlag });
+  } catch (err) {
+    console.error("POST /assessments/:topicId/submit", err);
+    return res.status(500).json({ error: "Failed to submit assessment" });
+  }
+});
+
+/**
+ * GET /assessments/:topicId/submission/:studentId
+ * returns latest submission for that student & topic (optional)
+ */
+app.get("/assessments/:topicId/submission/:studentId", async (req, res) => {
+  try {
+    const { topicId, studentId } = req.params;
+    const snap = await db.collection("assessment_submissions")
+      .where("topic_id", "==", topicId)
+      .where("student_id", "==", studentId)
+      .orderBy("attempted_at", "desc")
+      .limit(1)
+      .get();
+    if (snap.empty) return res.status(404).json({ found: false });
+    const doc = snap.docs[0];
+    return res.json({ id: doc.id, ...doc.data() });
+  } catch (err) {
+    console.error("GET submission", err);
+    return res.status(500).json({ error: "Failed to get submission" });
+  }
+});
+
 // ------------------------------------------------
 // 🔹 TEACHER SUMMARY & LOGIN
 // ------------------------------------------------

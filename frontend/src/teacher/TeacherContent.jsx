@@ -338,6 +338,13 @@ export default function TeacherContent() {
                     🗑️ Delete Topic
                   </button>
 
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setModalTopic(topic.id); openAssessmentModal(topic.id); }}
+                    style={{ background: "#f97316", color: "white", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer" }}
+                  >
+                    📝 Manage Assessment
+                  </button>
+
                   <div style={{ marginLeft: "auto", fontSize: 13, color: "#666" }}>
                     {topic.materials.length} resource{topic.materials.length !== 1 ? "s" : ""}
                   </div>
