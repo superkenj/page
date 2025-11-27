@@ -1,6 +1,8 @@
 // CompactAssessmentModal.jsx (inline or import)
 import { useState, useEffect } from "react";
 
+const API_BASE = "https://page-jirk.onrender.com";
+
 export default function CompactAssessmentModal({ topicId, onClose, refresh }) {
   const [loading, setLoading] = useState(true);
   const [assessment, setAssessment] = useState({ topic_id: topicId, title: "", instructions: "", passing_score: 70, questions: [] });
