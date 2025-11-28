@@ -23,6 +23,7 @@ export default function StudentTopicContent() {
   const [answers, setAnswers] = useState({}); // { question_id: student_answer }
   const [submitting, setSubmitting] = useState(false);
   const [submissionResult, setSubmissionResult] = useState(null); // { score, passed }
+  const [locked, setLocked] = useState(false); // NEW: assessment locked after pass or 3 attempts
 
   // ---------------- helper ----------------
   function shuffle(arr) {
@@ -50,6 +51,11 @@ export default function StudentTopicContent() {
         setContents(contentList || []);
         const stu = await stuRes.json();
         setSeen(stu.content_seen || []);
+        // ---------- set local locked state based on student's topic_progress ----------
+        // if teacher/backend already wrote topic_progress for this topic, use it
+        const tp = stu.topic_progress && stu.topic_progress[topicId] ? stu.topic_progress[topicId] : null;
+        const isLocked = tp ? (tp.locked === true || tp.completed === true || (tp.attempts || 0) >= 3) : false;
+        setLocked(isLocked);
       } catch (err) {
         console.error("Error loading topic content:", err);
       } finally {
@@ -94,7 +100,19 @@ export default function StudentTopicContent() {
           const sub = await fetch(`${API_BASE}/assessments/${topicId}/submission/${studentId}`);
           if (sub.ok) {
             const sj = await sub.json();
-            if (mounted) setSubmissionResult({ score: sj.score, passed: sj.passed });
+
+            if (mounted) {
+              setSubmissionResult({ score: sj.score, passed: sj.passed });
+
+              // If submission doc has attempt_number or shows passed, lock the assessment UI
+              // attempt_number comes from backend's saved submission; fallback to attempts in topic_progress if needed.
+              const attemptsFromSubmission = sj.attempt_number || sj.attempts || 0;
+              if (sj.passed === true || attemptsFromSubmission >= 3) {
+                setLocked(true);
+              } else {
+                setLocked(false);
+              }
+            }
           }
         } else {
           // no assessment found
@@ -111,6 +129,12 @@ export default function StudentTopicContent() {
     loadAssessment();
     return () => { mounted = false; };
   }, [tab, topicId, studentId]);
+
+  useEffect(() => {
+    if (locked && tab === "assessment") {
+      setTab("content");
+    }
+  }, [locked, tab]);
 
   async function markSeen(contentId) {
     try {
@@ -197,6 +221,10 @@ export default function StudentTopicContent() {
       // update local submission result for UI
       setSubmissionResult({ score: json.score ?? null, passed: json.passed ?? false });
 
+      // also update local locked state if server says mastered/locked or attempts >= 3
+      if (json.mastered === true || (json.attempts && json.attempts >= 3) || json.passed === true) {
+        setLocked(true);
+      }
       // refresh student record (so dashboard/sidebar picks up mastered/recommended)
       try {
         const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
@@ -271,19 +299,27 @@ export default function StudentTopicContent() {
           Content
         </button>
         <button
-          onClick={() => setTab("assessment")}
+          onClick={() => {
+            if (!locked) setTab("assessment");
+          }}
+          disabled={locked}
           style={{
             flex: 1,
             padding: "10px 12px",
             borderRadius: 8,
             border: tab === "assessment" ? "2px solid #2563eb" : "1px solid #e5e7eb",
-            background: tab === "assessment" ? "#eef2ff" : "#fff",
-            cursor: "pointer",
+            background: locked
+              ? "#f3f4f6"      // greyed out background
+              : tab === "assessment"
+              ? "#eef2ff"
+              : "#fff",
+            color: locked ? "#9ca3af" : "#000",
+            cursor: locked ? "not-allowed" : "pointer",
             textAlign: "center",
             fontWeight: tab === "assessment" ? 700 : 500
           }}
         >
-          Assessment
+          Assessment {locked && "🔒"}
         </button>
       </div>
 

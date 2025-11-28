@@ -825,7 +825,15 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
     if (!docSnap.exists) return res.status(404).json({ error: "Assessment not found" });
     const assessment = docSnap.data();
 
-    // grade
+    // ---------- count prior attempts (deterministic) ----------
+    const priorSnap = await db.collection("assessment_submissions")
+      .where("topic_id", "==", topicId)
+      .where("student_id", "==", student_id)
+      .get();
+    const priorAttempts = priorSnap.size || 0;
+    const attempts = priorAttempts + 1;
+
+    // ---------- grade ----------
     const items = assessment.questions.map((q) => {
       const ansObj = answers.find(a => a.question_id === q.question_id);
       const studentAnswer = ansObj ? ansObj.student_answer : null;
@@ -854,7 +862,7 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
     const score = totalPoints > 0 ? Math.round((earned / totalPoints) * 100) : 0;
     const passed = score >= (assessment.passing_score ?? 70);
 
-    // save submission (always)
+    // ---------- save submission (always) ----------
     const submission = {
       assessment_id: docId,
       topic_id: topicId,
@@ -863,33 +871,17 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
       score,
       passed,
       attempted_at: new Date().toISOString(),
+      attempt_number: attempts
     };
     await db.collection("assessment_submissions").add(submission);
 
-    // count previous attempts (before this submission) and compute attempts including current
-    const prevSnap = await db.collection("assessment_submissions")
-      .where("topic_id", "==", topicId)
-      .where("student_id", "==", student_id)
-      .get();
-    // prevSnap.size is the number of submissions (including the one we just added in most cases).
-    // To be deterministic treat attempts = prevSnap.size (if prevSnap includes our new doc) or +1.
-    // Simpler and correct: attempts = prevSnap.size (which normally includes current) OR prevSnap.size + 1.
-    let attempts = prevSnap.size;
-    // If prevSnap.size is 0 (rare), set attempts to 1
-    if (!attempts) attempts = 1;
-    // If you want to force attempts to be prior + current reliably, you can also do:
-    // attempts = prevSnap.size + 0; // keep as-is since prevSnap usually includes current
-
-    const shouldMaster = passed || attempts >= 3;
-
-    // Update student's records: topic_progress and possibly mastered
+    // ---------- update student topic_progress and mastered/lock if needed ----------
     const studentRef = db.collection("students").doc(student_id);
     const studentDoc = await studentRef.get();
     const sd = studentDoc.exists ? studentDoc.data() : {};
 
-    // Prepare topic_progress patch
     const existingTP = sd.topic_progress || {};
-    const thisTP = {
+    const tpForTopic = {
       ...(existingTP[topicId] || {}),
       attempts: attempts,
       last_score: score,
@@ -897,64 +889,59 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
       passed: passed
     };
 
-    // Merge topic_progress (records attempts)
+    // If passed OR attempts >= 3 -> lock/complete the topic
+    const shouldLock = passed || attempts >= 3;
+    if (shouldLock) {
+      tpForTopic.completed = true;
+      tpForTopic.locked = true;
+      tpForTopic.passed_at = passed ? new Date().toISOString() : undefined;
+    }
+
+    // Merge topic_progress
     await studentRef.set({
       topic_progress: {
         ...existingTP,
-        [topicId]: thisTP
+        [topicId]: tpForTopic
       }
     }, { merge: true });
 
+    // If mastered (passed or auto after attempts), update mastered array (best-effort)
     let masteredFlag = false;
-    let recommendationWarning = null;
-    if (shouldMaster) {
-      // Ensure mastered is normalized
+    if (shouldLock) {
       let mastered = Array.isArray(sd.mastered) ? sd.mastered.map(m => (typeof m === "object" ? m.id : m)) : [];
       if (!mastered.includes(topicId)) {
         mastered.push(topicId);
         try {
           await studentRef.update({ mastered });
         } catch (err) {
-          // If update fails for some reason, still continue but log warning
           console.error("Warning: failed to update student's mastered array:", err);
         }
       }
-
-      // mark completed details in topic_progress
-      await studentRef.set({
-        topic_progress: {
-          ...(sd.topic_progress || {}),
-          [topicId]: {
-            ...thisTP,
-            completed: true,
-            score,
-            passed_at: passed ? new Date().toISOString() : undefined
-          }
-        }
-      }, { merge: true });
-
-      // trigger recommendations, but do not let a recommendation failure throw overall error
+      // Attempt recommended update, but don't let it break response
       try {
         await updateRecommendedAfterMastered(student_id, topicId);
       } catch (err) {
         console.error("Non-fatal: updateRecommendedAfterMastered failed:", err);
-        recommendationWarning = "recommendation_update_failed";
       }
-
       masteredFlag = true;
       console.log(`✅ Student ${student_id} mastered ${topicId} (passed: ${passed}, attempts: ${attempts})`);
     } else {
       console.log(`ℹ️ Submission for ${student_id} on ${topicId}: score=${score}, passed=${passed}, attempts=${attempts}`);
     }
 
-    // Always return helpful info for frontend (200)
-    const responseBody = { success: true, score, passed, attempts, mastered: masteredFlag };
-    if (recommendationWarning) responseBody.warning = recommendationWarning;
-    return res.status(200).json(responseBody);
+    // ---------- respond (always 200) ----------
+    return res.status(200).json({
+      success: true,
+      score,
+      passed,
+      attempts,
+      mastered: masteredFlag
+    });
+
   } catch (err) {
     console.error("POST /assessments/:topicId/submit", err);
-    // If something truly fatal happened before we could save submission, return 500
-    return res.status(500).json({ error: "Failed to submit assessment" });
+    // If something fatal occurs before we've saved anything, still return 200 with an error-like shape so frontend shows score behavior.
+    return res.status(200).json({ success: false, error: "Server error while submitting. Your attempt may still be recorded." });
   }
 });
 
