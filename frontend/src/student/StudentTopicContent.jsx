@@ -149,6 +149,7 @@ export default function StudentTopicContent() {
       return;
     }
 
+    // Build answers array in expected format
     const payloadAnswers = assessment.questions.map((q) => {
       const ans = answers[q.question_id];
       return { question_id: q.question_id, student_answer: typeof ans === "undefined" ? null : ans };
@@ -162,60 +163,74 @@ export default function StudentTopicContent() {
         body: JSON.stringify({ student_id: studentId, answers: payloadAnswers }),
       });
 
-      // try parse JSON, fall back to text
+      // Defensive parse: prefer JSON, fallback to text
       let body;
       try {
         body = await res.json();
-      } catch (parseErr) {
+      } catch (e) {
         body = await res.text().catch(() => null);
-        console.warn("submitAssessment: response not JSON:", body);
+        console.warn("submitAssessment: non-JSON response:", body);
       }
 
-      // Debug log so you can inspect what the server returned
-      console.log("submit response status:", res.status, "body:", body);
+      console.log("submit response", res.status, body);
 
-      // Consider success if:
-      // - HTTP 2xx, OR
-      // - body contains explicit success/score fields (some backends return 200 but res.ok false)
+      // Treat as success if res.ok OR body contains expected fields (score/passed/mastered)
       const looksSuccessful =
-        (res.ok === true) ||
-        (body && (body.success === true || typeof body.score === "number"));
+        res.ok ||
+        (body && (typeof body.score === "number" || body.success === true || typeof body.mastered !== "undefined"));
 
       if (!looksSuccessful) {
-        // Show server error message when available
-        const msg = body && (body.error || body.message || body.err) ? (body.error || body.message || body.err) : "Failed to submit assessment";
+        // prefer server message if present
+        const msg = (body && (body.error || body.message)) || "Failed to submit assessment";
         console.error("submit failed:", res.status, body);
         alert(msg);
         return;
       }
 
-      // If we get here treat as success
+      // normalize JSON body
       const json = typeof body === "object" ? body : {};
 
+      // update local submission result for UI
       setSubmissionResult({ score: json.score ?? null, passed: json.passed ?? false });
 
-      // refresh student record to pick up mastered flag
-      const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
-      if (stuRes.ok) {
-        const stu = await stuRes.json();
-        setSeen(stu.content_seen || []);
-        window.dispatchEvent(new Event("studentDataUpdated"));
-        window.dispatchEvent(new Event("studentPathUpdated"));
-        window.dispatchEvent(new Event("contentSeenUpdated"));
+      // refresh student record (so dashboard/sidebar picks up mastered/recommended)
+      try {
+        const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
+        if (stuRes.ok) {
+          const stu = await stuRes.json();
+          setSeen(stu.content_seen || []);
+        }
+      } catch (e) {
+        console.warn("Failed to refresh student after submit:", e);
       }
 
-      // return to content so user sees resources
-      setTab("content");
+      // Dispatch events so other components refresh immediately
+      window.dispatchEvent(new Event("studentDataUpdated"));
+      window.dispatchEvent(new Event("studentPathUpdated"));
+      window.dispatchEvent(new Event("contentSeenUpdated"));
 
-      if (json.passed) {
-        alert(`Passed! Score: ${json.score}. Topic will be marked completed.`);
+      // If server marked topic as mastered (auto-master after 3 attempts),
+      // show an explicit message
+      if (json.mastered === true || (json.attempts >= 3 && json.passed === false)) {
+        alert(
+          json.passed
+            ? `Passed! Score: ${json.score}. Topic marked completed.`
+            : `This topic has been marked completed after ${json.attempts} attempts.`
+        );
       } else {
-        alert(`Score: ${json.score ?? "N/A"}. You did not pass. Try again if allowed.`);
+        // Not mastered: show pass/fail message
+        if (json.passed) {
+          alert(`Passed! Score: ${json.score}. Topic will be marked completed.`);
+        } else {
+          alert(`Score: ${json.score ?? "N/A"}. You did not pass. Try again if allowed.`);
+        }
       }
 
+      // Return the user to the content tab so they can review materials
+      setTab("content");
     } catch (err) {
-      console.error("submitAssessment error (network/exception):", err);
-      alert("Failed to submit assessment (network error)");
+      console.error("submitAssessment network/error:", err);
+      alert("Failed to submit assessment (network error).");
     } finally {
       setSubmitting(false);
     }
