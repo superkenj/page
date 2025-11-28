@@ -180,11 +180,15 @@ export default function StudentTopicContent() {
         (body && (typeof body.score === "number" || body.success === true || typeof body.mastered !== "undefined"));
 
       if (!looksSuccessful) {
-        // prefer server message if present
         const msg = (body && (body.error || body.message)) || "Failed to submit assessment";
-        console.error("submit failed:", res.status, body);
-        alert(msg);
-        return;
+        // If server responded with mastered info in body despite non-ok, treat as success:
+        if (body && body.mastered) {
+          // proceed as success path below (refresh student, dispatch events, setTab)
+        } else {
+          console.error("submit failed:", res.status, body);
+          alert(msg);
+          return;
+        }
       }
 
       // normalize JSON body

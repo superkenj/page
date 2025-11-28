@@ -831,7 +831,6 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
       const studentAnswer = ansObj ? ansObj.student_answer : null;
       let isCorrect = false;
 
-      // grading rules (same as before)
       if (q.type === "multiple_choice" || q.type === "short_answer") {
         isCorrect = studentAnswer != null && String(studentAnswer).trim() === String(q.answer).trim();
       } else if (q.type === "ordering" || q.type === "drag_sort") {
@@ -855,7 +854,7 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
     const score = totalPoints > 0 ? Math.round((earned / totalPoints) * 100) : 0;
     const passed = score >= (assessment.passing_score ?? 70);
 
-    // save submission
+    // save submission (always)
     const submission = {
       assessment_id: docId,
       topic_id: topicId,
@@ -867,18 +866,20 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
     };
     await db.collection("assessment_submissions").add(submission);
 
-    // count previous attempts (before this one) and compute attempts including current
+    // count previous attempts (before this submission) and compute attempts including current
     const prevSnap = await db.collection("assessment_submissions")
       .where("topic_id", "==", topicId)
       .where("student_id", "==", student_id)
       .get();
-    // prevSnap includes the submission we just added only in some timings - to be safe compute attempts as prevSnap.size
-    // If the newly added submission appears in prevSnap, that's ok: attempts = prevSnap.size
-    // If not, still treat attempts = prevSnap.size (it will be 1 less) so we correct by ensuring attempts >=1:
+    // prevSnap.size is the number of submissions (including the one we just added in most cases).
+    // To be deterministic treat attempts = prevSnap.size (if prevSnap includes our new doc) or +1.
+    // Simpler and correct: attempts = prevSnap.size (which normally includes current) OR prevSnap.size + 1.
     let attempts = prevSnap.size;
-    if (attempts === 0) attempts = 1; // fallback (shouldn't happen because we just added)
+    // If prevSnap.size is 0 (rare), set attempts to 1
+    if (!attempts) attempts = 1;
+    // If you want to force attempts to be prior + current reliably, you can also do:
+    // attempts = prevSnap.size + 0; // keep as-is since prevSnap usually includes current
 
-    // Decide mastered: either passed OR attempts >= 3
     const shouldMaster = passed || attempts >= 3;
 
     // Update student's records: topic_progress and possibly mastered
@@ -896,7 +897,7 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
       passed: passed
     };
 
-    // Always merge topic_progress (records attempts)
+    // Merge topic_progress (records attempts)
     await studentRef.set({
       topic_progress: {
         ...existingTP,
@@ -905,13 +906,20 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
     }, { merge: true });
 
     let masteredFlag = false;
+    let recommendationWarning = null;
     if (shouldMaster) {
       // Ensure mastered is normalized
       let mastered = Array.isArray(sd.mastered) ? sd.mastered.map(m => (typeof m === "object" ? m.id : m)) : [];
       if (!mastered.includes(topicId)) {
         mastered.push(topicId);
-        await studentRef.update({ mastered });
+        try {
+          await studentRef.update({ mastered });
+        } catch (err) {
+          // If update fails for some reason, still continue but log warning
+          console.error("Warning: failed to update student's mastered array:", err);
+        }
       }
+
       // mark completed details in topic_progress
       await studentRef.set({
         topic_progress: {
@@ -925,18 +933,27 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
         }
       }, { merge: true });
 
-      // trigger recommendations only when newly mastered
-      await updateRecommendedAfterMastered(student_id, topicId);
+      // trigger recommendations, but do not let a recommendation failure throw overall error
+      try {
+        await updateRecommendedAfterMastered(student_id, topicId);
+      } catch (err) {
+        console.error("Non-fatal: updateRecommendedAfterMastered failed:", err);
+        recommendationWarning = "recommendation_update_failed";
+      }
+
       masteredFlag = true;
       console.log(`✅ Student ${student_id} mastered ${topicId} (passed: ${passed}, attempts: ${attempts})`);
     } else {
       console.log(`ℹ️ Submission for ${student_id} on ${topicId}: score=${score}, passed=${passed}, attempts=${attempts}`);
     }
 
-    // return helpful info for frontend
-    return res.json({ success: true, score, passed, attempts, mastered: masteredFlag });
+    // Always return helpful info for frontend (200)
+    const responseBody = { success: true, score, passed, attempts, mastered: masteredFlag };
+    if (recommendationWarning) responseBody.warning = recommendationWarning;
+    return res.status(200).json(responseBody);
   } catch (err) {
     console.error("POST /assessments/:topicId/submit", err);
+    // If something truly fatal happened before we could save submission, return 500
     return res.status(500).json({ error: "Failed to submit assessment" });
   }
 });
