@@ -24,6 +24,17 @@ export default function StudentTopicContent() {
   const [submitting, setSubmitting] = useState(false);
   const [submissionResult, setSubmissionResult] = useState(null); // { score, passed }
 
+  // ---------------- helper ----------------
+  function shuffle(arr) {
+    // Fisher-Yates in-place shuffle (returns new array copy)
+    const a = Array.isArray(arr) ? [...arr] : [];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
   useEffect(() => {
     async function load() {
       try {
@@ -52,6 +63,7 @@ export default function StudentTopicContent() {
   useEffect(() => {
     if (tab !== "assessment") return;
     let mounted = true;
+
     async function loadAssessment() {
       setAssessmentLoading(true);
       setAssessment(null);
@@ -61,15 +73,28 @@ export default function StudentTopicContent() {
         const res = await fetch(`${API_BASE}/assessments/${topicId}`);
         if (res.ok) {
           const json = await res.json();
+
+          // ----- SHUFFLE QUESTIONS + CHOICES -----
+          let qlist = Array.isArray(json.questions) ? [...json.questions] : [];
+          // Shuffle questions order
+          qlist = shuffle(qlist);
+
+          // For each multiple choice question, shuffle its choices
+          qlist = qlist.map((q) => {
+            if (q.type === "multiple_choice" && Array.isArray(q.choices)) {
+              return { ...q, choices: shuffle(q.choices) };
+            }
+            return q;
+          });
+
           if (!mounted) return;
-          setAssessment(json);
+          setAssessment({ ...json, questions: qlist });
+
           // try to load latest submission for this student (optional)
           const sub = await fetch(`${API_BASE}/assessments/${topicId}/submission/${studentId}`);
           if (sub.ok) {
             const sj = await sub.json();
-            if (mounted) {
-              setSubmissionResult({ score: sj.score, passed: sj.passed });
-            }
+            if (mounted) setSubmissionResult({ score: sj.score, passed: sj.passed });
           }
         } else {
           // no assessment found
@@ -82,6 +107,7 @@ export default function StudentTopicContent() {
         if (mounted) setAssessmentLoading(false);
       }
     }
+
     loadAssessment();
     return () => { mounted = false; };
   }, [tab, topicId, studentId]);
@@ -116,6 +142,7 @@ export default function StudentTopicContent() {
     setAnswers((a) => ({ ...a, [questionId]: value }));
   }
 
+  // ---------- submitAssessment: returns to Content tab on success ----------
   async function submitAssessment() {
     if (!assessment || !assessment.questions || assessment.questions.length === 0) {
       alert("No assessment available.");
@@ -144,41 +171,22 @@ export default function StudentTopicContent() {
         setSubmissionResult({ score: json.score, passed: json.passed });
 
         // refresh student record to pick up mastered flag
-        try {
-          const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
-          if (stuRes.ok) {
-            const stu = await stuRes.json();
-            setSeen(stu.content_seen || []);
-            // notify generic student-data update (existing behavior)
-            window.dispatchEvent(new Event("studentDataUpdated"));
-          }
-        } catch (err) {
-          console.warn("Failed to refresh student record:", err);
-        }
-
-        // --- NEW: fetch the authoritative path and broadcast it to listeners ---
-        try {
-          const pathRes = await fetch(`${API_BASE}/students/${studentId}/path`);
-          if (pathRes.ok) {
-            const pathJson = await pathRes.json();
-            // dispatch with the new path so other components (dashboard, sidebar) can update immediately
-            window.dispatchEvent(new CustomEvent("studentPathUpdated", { detail: pathJson }));
-          } else {
-            // fallback: still notify components to refresh themselves
-            window.dispatchEvent(new Event("studentPathUpdated"));
-          }
-        } catch (err) {
-          console.warn("Failed to fetch student path:", err);
+        const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
+        if (stuRes.ok) {
+          const stu = await stuRes.json();
+          setSeen(stu.content_seen || []);
+          // dispatch events in case other components rely on it (dashboard/sidebar)
+          window.dispatchEvent(new Event("studentDataUpdated"));
           window.dispatchEvent(new Event("studentPathUpdated"));
+          window.dispatchEvent(new Event("contentSeenUpdated"));
         }
 
-        // Optionally refresh the dashboard contentSeenUpdated as well (if relevant)
-        window.dispatchEvent(new Event("contentSeenUpdated"));
+        // switch back to content tab so student sees materials immediately
+        setTab("content");
 
+        // give user feedback
         if (json.passed) {
           alert(`Passed! Score: ${json.score}. Topic will be marked completed.`);
-          // OPTIONAL: redirect student to the topic's content page after pass
-          // navigate(`/student-dashboard/${studentId}/topic/${topicId}`);
         } else {
           alert(`Score: ${json.score}. You did not pass. Try again if allowed.`);
         }
@@ -204,16 +212,19 @@ export default function StudentTopicContent() {
         <p style={{ color: "#334155" }}>{topic?.description}</p>
       </div>
 
-      {/* TAB SWITCHER */}
+      {/* TAB SWITCHER: full width, both buttons split evenly */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <button
           onClick={() => setTab("content")}
           style={{
-            padding: "8px 12px",
+            flex: 1,
+            padding: "10px 12px",
             borderRadius: 8,
             border: tab === "content" ? "2px solid #2563eb" : "1px solid #e5e7eb",
             background: tab === "content" ? "#eef2ff" : "#fff",
-            cursor: "pointer"
+            cursor: "pointer",
+            textAlign: "center",
+            fontWeight: tab === "content" ? 700 : 500
           }}
         >
           Content
@@ -221,11 +232,14 @@ export default function StudentTopicContent() {
         <button
           onClick={() => setTab("assessment")}
           style={{
-            padding: "8px 12px",
+            flex: 1,
+            padding: "10px 12px",
             borderRadius: 8,
             border: tab === "assessment" ? "2px solid #2563eb" : "1px solid #e5e7eb",
             background: tab === "assessment" ? "#eef2ff" : "#fff",
-            cursor: "pointer"
+            cursor: "pointer",
+            textAlign: "center",
+            fontWeight: tab === "assessment" ? 700 : 500
           }}
         >
           Assessment
