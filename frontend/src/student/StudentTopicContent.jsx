@@ -149,10 +149,8 @@ export default function StudentTopicContent() {
       return;
     }
 
-    // Build answers array in expected format
     const payloadAnswers = assessment.questions.map((q) => {
       const ans = answers[q.question_id];
-      // For ordering questions where student provides array, ensure we pass array
       return { question_id: q.question_id, student_answer: typeof ans === "undefined" ? null : ans };
     });
 
@@ -163,37 +161,61 @@ export default function StudentTopicContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ student_id: studentId, answers: payloadAnswers }),
       });
-      const json = await res.json();
-      if (!res.ok) {
-        console.error("submit failed", json);
-        alert(json.error || "Failed to submit assessment");
-      } else {
-        setSubmissionResult({ score: json.score, passed: json.passed });
 
-        // refresh student record to pick up mastered flag
-        const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
-        if (stuRes.ok) {
-          const stu = await stuRes.json();
-          setSeen(stu.content_seen || []);
-          // dispatch events in case other components rely on it (dashboard/sidebar)
-          window.dispatchEvent(new Event("studentDataUpdated"));
-          window.dispatchEvent(new Event("studentPathUpdated"));
-          window.dispatchEvent(new Event("contentSeenUpdated"));
-        }
-
-        // switch back to content tab so student sees materials immediately
-        setTab("content");
-
-        // give user feedback
-        if (json.passed) {
-          alert(`Passed! Score: ${json.score}. Topic will be marked completed.`);
-        } else {
-          alert(`Score: ${json.score}. You did not pass. Try again if allowed.`);
-        }
+      // try parse JSON, fall back to text
+      let body;
+      try {
+        body = await res.json();
+      } catch (parseErr) {
+        body = await res.text().catch(() => null);
+        console.warn("submitAssessment: response not JSON:", body);
       }
+
+      // Debug log so you can inspect what the server returned
+      console.log("submit response status:", res.status, "body:", body);
+
+      // Consider success if:
+      // - HTTP 2xx, OR
+      // - body contains explicit success/score fields (some backends return 200 but res.ok false)
+      const looksSuccessful =
+        (res.ok === true) ||
+        (body && (body.success === true || typeof body.score === "number"));
+
+      if (!looksSuccessful) {
+        // Show server error message when available
+        const msg = body && (body.error || body.message || body.err) ? (body.error || body.message || body.err) : "Failed to submit assessment";
+        console.error("submit failed:", res.status, body);
+        alert(msg);
+        return;
+      }
+
+      // If we get here treat as success
+      const json = typeof body === "object" ? body : {};
+
+      setSubmissionResult({ score: json.score ?? null, passed: json.passed ?? false });
+
+      // refresh student record to pick up mastered flag
+      const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
+      if (stuRes.ok) {
+        const stu = await stuRes.json();
+        setSeen(stu.content_seen || []);
+        window.dispatchEvent(new Event("studentDataUpdated"));
+        window.dispatchEvent(new Event("studentPathUpdated"));
+        window.dispatchEvent(new Event("contentSeenUpdated"));
+      }
+
+      // return to content so user sees resources
+      setTab("content");
+
+      if (json.passed) {
+        alert(`Passed! Score: ${json.score}. Topic will be marked completed.`);
+      } else {
+        alert(`Score: ${json.score ?? "N/A"}. You did not pass. Try again if allowed.`);
+      }
+
     } catch (err) {
-      console.error("submitAssessment error", err);
-      alert("Failed to submit assessment");
+      console.error("submitAssessment error (network/exception):", err);
+      alert("Failed to submit assessment (network error)");
     } finally {
       setSubmitting(false);
     }
