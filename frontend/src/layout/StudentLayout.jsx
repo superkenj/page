@@ -38,10 +38,12 @@ export default function StudentLayout() {
         const masteredSet = new Set(stuJson?.mastered || []);
         const computed = allTopics
           .filter(
-            (topic) =>
-              !masteredSet.has(topic.id) &&
-              (topic.prerequisites || []).every((p) => masteredSet.has(p))
-          )
+            (topic) => {
+              const prereqs = Array.isArray(topic.prerequisites) ? topic.prerequisites : [];
+              if (masteredSet.has(topic.id)) return false;
+              if (!prereqs.length) return true; // NO prereqs => recommend
+              return prereqs.every((p) => masteredSet.has(p));
+            })
           .map((t) => ({ id: t.id, name: t.name }));
         setRecommended(computed);
       } catch (err) {

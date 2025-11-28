@@ -360,9 +360,15 @@ app.get("/students/:id/path", async (req, res) => {
     // and that is not already mastered.
     const recommendedCandidates = allTopics.filter((t) => {
       const prereqs = Array.isArray(t.prerequisites) ? t.prerequisites : [];
-      if (!prereqs.length) return false; // if no prereqs, don't recommend just because
-      // require every prereq to be mastered
-      return prereqs.every((p) => masteredIds.includes(p)) && !masteredIds.includes(t.id);
+
+      // If already mastered -> not recommended
+      if (masteredIds.includes(t.id)) return false;
+
+      // If no prereqs -> recommend (first-start topics)
+      if (!prereqs.length) return true;
+
+      // otherwise require every prereq to be mastered
+      return prereqs.every((p) => masteredIds.includes(p));
     });
 
     // Convert to id array + detailed array

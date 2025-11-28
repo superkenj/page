@@ -100,10 +100,27 @@ export default function StudentDashboard() {
   const recommendedSet = new Set(path.recommended || []);
   const inProgressSet = new Set(path.inProgress || []);
 
+  // build a lookup so we can inspect topic metadata (prerequisites)
+  const topicsMap = Object.fromEntries((topics || []).map((t) => [t.id, t]));
+
   function getStatus(topicId) {
+    // In-Progress always wins
     if (inProgressSet.has(topicId)) return "In Progress";
-    if (recommendedSet.has(topicId)) return "Recommended";
+
+    // Mastered wins over recommended/upcoming
     if (masteredSet.has(topicId)) return "Mastered";
+
+    // If explicitly recommended by path -> Recommended
+    if (recommendedSet.has(topicId)) return "Recommended";
+
+    // NEW: treat a starter topic (no prereqs) as "Recommended" if not mastered.
+    // This handles the initial card that has no prerequisites.
+    const topic = topicsMap[topicId];
+    const prereqs = (topic && Array.isArray(topic.prerequisites)) ? topic.prerequisites : [];
+    if (prereqs.length === 0 && !masteredSet.has(topicId)) {
+      return "Recommended";
+    }
+
     return "Upcoming";
   }
 

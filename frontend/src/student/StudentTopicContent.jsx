@@ -142,16 +142,43 @@ export default function StudentTopicContent() {
         alert(json.error || "Failed to submit assessment");
       } else {
         setSubmissionResult({ score: json.score, passed: json.passed });
+
         // refresh student record to pick up mastered flag
-        const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
-        if (stuRes.ok) {
-          const stu = await stuRes.json();
-          setSeen(stu.content_seen || []);
-          // dispatch event in case other components rely on it
-          window.dispatchEvent(new Event("studentDataUpdated"));
+        try {
+          const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
+          if (stuRes.ok) {
+            const stu = await stuRes.json();
+            setSeen(stu.content_seen || []);
+            // notify generic student-data update (existing behavior)
+            window.dispatchEvent(new Event("studentDataUpdated"));
+          }
+        } catch (err) {
+          console.warn("Failed to refresh student record:", err);
         }
+
+        // --- NEW: fetch the authoritative path and broadcast it to listeners ---
+        try {
+          const pathRes = await fetch(`${API_BASE}/students/${studentId}/path`);
+          if (pathRes.ok) {
+            const pathJson = await pathRes.json();
+            // dispatch with the new path so other components (dashboard, sidebar) can update immediately
+            window.dispatchEvent(new CustomEvent("studentPathUpdated", { detail: pathJson }));
+          } else {
+            // fallback: still notify components to refresh themselves
+            window.dispatchEvent(new Event("studentPathUpdated"));
+          }
+        } catch (err) {
+          console.warn("Failed to fetch student path:", err);
+          window.dispatchEvent(new Event("studentPathUpdated"));
+        }
+
+        // Optionally refresh the dashboard contentSeenUpdated as well (if relevant)
+        window.dispatchEvent(new Event("contentSeenUpdated"));
+
         if (json.passed) {
           alert(`Passed! Score: ${json.score}. Topic will be marked completed.`);
+          // OPTIONAL: redirect student to the topic's content page after pass
+          // navigate(`/student-dashboard/${studentId}/topic/${topicId}`);
         } else {
           alert(`Score: ${json.score}. You did not pass. Try again if allowed.`);
         }
