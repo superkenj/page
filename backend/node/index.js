@@ -813,32 +813,30 @@ app.post("/assessments", async (req, res) => {
  */
 app.post("/assessments/:topicId/submit", async (req, res) => {
   try {
-    const { topicId } = req.params;
+    const topicId = req.params.topicId;
     const { student_id, answers } = req.body;
     if (!student_id || !Array.isArray(answers)) {
       return res.status(400).json({ error: "student_id and answers[] required" });
     }
 
-    // load assessment
     const docId = `${topicId}_assessment`;
     const docSnap = await db.collection("assessments").doc(docId).get();
     if (!docSnap.exists) return res.status(404).json({ error: "Assessment not found" });
     const assessment = docSnap.data();
 
-    // ---------- count prior attempts (deterministic) ----------
+    // COUNT prior attempts (deterministic)
     const priorSnap = await db.collection("assessment_submissions")
       .where("topic_id", "==", topicId)
       .where("student_id", "==", student_id)
       .get();
     const priorAttempts = priorSnap.size || 0;
-    const attempts = priorAttempts + 1;
+    const attemptNumber = priorAttempts + 1;
 
-    // ---------- grade ----------
+    // GRADE
     const items = assessment.questions.map((q) => {
       const ansObj = answers.find(a => a.question_id === q.question_id);
       const studentAnswer = ansObj ? ansObj.student_answer : null;
       let isCorrect = false;
-
       if (q.type === "multiple_choice" || q.type === "short_answer") {
         isCorrect = studentAnswer != null && String(studentAnswer).trim() === String(q.answer).trim();
       } else if (q.type === "ordering" || q.type === "drag_sort") {
@@ -848,7 +846,6 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
       } else {
         isCorrect = String(studentAnswer || "") === String(q.answer || "");
       }
-
       return {
         question_id: q.question_id,
         student_answer: studentAnswer,
@@ -862,7 +859,7 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
     const score = totalPoints > 0 ? Math.round((earned / totalPoints) * 100) : 0;
     const passed = score >= (assessment.passing_score ?? 70);
 
-    // ---------- save submission (always) ----------
+    // Save submission (non-transactional add is ok here)
     const submission = {
       assessment_id: docId,
       topic_id: topicId,
@@ -871,77 +868,66 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
       score,
       passed,
       attempted_at: new Date().toISOString(),
-      attempt_number: attempts
+      attempt_number: attemptNumber
     };
     await db.collection("assessment_submissions").add(submission);
 
-    // ---------- update student topic_progress and mastered/lock if needed ----------
+    // Now atomically update student.topic_progress and mastered using a transaction
     const studentRef = db.collection("students").doc(student_id);
-    const studentDoc = await studentRef.get();
-    const sd = studentDoc.exists ? studentDoc.data() : {};
+    await db.runTransaction(async (tx) => {
+      const sdSnap = await tx.get(studentRef);
+      const sd = sdSnap.exists ? sdSnap.data() : {};
 
-    const existingTP = sd.topic_progress || {};
-    const tpForTopic = {
-      ...(existingTP[topicId] || {}),
-      attempts: attempts,
-      last_score: score,
-      last_attempted_at: new Date().toISOString(),
-      passed: passed
-    };
+      const existingTP = sd.topic_progress || {};
+      const tpForTopic = {
+        ...(existingTP[topicId] || {}),
+        attempts: attemptNumber,
+        last_score: score,
+        last_attempted_at: new Date().toISOString(),
+        passed: passed
+      };
 
-    // If passed OR attempts >= 3 -> lock/complete the topic
-    const shouldLock = passed || attempts >= 3;
-    if (shouldLock) {
-      tpForTopic.completed = true;
-      tpForTopic.locked = true;
-      tpForTopic.passed_at = passed ? new Date().toISOString() : undefined;
-    }
+      const shouldLockOrMaster = passed || attemptNumber >= 3;
+      if (shouldLockOrMaster) {
+        tpForTopic.completed = true;
+        tpForTopic.locked = true;
+        tpForTopic.passed_at = passed ? new Date().toISOString() : undefined;
+      }
 
-    // Merge topic_progress
-    await studentRef.set({
-      topic_progress: {
+      // prepare updated topic_progress
+      const newTopicProgress = {
         ...existingTP,
         [topicId]: tpForTopic
-      }
-    }, { merge: true });
+      };
 
-    // If mastered (passed or auto after attempts), update mastered array (best-effort)
-    let masteredFlag = false;
-    if (shouldLock) {
-      let mastered = Array.isArray(sd.mastered) ? sd.mastered.map(m => (typeof m === "object" ? m.id : m)) : [];
-      if (!mastered.includes(topicId)) {
+      // update mastered array if needed
+      const mastered = Array.isArray(sd.mastered) ? sd.mastered.map(m => (typeof m === "object" ? m.id : m)) : [];
+      let masteredAdded = false;
+      if (shouldLockOrMaster && !mastered.includes(topicId)) {
         mastered.push(topicId);
-        try {
-          await studentRef.update({ mastered });
-        } catch (err) {
-          console.error("Warning: failed to update student's mastered array:", err);
-        }
+        masteredAdded = true;
       }
-      // Attempt recommended update, but don't let it break response
-      try {
-        await updateRecommendedAfterMastered(student_id, topicId);
-      } catch (err) {
-        console.error("Non-fatal: updateRecommendedAfterMastered failed:", err);
-      }
-      masteredFlag = true;
-      console.log(`✅ Student ${student_id} mastered ${topicId} (passed: ${passed}, attempts: ${attempts})`);
-    } else {
-      console.log(`ℹ️ Submission for ${student_id} on ${topicId}: score=${score}, passed=${passed}, attempts=${attempts}`);
-    }
 
-    // ---------- respond (always 200) ----------
+      // Commit the two fields atomically
+      tx.set(studentRef, { topic_progress: newTopicProgress, mastered }, { merge: true });
+    });
+
+    // Trigger recommendations (best effort)
+    try { await updateRecommendedAfterMastered(student_id, topicId); } catch (e) { console.error("recommendation failed:", e); }
+
+    // Respond with authoritative info
     return res.status(200).json({
       success: true,
       score,
       passed,
-      attempts,
-      mastered: masteredFlag
+      attempts: attemptNumber,
+      attempt_number: attemptNumber,
+      mastered: (passed || attemptNumber >= 3)
     });
-
   } catch (err) {
     console.error("POST /assessments/:topicId/submit", err);
-    // If something fatal occurs before we've saved anything, still return 200 with an error-like shape so frontend shows score behavior.
-    return res.status(200).json({ success: false, error: "Server error while submitting. Your attempt may still be recorded." });
+    // return a 200-shaped response so frontend still shows score but flag failure
+    return res.status(200).json({ success: false, error: "Server error while submitting. Attempt may be recorded." });
   }
 });
 

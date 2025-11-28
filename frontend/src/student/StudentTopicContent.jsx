@@ -1,4 +1,4 @@
-// frontend/src/layout/StudentTopicContent.jsx
+// frontend/src/student/StudentTopicContent.jsx
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
@@ -27,7 +27,6 @@ export default function StudentTopicContent() {
 
   // ---------------- helper ----------------
   function shuffle(arr) {
-    // Fisher-Yates in-place shuffle (returns new array copy)
     const a = Array.isArray(arr) ? [...arr] : [];
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -36,6 +35,7 @@ export default function StudentTopicContent() {
     return a;
   }
 
+  // ---------- load initial data (topics, contents, student) ----------
   useEffect(() => {
     async function load() {
       try {
@@ -51,6 +51,7 @@ export default function StudentTopicContent() {
         setContents(contentList || []);
         const stu = await stuRes.json();
         setSeen(stu.content_seen || []);
+
         // ---------- set local locked state based on student's topic_progress ----------
         // if teacher/backend already wrote topic_progress for this topic, use it
         const tp = stu.topic_progress && stu.topic_progress[topicId] ? stu.topic_progress[topicId] : null;
@@ -65,7 +66,7 @@ export default function StudentTopicContent() {
     load();
   }, [studentId, topicId]);
 
-  // Load assessment when switching to assessment tab
+  // ---------- when assessment tab is opened: load assessment, latest submission, and re-check student topic_progress ----------
   useEffect(() => {
     if (tab !== "assessment") return;
     let mounted = true;
@@ -75,48 +76,67 @@ export default function StudentTopicContent() {
       setAssessment(null);
       setSubmissionResult(null);
       setAnswers({});
+
       try {
+        // Load assessment doc
         const res = await fetch(`${API_BASE}/assessments/${topicId}`);
-        if (res.ok) {
-          const json = await res.json();
-
-          // ----- SHUFFLE QUESTIONS + CHOICES -----
-          let qlist = Array.isArray(json.questions) ? [...json.questions] : [];
-          // Shuffle questions order
-          qlist = shuffle(qlist);
-
-          // For each multiple choice question, shuffle its choices
-          qlist = qlist.map((q) => {
-            if (q.type === "multiple_choice" && Array.isArray(q.choices)) {
-              return { ...q, choices: shuffle(q.choices) };
-            }
-            return q;
-          });
-
+        if (!res.ok) {
           if (!mounted) return;
-          setAssessment({ ...json, questions: qlist });
+          setAssessment(null);
+          return;
+        }
 
-          // try to load latest submission for this student (optional)
-          const sub = await fetch(`${API_BASE}/assessments/${topicId}/submission/${studentId}`);
-          if (sub.ok) {
-            const sj = await sub.json();
+        const json = await res.json();
 
-            if (mounted) {
-              setSubmissionResult({ score: sj.score, passed: sj.passed });
-
-              // If submission doc has attempt_number or shows passed, lock the assessment UI
-              // attempt_number comes from backend's saved submission; fallback to attempts in topic_progress if needed.
-              const attemptsFromSubmission = sj.attempt_number || sj.attempts || 0;
-              if (sj.passed === true || attemptsFromSubmission >= 3) {
-                setLocked(true);
-              } else {
-                setLocked(false);
-              }
-            }
+        // Shuffle questions and choices for presentation
+        let qlist = Array.isArray(json.questions) ? [...json.questions] : [];
+        qlist = shuffle(qlist);
+        qlist = qlist.map((q) => {
+          if (q.type === "multiple_choice" && Array.isArray(q.choices)) {
+            return { ...q, choices: shuffle(q.choices) };
           }
-        } else {
-          // no assessment found
-          if (mounted) setAssessment(null);
+          return q;
+        });
+
+        if (!mounted) return;
+        setAssessment({ ...json, questions: qlist });
+
+        // Load latest submission (if any)
+        const subRes = await fetch(`${API_BASE}/assessments/${topicId}/submission/${studentId}`);
+        let submissionJson = null;
+        if (subRes.ok) {
+          submissionJson = await subRes.json();
+          if (!mounted) return;
+          setSubmissionResult({ score: submissionJson.score, passed: submissionJson.passed });
+        }
+
+        // ALSO fetch latest student record (re-check topic_progress)
+        // This helps if submission vs student doc are slightly out of sync
+        try {
+          const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
+          if (stuRes.ok) {
+            const stu = await stuRes.json();
+            // re-sync seen indicator
+            if (mounted) setSeen(stu.content_seen || []);
+
+            // topic_progress from student doc
+            const tp = stu.topic_progress && stu.topic_progress[topicId] ? stu.topic_progress[topicId] : null;
+            const attemptsFromTP = tp ? (tp.attempts || 0) : 0;
+            const isLockedFromTP = tp ? (tp.locked === true || tp.completed === true || attemptsFromTP >= 3) : false;
+
+            // decide lock state using: submission doc (if present) OR topic_progress from student doc
+            const attemptsFromSubmission = submissionJson ? (submissionJson.attempt_number || submissionJson.attempts || 0) : 0;
+            const passedFromSubmission = submissionJson ? !!submissionJson.passed : false;
+
+            const finalLocked =
+              passedFromSubmission === true ||
+              attemptsFromSubmission >= 3 ||
+              isLockedFromTP;
+
+            if (mounted) setLocked(finalLocked);
+          }
+        } catch (e) {
+          console.warn("Failed to fetch student record while loading assessment:", e);
         }
       } catch (err) {
         console.error("Failed to load assessment:", err);
@@ -127,11 +147,15 @@ export default function StudentTopicContent() {
     }
 
     loadAssessment();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [tab, topicId, studentId]);
 
+  // If locked flips true while user is viewing assessment, redirect them back to content and show reason
   useEffect(() => {
     if (locked && tab === "assessment") {
+      alert("This assessment is locked (passed or maximum attempts reached). Redirecting to Content.");
       setTab("content");
     }
   }, [locked, tab]);
@@ -168,6 +192,14 @@ export default function StudentTopicContent() {
 
   // ---------- submitAssessment: returns to Content tab on success ----------
   async function submitAssessment() {
+    // Prevent submission when locked
+    if (locked) {
+      alert("This assessment is locked — you cannot submit anymore.");
+      // ensure we stay on content
+      setTab("content");
+      return;
+    }
+
     if (!assessment || !assessment.questions || assessment.questions.length === 0) {
       alert("No assessment available.");
       return;
@@ -198,7 +230,7 @@ export default function StudentTopicContent() {
 
       console.log("submit response", res.status, body);
 
-      // Treat as success if res.ok OR body contains expected fields (score/passed/mastered)
+      // Treat as success if res.ok OR body contains expected fields
       const looksSuccessful =
         res.ok ||
         (body && (typeof body.score === "number" || body.success === true || typeof body.mastered !== "undefined"));
@@ -207,7 +239,7 @@ export default function StudentTopicContent() {
         const msg = (body && (body.error || body.message)) || "Failed to submit assessment";
         // If server responded with mastered info in body despite non-ok, treat as success:
         if (body && body.mastered) {
-          // proceed as success path below (refresh student, dispatch events, setTab)
+          // proceed as success path below
         } else {
           console.error("submit failed:", res.status, body);
           alert(msg);
@@ -215,7 +247,6 @@ export default function StudentTopicContent() {
         }
       }
 
-      // normalize JSON body
       const json = typeof body === "object" ? body : {};
 
       // update local submission result for UI
@@ -225,12 +256,17 @@ export default function StudentTopicContent() {
       if (json.mastered === true || (json.attempts && json.attempts >= 3) || json.passed === true) {
         setLocked(true);
       }
+
       // refresh student record (so dashboard/sidebar picks up mastered/recommended)
       try {
         const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
         if (stuRes.ok) {
           const stu = await stuRes.json();
           setSeen(stu.content_seen || []);
+          // also double-check tp if server response lacked attempts/mastered
+          const tp = stu.topic_progress && stu.topic_progress[topicId] ? stu.topic_progress[topicId] : null;
+          const isLockedFromTP = tp ? (tp.locked === true || tp.completed === true || (tp.attempts || 0) >= 3) : false;
+          if (isLockedFromTP) setLocked(true);
         }
       } catch (e) {
         console.warn("Failed to refresh student after submit:", e);
@@ -262,7 +298,8 @@ export default function StudentTopicContent() {
       setTab("content");
     } catch (err) {
       console.error("submitAssessment network/error:", err);
-      alert("Failed to submit assessment (network error).");
+      // If network error, still warn user
+      alert("Failed to submit assessment (network error). Your attempt may or may not have been recorded.");
     } finally {
       setSubmitting(false);
     }
@@ -309,7 +346,7 @@ export default function StudentTopicContent() {
             borderRadius: 8,
             border: tab === "assessment" ? "2px solid #2563eb" : "1px solid #e5e7eb",
             background: locked
-              ? "#f3f4f6"      // greyed out background
+              ? "#f3f4f6"      // greyed out background when locked
               : tab === "assessment"
               ? "#eef2ff"
               : "#fff",
@@ -381,6 +418,7 @@ export default function StudentTopicContent() {
                             name={q.question_id}
                             checked={answers[q.question_id] === c}
                             onChange={() => setAnswer(q.question_id, c)}
+                            disabled={locked}
                           />
                           <span>{c}</span>
                         </label>
@@ -394,6 +432,7 @@ export default function StudentTopicContent() {
                       onChange={(e) => setAnswer(q.question_id, e.target.value)}
                       placeholder="Type your answer"
                       style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
+                      disabled={locked}
                     />
                   )}
 
@@ -404,6 +443,7 @@ export default function StudentTopicContent() {
                       onChange={(e) => setAnswer(q.question_id, e.target.value)}
                       placeholder="Numeric answer"
                       style={{ width: "200px", padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
+                      disabled={locked}
                     />
                   )}
 
@@ -415,6 +455,7 @@ export default function StudentTopicContent() {
                         onChange={(e) => setAnswer(q.question_id, e.target.value.split("|").map(s => s.trim()))}
                         placeholder="item1 | item2 | item3"
                         style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
+                        disabled={locked}
                       />
                     </>
                   )}
@@ -430,7 +471,17 @@ export default function StudentTopicContent() {
 
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => setTab("content")} style={{ background: "#ddd", padding: "8px 12px", borderRadius: 6 }}>Back to Content</button>
-                <button onClick={submitAssessment} disabled={submitting} style={{ background: "#2563eb", color: "#fff", padding: "8px 12px", borderRadius: 6 }}>
+                <button
+                  onClick={submitAssessment}
+                  disabled={submitting || locked}
+                  style={{
+                    background: submitting || locked ? "#94a3b8" : "#2563eb",
+                    color: "#fff",
+                    padding: "8px 12px",
+                    borderRadius: 6,
+                    cursor: submitting || locked ? "not-allowed" : "pointer"
+                  }}
+                >
                   {submitting ? "Submitting..." : "Submit Assessment"}
                 </button>
               </div>
