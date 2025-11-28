@@ -809,34 +809,36 @@ app.post("/assessments", async (req, res) => {
 /**
  * POST /assessments/:topicId/submit
  * body: { student_id, answers: [{question_id, student_answer}, ...] }
- * Grades submission, stores it, updates master's list if passed or after 3 attempts.
+ * Grades submission, stores it, updates student's topic_progress and mastered (atomic).
  */
 app.post("/assessments/:topicId/submit", async (req, res) => {
   try {
-    const topicId = req.params.topicId;
+    const { topicId } = req.params;
     const { student_id, answers } = req.body;
     if (!student_id || !Array.isArray(answers)) {
       return res.status(400).json({ error: "student_id and answers[] required" });
     }
 
+    // load assessment
     const docId = `${topicId}_assessment`;
     const docSnap = await db.collection("assessments").doc(docId).get();
     if (!docSnap.exists) return res.status(404).json({ error: "Assessment not found" });
     const assessment = docSnap.data();
 
-    // COUNT prior attempts (deterministic)
+    // ---------- count prior attempts (deterministic) ----------
     const priorSnap = await db.collection("assessment_submissions")
       .where("topic_id", "==", topicId)
       .where("student_id", "==", student_id)
       .get();
     const priorAttempts = priorSnap.size || 0;
-    const attemptNumber = priorAttempts + 1;
+    const attempts = priorAttempts + 1;
 
-    // GRADE
+    // ---------- grade ----------
     const items = assessment.questions.map((q) => {
       const ansObj = answers.find(a => a.question_id === q.question_id);
       const studentAnswer = ansObj ? ansObj.student_answer : null;
       let isCorrect = false;
+
       if (q.type === "multiple_choice" || q.type === "short_answer") {
         isCorrect = studentAnswer != null && String(studentAnswer).trim() === String(q.answer).trim();
       } else if (q.type === "ordering" || q.type === "drag_sort") {
@@ -846,6 +848,7 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
       } else {
         isCorrect = String(studentAnswer || "") === String(q.answer || "");
       }
+
       return {
         question_id: q.question_id,
         student_answer: studentAnswer,
@@ -859,7 +862,7 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
     const score = totalPoints > 0 ? Math.round((earned / totalPoints) * 100) : 0;
     const passed = score >= (assessment.passing_score ?? 70);
 
-    // Save submission (non-transactional add is ok here)
+    // ---------- save submission (always) ----------
     const submission = {
       assessment_id: docId,
       topic_id: topicId,
@@ -868,66 +871,79 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
       score,
       passed,
       attempted_at: new Date().toISOString(),
-      attempt_number: attemptNumber
+      attempt_number: attempts
     };
     await db.collection("assessment_submissions").add(submission);
 
-    // Now atomically update student.topic_progress and mastered using a transaction
+    // ---------- update student topic_progress and mastered/lock atomically using a transaction ----------
     const studentRef = db.collection("students").doc(student_id);
-    await db.runTransaction(async (tx) => {
-      const sdSnap = await tx.get(studentRef);
-      const sd = sdSnap.exists ? sdSnap.data() : {};
+
+    // We'll use a transaction so we both set topic_progress and mastered in one atomic operation
+    const result = await db.runTransaction(async (tx) => {
+      const studentDoc = await tx.get(studentRef);
+      const sd = studentDoc.exists ? studentDoc.data() : {};
 
       const existingTP = sd.topic_progress || {};
       const tpForTopic = {
         ...(existingTP[topicId] || {}),
-        attempts: attemptNumber,
+        attempts: attempts,
         last_score: score,
         last_attempted_at: new Date().toISOString(),
         passed: passed
       };
 
-      const shouldLockOrMaster = passed || attemptNumber >= 3;
-      if (shouldLockOrMaster) {
+      const shouldLock = passed || attempts >= 3;
+      if (shouldLock) {
         tpForTopic.completed = true;
         tpForTopic.locked = true;
-        tpForTopic.passed_at = passed ? new Date().toISOString() : undefined;
+        if (passed) tpForTopic.passed_at = new Date().toISOString();
       }
 
-      // prepare updated topic_progress
+      // prepare new topic_progress map
       const newTopicProgress = {
         ...existingTP,
         [topicId]: tpForTopic
       };
 
-      // update mastered array if needed
-      const mastered = Array.isArray(sd.mastered) ? sd.mastered.map(m => (typeof m === "object" ? m.id : m)) : [];
+      // prepare mastered list (preserve existing)
+      let mastered = Array.isArray(sd.mastered) ? sd.mastered.map(m => (typeof m === "object" ? m.id : m)) : [];
       let masteredAdded = false;
-      if (shouldLockOrMaster && !mastered.includes(topicId)) {
+      if (shouldLock && !mastered.includes(topicId)) {
         mastered.push(topicId);
         masteredAdded = true;
       }
 
-      // Commit the two fields atomically
+      // write both pieces in transaction
       tx.set(studentRef, { topic_progress: newTopicProgress, mastered }, { merge: true });
+
+      return { shouldLock, masteredAdded };
     });
 
-    // Trigger recommendations (best effort)
-    try { await updateRecommendedAfterMastered(student_id, topicId); } catch (e) { console.error("recommendation failed:", e); }
+    // Attempt recommended update if we just mastered a topic (non-blocking)
+    if (result.shouldLock) {
+      try {
+        await updateRecommendedAfterMastered(student_id, topicId);
+      } catch (err) {
+        console.error("Non-fatal: updateRecommendedAfterMastered failed:", err);
+      }
+      console.log(`✅ Student ${student_id} mastered ${topicId} (passed: ${passed}, attempts: ${attempts})`);
+    } else {
+      console.log(`ℹ️ Submission for ${student_id} on ${topicId}: score=${score}, passed=${passed}, attempts=${attempts}`);
+    }
 
-    // Respond with authoritative info
+    // ---------- respond with authoritative fields so frontend can immediately lock UI ----------
     return res.status(200).json({
       success: true,
       score,
       passed,
-      attempts: attemptNumber,
-      attempt_number: attemptNumber,
-      mastered: (passed || attemptNumber >= 3)
+      attempts,
+      mastered: !!result.shouldLock
     });
+
   } catch (err) {
     console.error("POST /assessments/:topicId/submit", err);
-    // return a 200-shaped response so frontend still shows score but flag failure
-    return res.status(200).json({ success: false, error: "Server error while submitting. Attempt may be recorded." });
+    // Return 500 with a clear message; frontend fallback will re-check student doc.
+    return res.status(500).json({ error: "Server error while submitting. Your attempt may still be recorded." });
   }
 });
 

@@ -252,9 +252,47 @@ export default function StudentTopicContent() {
       // update local submission result for UI
       setSubmissionResult({ score: json.score ?? null, passed: json.passed ?? false });
 
-      // also update local locked state if server says mastered/locked or attempts >= 3
+      // update local submission result for UI
+      setSubmissionResult({ score: json.score ?? null, passed: json.passed ?? false });
+
+      // If backend explicitly tells us to lock, do it. Otherwise, re-check server state to be safe.
       if (json.mastered === true || (json.attempts && json.attempts >= 3) || json.passed === true) {
         setLocked(true);
+      } else {
+        // If response didn't include attempts/mastered information, fetch authoritative state
+        let attemptsFromResponse = json.attempts || null;
+        let masteredFromResponse = typeof json.mastered !== "undefined" ? json.mastered : null;
+
+        if (attemptsFromResponse === null || masteredFromResponse === null) {
+          try {
+            // get latest submission (if any)
+            const subRes = await fetch(`${API_BASE}/assessments/${topicId}/submission/${studentId}`);
+            if (subRes.ok) {
+              const subJson = await subRes.json();
+              attemptsFromResponse = attemptsFromResponse ?? (subJson.attempt_number || subJson.attempts || 0);
+              masteredFromResponse = masteredFromResponse ?? subJson.mastered ?? null;
+            }
+          } catch (e) {
+            console.warn("Failed to fetch latest submission during fallback:", e);
+          }
+
+          // fetch student document and inspect topic_progress
+          try {
+            const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
+            if (stuRes.ok) {
+              const stu = await stuRes.json();
+              const tp = stu.topic_progress && stu.topic_progress[topicId] ? stu.topic_progress[topicId] : null;
+              const attemptsFromTP = tp ? (tp.attempts || 0) : 0;
+              const lockedFromTP = tp ? (tp.locked === true || tp.completed === true || attemptsFromTP >= 3) : false;
+
+              // final decision
+              const finalLocked = lockedFromTP || (attemptsFromResponse >= 3) || (masteredFromResponse === true) || (json.passed === true);
+              if (finalLocked) setLocked(true);
+            }
+          } catch (e) {
+            console.warn("Failed to fetch student doc during fallback:", e);
+          }
+        }
       }
 
       // refresh student record (so dashboard/sidebar picks up mastered/recommended)
