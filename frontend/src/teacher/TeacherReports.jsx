@@ -209,15 +209,48 @@ export default function TeacherReports() {
       const json = await res.json();
       let attempts = json.attempts || [];
 
-      // Sort attempts descending by attempted_at if present
-      attempts.sort((a,b) => (new Date(b.attempted_at || 0) - new Date(a.attempted_at || 0)));
+      // Normalize fields for each attempt so UI can rely on consistent names
+      attempts = attempts.map(a => {
+        const attemptNumber = a.attempt_number ?? a.attemptNumber ?? a.attempt ?? null;
+        const attemptedAt = a.attempted_at ?? a.attemptedAt ?? null;
 
-      // FALLBACK: if the endpoint returned no attempts but student.topic_progress exists,
-      // synthesize a readable attempts list from topic_progress so modal can show something.
+        // Ensure items array exists
+        const items = Array.isArray(a.items) ? a.items : [];
+
+        // compute earned/total when possible
+        const earned = items.reduce((acc, it) => acc + (Number(it.points_awarded || 0)), 0);
+        const totalQ = items.length;
+        // If the backend provided totalPoints/earnedPoints, prefer that (compat)
+        const earnedPoints = (typeof a.earnedPoints === "number") ? a.earnedPoints : earned;
+        const totalPoints = (typeof a.totalPoints === "number") ? a.totalPoints : totalQ;
+
+        // keep score if present (percent), else compute percent from score or items
+        const score = (typeof a.score === "number") ? a.score : (a.score ?? null);
+        const percentFromItems = totalPoints ? Math.round((earnedPoints / (totalPoints || 1)) * 100) : null;
+
+        return {
+          ...a,
+          attempt_number: attemptNumber,
+          attempted_at: attemptedAt,
+          items,
+          earnedPoints,
+          totalPoints,
+          score,
+          percentFromItems,
+        };
+      });
+
+      // Sort attempts: prefer attempted_at desc, else attempt_number desc
+      attempts.sort((x, y) => {
+        const tA = x.attempted_at ? new Date(x.attempted_at).getTime() : (x.attempt_number ?? 0);
+        const tB = y.attempted_at ? new Date(y.attempted_at).getTime() : (y.attempt_number ?? 0);
+        return tB - tA;
+      });
+
+      // FALLBACK: synthesize attempts from student.topic_progress if endpoint returned none
       if ((!attempts || attempts.length === 0) && student && student.topic_progress && typeof student.topic_progress === "object") {
         const synth = [];
         Object.entries(student.topic_progress).forEach(([tid, tp]) => {
-          // Only synthesize if attempts > 0 or a last_attempted_at exists
           const atCount = Number(tp.attempts || 0);
           if (atCount > 0 || tp.last_attempted_at) {
             synth.push({
@@ -229,11 +262,12 @@ export default function TeacherReports() {
               attempt_number: tp.attempts || null,
               attempted_at: tp.last_attempted_at || null,
               items: [],
+              earnedPoints: 0,
+              totalPoints: 0,
               synthesized: true
             });
           }
         });
-        // sort synthesized by attempted_at desc
         synth.sort((a,b) => (new Date(b.attempted_at || 0) - new Date(a.attempted_at || 0)));
         if (synth.length) attempts = synth;
       }
@@ -601,36 +635,26 @@ export default function TeacherReports() {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {attemptsForTopic.map((at, idx) => {
-                                    // compute earned & totalPossible from items if available
-                                    let earned = null;
-                                    let totalPossible = null;
-                                    if (Array.isArray(at.items) && at.items.length) {
-                                      earned = at.items.reduce((acc, it) => acc + (Number(it.points_awarded || 0)), 0);
-                                      totalPossible = at.items.reduce((acc, it) => acc + (Number(it.points ?? 1)), 0);
-                                    }
+                                  {attemptsForTopic.map((at, idx) => (
+                                    <tr key={at.id || `${at.assessment_id}-${String(at.attempt_number || idx+1)}`} style={{ borderBottom: "1px solid #fafafa" }}>
+                                      <td style={{ padding: 8 }}>{at.attempt_number ?? (idx + 1)}</td>
 
-                                    // percent fallback if score number stored (0-100)
-                                    const percentDisplay = (typeof at.score === "number") ? `${at.score}%` : null;
+                                      <td style={{ padding: 8 }}>
+                                        {Array.isArray(at.items) && at.items.length ? (
+                                          // show earned/total and percent
+                                          (() => {
+                                            const earned = Number(at.earnedPoints ?? 0);
+                                            const total = Number(at.totalPoints ?? at.items.length ?? 0);
+                                            const pct = (typeof at.score === "number") ? `${at.score}%` : (total ? `${Math.round((earned / total) * 100)}%` : "-");
+                                            return `${earned}/${total}${total ? ` (${pct})` : pct === "-" ? "" : ` (${pct})`}`;
+                                          })()
+                                        ) : (typeof at.score === "number" ? `${at.score}%` : (at.score ?? (at.percentFromItems !== null ? `${at.percentFromItems}%` : "-")))}
+                                      </td>
 
-                                    return (
-                                      <tr key={at.id || `${at.assessment_id}-${at.attempt_number || idx}`} style={{ borderBottom: "1px solid #fafafa" }}>
-                                        <td style={{ padding: 8, textAlign: "center" }}>
-                                          {at.attempt_number != null ? at.attempt_number : (idx + 1)}
-                                        </td>
-                                        <td style={{ padding: 8, textAlign: "center" }}>
-                                          {earned != null && totalPossible != null ? (
-                                            (() => {
-                                              const pct = totalPossible ? Math.round((earned / totalPossible) * 100) : 0;
-                                              return `${earned}/${totalPossible} (${pct}%)`;
-                                            })()
-                                          ) : (percentDisplay ? percentDisplay : (at.score != null ? at.score : "-"))}
-                                        </td>
-                                        <td style={{ padding: 8, textAlign: "center" }}>{at.passed ? "Yes" : "No"}</td>
-                                        <td style={{ padding: 8, textAlign: "center" }}>{at.attempted_at ? new Date(at.attempted_at).toLocaleString() : "-"}</td>
-                                      </tr>
-                                    );
-                                  })}
+                                      <td style={{ padding: 8 }}>{at.passed ? "Yes" : "No"}</td>
+                                      <td style={{ padding: 8 }}>{at.attempted_at ? new Date(at.attempted_at).toLocaleString() : "-"}</td>
+                                    </tr>
+                                  ))}
                                 </tbody>
                               </table>
                             </div>

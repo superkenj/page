@@ -494,18 +494,29 @@ app.get("/reports/student/:id/attempts", async (req, res) => {
 
     const attempts = snap.docs.map(d => {
       const dd = d.data();
+
+      // normalize attempt number field (support multiple naming patterns)
+      const attemptNumber = dd.attempt_number ?? dd.attemptNumber ?? dd.attempt ?? null;
+
+      const items = Array.isArray(dd.items) ? dd.items : [];
+
+      // compute earned / total points from items if they exist
+      const earnedPoints = items.reduce((acc, it) => acc + (Number(it.points_awarded || 0)), 0);
+      const totalPoints = items.length ? items.reduce((acc, it) => acc + (Number(it.points_possible || 1) || 1), 0) : items.length;
+
       return {
         id: d.id,
-        assessment_id: dd.assessment_id,
-        assessmentTitle: dd.assessment_id, // fallback; frontend can map using assessments list
-        topic_id: dd.topic_id,
-        score: dd.score,
-        passed: dd.passed,
-        attempt_number: dd.attempt_number,
-        attempted_at: dd.attempted_at,
-        items: dd.items || [],
-        // duration if stored later
-        durationSeconds: dd.durationSeconds ?? null,
+        assessment_id: dd.assessment_id ?? dd.assessmentId ?? null,
+        assessmentTitle: dd.assessment_id ?? dd.assessmentId ?? dd.topic_id ?? null,
+        topic_id: dd.topic_id ?? dd.topicId ?? null,
+        score: (typeof dd.score === "number") ? dd.score : (dd.score ?? null),
+        passed: !!dd.passed,
+        attempt_number: attemptNumber,
+        attempted_at: dd.attempted_at ?? dd.attemptedAt ?? null,
+        items,
+        earnedPoints,   // number (0 if no items)
+        totalPoints,    // number (0 if no items)
+        raw: dd,        // raw document if frontend wants more
       };
     });
 
