@@ -1,4 +1,4 @@
-// frontend/src/pages/TopicsGraph.jsx
+// frontend/src/teacher/TopicsGraph.jsx
 import React, { useEffect, useState, useRef } from "react";
 import { ForceGraph2D } from "react-force-graph";
 
