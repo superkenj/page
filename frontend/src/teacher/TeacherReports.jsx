@@ -551,16 +551,18 @@ export default function TeacherReports() {
       </div>
 
       {/* Modal: student detail => show assessments taken grouped by topic */}
+      {/* Modal: student detail => show assessments taken grouped by topic */}
       {modalOpen && studentDetail && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.4)",
+            background: "rgba(0,0,0,0.45)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             zIndex: 9999,
+            padding: 20,
           }}
           onClick={() => {
             setModalOpen(false);
@@ -568,118 +570,185 @@ export default function TeacherReports() {
           }}
         >
           <div
-            onClick={e => e.stopPropagation()}
-            style={{ width: 900, maxHeight: "80vh", overflowY: "auto", background: "#fff", padding: 16, borderRadius: 8 }}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 960,
+              maxHeight: "86vh",
+              overflowY: "auto",
+              background: "#fff",
+              borderRadius: 12,
+              padding: 18,
+              boxShadow: "0 20px 40px rgba(2,6,23,0.35)",
+              border: "1px solid rgba(20,40,80,0.06)",
+            }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ margin: 0 }}>{studentDetail.student.name} — Assessment Attempts</h3>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <div>
-                <button onClick={() => { setModalOpen(false); setStudentDetail(null); }} style={{ padding: 6, borderRadius: 6 }}>
+                <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a", letterSpacing: 0.2 }}>
+                  {studentDetail.student.name} — <span style={{ fontWeight: 500, color: "#475569" }}>Assessment Attempts</span>
+                </h3>
+                <div style={{ marginTop: 6, fontSize: 13, color: "#64748b" }}>
+                  Review attempts grouped by topic. Click Close to return.
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button
+                  onClick={() => {
+                    setModalOpen(false);
+                    setStudentDetail(null);
+                  }}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(2,6,23,0.12)",
+                    background: "#fff",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
                   Close
                 </button>
               </div>
             </div>
 
             {studentDetail.loading ? (
-              <div>Loading attempts...</div>
+              <div style={{ padding: 12, color: "#475569" }}>Loading attempts...</div>
             ) : studentDetail.error ? (
               <div style={{ color: "red" }}>Failed to load attempts.</div>
             ) : (
-              <>
-                <div style={{ marginTop: 12 }}>
-                  {/* Debug: log what the backend returned for attempts */}
-                  {console.log("studentDetail.attempts", studentDetail.attempts, "student:", studentDetail.student.id)}
+              <div style={{ display: "grid", gap: 14 }}>
+                {/* If no attempts were returned, show explicit message */}
+                {(!Array.isArray(studentDetail.attempts) || studentDetail.attempts.length === 0) ? (
+                  <div style={{ padding: 14, background: "#fff8f6", border: "1px solid #ffede9", borderRadius: 8, color: "#7f1d1d" }}>
+                    No assessment attempts found for this student.
+                  </div>
+                ) : (
+                  (() => {
+                    const byTopic = {};
+                    studentDetail.attempts.forEach((a) => {
+                      const tid = a.topic_id || a.assessment_id || "unknown";
+                      if (!byTopic[tid]) byTopic[tid] = [];
+                      byTopic[tid].push(a);
+                    });
 
-                  {/* If no attempts were returned, show explicit message */}
-                  {(!Array.isArray(studentDetail.attempts) || studentDetail.attempts.length === 0) ? (
-                    <div style={{ padding: 12, background: "#fff3f2", border: "1px solid #ffe4e6", borderRadius: 6, color: "#9f1239" }}>
-                      No assessment attempts found for this student.
-                    </div>
-                  ) : (
-                    // Group attempts by topic_id and render them
-                    (() => {
-                      const byTopic = {};
-                      studentDetail.attempts.forEach(a => {
-                        const tid = a.topic_id || a.assessment_id || "unknown";
-                        if (!byTopic[tid]) byTopic[tid] = [];
-                        byTopic[tid].push(a);
+                    return Object.entries(byTopic).map(([tid, attemptsForTopic]) => {
+                      // find topic title from data.topics or assessments
+                      const topicObj =
+                        (data.topics || []).find((t) => t.id === tid) ||
+                        (data.assessments || []).find((a) => a.topic_id === tid) ||
+                        null;
+                      const topicTitle = topicObj ? (topicObj.name || topicObj.title || topicObj.id) : tid;
+
+                      // sort attempts ascending by attempt_number (if present) else by date ascending
+                      attemptsForTopic.sort((x, y) => {
+                        const ax = x.attempt_number != null ? x.attempt_number : (x.attempted_at ? new Date(x.attempted_at).getTime() : 0);
+                        const ay = y.attempt_number != null ? y.attempt_number : (y.attempted_at ? new Date(y.attempted_at).getTime() : 0);
+                        return ax - ay;
                       });
 
-                      // render sections
-                      return Object.entries(byTopic).map(([tid, attemptsForTopic]) => {
-                        // find topic title from data.topics
-                        const topicObj = (data.topics || []).find(t => t.id === tid) || (data.assessments || []).find(a => a.topic_id === tid);
-                        const topicTitle = topicObj ? (topicObj.name || topicObj.title || topicObj.id) : tid;
-
-                        // sort attempts ascending by attempt_number (if present) else by date
-                        attemptsForTopic.sort((x,y) => {
-                          const ax = (x.attempt_number != null) ? x.attempt_number : (x.attempted_at ? new Date(x.attempted_at).getTime() : 0);
-                          const ay = (y.attempt_number != null) ? y.attempt_number : (y.attempted_at ? new Date(y.attempted_at).getTime() : 0);
-                          return ax - ay;
-                        });
-
-                        return (
-                          <div key={tid} style={{ marginBottom: 14, border: "1px solid #eef2ff", padding: 12, borderRadius: 6 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                              <strong style={{ textAlign: "left" }}>{topicTitle}</strong>
-                              <span style={{ fontSize: 13, color: "#555" }}>{attemptsForTopic.length} attempt(s)</span>
+                      return (
+                        <div
+                          key={tid}
+                          style={{
+                            borderRadius: 10,
+                            padding: 12,
+                            border: "1px solid rgba(14, 42, 80, 0.06)",
+                            background: "linear-gradient(180deg, #ffffff, #fbfdff)",
+                            boxShadow: "0 8px 18px rgba(15,23,42,0.04)",
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                              <div style={{
+                                width: 8,
+                                height: 32,
+                                borderRadius: 4,
+                                background: "linear-gradient(180deg,#2563eb,#60a5fa)"
+                              }} />
+                              <div>
+                                <div style={{ fontWeight: 700, color: "#0f172a" }}>{topicTitle}</div>
+                                <div style={{ fontSize: 12, color: "#64748b" }}>{/* optional subtitle - empty for now */}</div>
+                              </div>
                             </div>
 
-                            {/* center the table block under the topic header */}
-                            <div style={{ display: "flex", justifyContent: "center" }}>
-                              <table 
-                                style={{
-                                  width: "92%",
-                                  borderCollapse: "collapse",
-                                  marginTop: 6,
-                                  tableLayout: "fixed",        // <- important: stable column widths
-                                  borderSpacing: 0,
-                                }}
-                              >
-                                <colgroup>
-                                  <col style={{ width: 100 }} />   {/* Attempt # */}
-                                  <col style={{ width: 180 }} />   {/* Score */}
-                                  <col style={{ width: 120 }} />   {/* Passed */}
-                                  <col />                          {/* Submitted - flexible */}
-                                </colgroup>
-                                <thead>
-                                  <tr style={{ textAlign: "center", borderBottom: "1px solid #eee" }}>
-                                    <th style={{ padding: 8, verticalAlign: "middle" }}>Attempt #</th>
-                                    <th style={{ padding: 8, verticalAlign: "middle" }}>Score</th>
-                                    <th style={{ padding: 8, verticalAlign: "middle" }}>Passed</th>
-                                    <th style={{ padding: 8, verticalAlign: "middle" }}>Submitted</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {attemptsForTopic.map((at, idx) => (
-                                    <tr key={at.id || `${at.assessment_id}-${String(at.attempt_number || idx+1)}`} style={{ borderBottom: "1px solid #fafafa" }}>
-                                      <td style={{ padding: 8, textAlign: "center", verticalAlign: "middle" }}>{at.attempt_number ?? (idx + 1)}</td>
-
-                                      <td style={{ padding: 8, textAlign: "center", verticalAlign: "middle" }}>
-                                        {Array.isArray(at.items) && at.items.length ? (
-                                          // show earned/total and percent
-                                          (() => {
-                                            const earned = Number(at.earnedPoints ?? 0);
-                                            const total = Number(at.totalPoints ?? at.items.length ?? 0);
-                                            const pct = (typeof at.score === "number") ? `${at.score}%` : (total ? `${Math.round((earned / total) * 100)}%` : "-");
-                                            return `${earned}/${total}${total ? ` (${pct})` : pct === "-" ? "" : ` (${pct})`}`;
-                                          })()
-                                        ) : (typeof at.score === "number" ? `${at.score}%` : (at.score ?? (at.percentFromItems !== null ? `${at.percentFromItems}%` : "-")))}
-                                      </td>
-                                      <td style={{ padding: 8, textAlign: "center", verticalAlign: "middle" }}>{at.passed ? "Yes" : "No"}</td>
-                                      <td style={{ padding: 8, textAlign: "center", verticalAlign: "middle" }}>{at.attempted_at ? new Date(at.attempted_at).toLocaleString() : "-"}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                            <div style={{ textAlign: "right" }}>
+                              <span style={{
+                                display: "inline-block",
+                                fontSize: 12,
+                                padding: "6px 10px",
+                                borderRadius: 18,
+                                background: "#eef2ff",
+                                color: "#1e40af",
+                                fontWeight: 700,
+                                border: "1px solid rgba(37,99,235,0.08)"
+                              }}>
+                                {attemptsForTopic.length} attempt(s)
+                              </span>
                             </div>
                           </div>
-                        );
-                      });
-                    })()
-                  )}
-                </div>
-              </>
+
+                          {/* centered table block */}
+                          <div style={{ display: "flex", justifyContent: "center" }}>
+                            <table
+                              style={{
+                                width: "94%",
+                                borderCollapse: "collapse",
+                                marginTop: 6,
+                                tableLayout: "fixed",
+                                fontSize: 14,
+                                color: "#0b1220"
+                              }}
+                            >
+                              <colgroup>
+                                <col style={{ width: 90 }} />
+                                <col style={{ width: 170 }} />
+                                <col style={{ width: 110 }} />
+                                <col />
+                              </colgroup>
+
+                              <thead>
+                                <tr style={{ textAlign: "center", borderBottom: "1px solid #e6eefc" }}>
+                                  <th style={{ padding: "10px 8px", verticalAlign: "middle", fontWeight: 700 }}>Attempt #</th>
+                                  <th style={{ padding: "10px 8px", verticalAlign: "middle", fontWeight: 700 }}>Score</th>
+                                  <th style={{ padding: "10px 8px", verticalAlign: "middle", fontWeight: 700 }}>Passed</th>
+                                  <th style={{ padding: "10px 8px", verticalAlign: "middle", fontWeight: 700 }}>Submitted</th>
+                                </tr>
+                              </thead>
+
+                              <tbody>
+                                {attemptsForTopic.map((at, idx) => {
+                                  const attemptNumber = at.attempt_number ?? (idx + 1);
+                                  const earned = Number(at.earnedPoints ?? 0);
+                                  const total = Number(at.totalPoints ?? (Array.isArray(at.items) ? at.items.length : 0));
+                                  const pct = (typeof at.score === "number") ? `${at.score}%` : (total ? `${Math.round((earned / (total || 1)) * 100)}%` : "-");
+                                  const scoreDisplay = Array.isArray(at.items) && at.items.length
+                                    ? `${earned}/${total} (${pct})`
+                                    : (typeof at.score === "number" ? `${at.score}%` : (at.score ?? (at.percentFromItems !== null ? `${at.percentFromItems}%` : "-")));
+
+                                  return (
+                                    <tr key={at.id || `${tid}-${attemptNumber}`} style={{ borderBottom: "1px solid #f4f8ff", background: idx % 2 === 0 ? "transparent" : "#fbfdff" }}>
+                                      <td style={{ padding: "10px 8px", textAlign: "center", verticalAlign: "middle", color: "#0f172a" }}>{attemptNumber}</td>
+                                      <td style={{ padding: "10px 8px", textAlign: "center", verticalAlign: "middle", color: "#0f172a" }}>{scoreDisplay}</td>
+                                      <td style={{ padding: "10px 8px", textAlign: "center", verticalAlign: "middle", color: at.passed ? "#065f46" : "#7f1d1d", fontWeight: 600 }}>
+                                        {at.passed ? "Yes" : "No"}
+                                      </td>
+                                      <td style={{ padding: "10px 8px", textAlign: "center", verticalAlign: "middle", color: "#475569" }}>
+                                        {at.attempted_at ? new Date(at.attempted_at).toLocaleString() : "-"}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()
+                )}
+              </div>
             )}
           </div>
         </div>
