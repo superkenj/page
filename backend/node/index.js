@@ -250,16 +250,70 @@ app.get("/reports/performance", async (req, res) => {
     const contents = contentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     const topicsMap = Object.fromEntries(topics.map(t => [t.id, t]));
 
+    const subsSnap = await db.collection("assessment_submissions").get();
+
+    // build map: studentId -> { attempts, lastScore, lastAttemptedAt, perTopic }
+    const subsByStudent = {};
+    subsSnap.docs.forEach(doc => {
+      const d = doc.data();
+      const sid = d.student_id;
+      if (!sid) return; // defensive: skip malformed submissions
+
+      if (!subsByStudent[sid]) subsByStudent[sid] = { attempts: 0, lastScore: null, lastAttemptedAt: null, perTopic: {} };
+      subsByStudent[sid].attempts += 1;
+
+      // normalize attempted_at names (your submissions use attempted_at)
+      const attemptedAt = d.attempted_at || d.attemptedAt || null;
+      if (!subsByStudent[sid].lastAttemptedAt || (attemptedAt && new Date(attemptedAt) > new Date(subsByStudent[sid].lastAttemptedAt))) {
+        subsByStudent[sid].lastAttemptedAt = attemptedAt;
+        subsByStudent[sid].lastScore = (typeof d.score === "number") ? d.score : (d.score ?? null);
+      }
+
+      // per-topic summary: keep highest score per topic
+      const tid = d.topic_id || d.topicId || null;
+      if (tid) {
+        subsByStudent[sid].perTopic[tid] = Math.max(subsByStudent[sid].perTopic[tid] || 0, Number(d.score ?? 0));
+      }
+    });
+
+    // Now build students array with attempts + progress heuristic
     const students = [];
     studentsSnap.forEach(doc => {
       const d = doc.data();
       const score = d.score ?? d.scores?.general ?? 0;
       const final = d.final ?? d.finals?.general ?? 100;
       const status = Number(score) >= Number(final) * 0.5 ? "PASS" : "FAIL";
+
       const mastered = Array.isArray(d.mastered) ? d.mastered : [];
       const recommended = Array.isArray(d.recommended) ? d.recommended : [];
+
+      const sid = doc.id;
+      const subs = subsByStudent[sid] || { attempts: 0, lastScore: null, perTopic: {} };
+
+      // Progress heuristic — choose the most meaningful available metric
+      let progress = null;
+      if (typeof d.progress === "number") {
+        progress = Math.round(d.progress);
+      } else if (d.masteryScore && typeof d.masteryScore === "number") {
+        // backend might expose 0-1 masteryScore
+        progress = d.masteryScore <= 1 ? Math.round(d.masteryScore * 100) : Math.round(d.masteryScore);
+      } else if (d.topic_progress && typeof d.topic_progress === "object") {
+        const tp = d.topic_progress;
+        const totalTp = Object.keys(tp).length || 0;
+        if (totalTp > 0) {
+          const done = Object.values(tp).filter(x => x && x.completed).length;
+          progress = Math.round((done / totalTp) * 100);
+        }
+      } else if (Object.keys(subs.perTopic || {}).length) {
+        const vals = Object.values(subs.perTopic).map(v => Number(v || 0));
+        progress = vals.length ? Math.round(vals.reduce((a,b)=>a+b,0) / vals.length) : null;
+      } else if (Array.isArray(d.mastered) && topics.length) {
+        progress = Math.round((d.mastered.length / topics.length) * 100);
+      }
+      if (progress === null) progress = 0;
+
       students.push({
-        id: doc.id,
+        id: sid,
         name: d.name || "",
         gender: d.gender || "",
         score,
@@ -269,10 +323,9 @@ app.get("/reports/performance", async (req, res) => {
         recommendedCount: recommended.length,
         mastered,
         recommended,
-        // include a simple progress field if available (frontend will still compute fallback)
-        progress: typeof d.progress === "number" ? d.progress : undefined,
-        attempts: d.attempts ?? undefined,
-        // include topic_progress summary if present (helpful for frontend diagnostics)
+        progress,
+        attempts: subs.attempts || 0,
+        lastScore: subs.lastScore ?? null,
         topic_progress: d.topic_progress ?? undefined,
         email: d.email ?? undefined,
       });
