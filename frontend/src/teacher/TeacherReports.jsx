@@ -404,13 +404,14 @@ export default function TeacherReports() {
                           <div
                             title={tooltipText}
                             style={{
-                              flex: 1,
+                              width: "70%",
+                              maxWidth: 420,
+                              minWidth: 140,
                               background: "#f3f4f6",
                               height: 20,
                               borderRadius: 12,
                               overflow: "hidden",
-                              position: "relative", // needed for absolute centering of the label
-                              minWidth: 120
+                              position: "relative",
                             }}
                           >
                             {/* filled portion */}
@@ -443,15 +444,13 @@ export default function TeacherReports() {
                                 zIndex: 2,
                                 fontSize: 12,
                                 fontWeight: 700,
-                                color: "#000", // black for visibility on light and dark bars
+                                color: "#000",
                                 pointerEvents: "none",
                               }}
                             >
                               {`${attempted}/${totalTopics}`}
                             </div>
                           </div>
-
-                          <div style={{ width: 54, fontSize: 12, textAlign: "right" }}>{percent}%</div>
                         </div>
                       </td>
                       <td style={{ padding: 8 }}>
@@ -601,7 +600,17 @@ export default function TeacherReports() {
                                 {attemptsForTopic.map(at => (
                                   <tr key={at.id || `${at.assessment_id}-${at.attempt_number}`} style={{ borderBottom: "1px solid #fafafa" }}>
                                     <td style={{ padding: 8 }}>{at.attempt_number ?? "-"}</td>
-                                    <td style={{ padding: 8 }}>{typeof at.score === "number" ? `${at.score}` : (at.score ?? "-")}</td>
+                                    <td style={{ padding: 8 }}>
+                                      {Array.isArray(at.items) && at.items.length ? (
+                                        (() => {
+                                          const earned = at.items.reduce((acc, it) => acc + (Number(it.points_awarded || 0)), 0);
+                                          const totalQ = at.items.length;
+                                          // show "earned/total (percent%)"
+                                          const pct = (typeof at.score === "number") ? `${at.score}%` : "";
+                                          return `${earned}/${totalQ}${pct ? ` (${pct})` : ""}`;
+                                        })()
+                                      ) : (typeof at.score === "number" ? `${at.score}%` : (at.score ?? "-"))}
+                                    </td>
                                     <td style={{ padding: 8 }}>{at.passed ? "Yes" : "No"}</td>
                                     <td style={{ padding: 8 }}>{at.attempted_at ? new Date(at.attempted_at).toLocaleString() : "-"}</td>
                                   </tr>
