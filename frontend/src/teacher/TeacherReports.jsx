@@ -207,10 +207,37 @@ export default function TeacherReports() {
     try {
       const res = await fetch(`${API_BASE}/reports/student/${encodeURIComponent(student.id)}/attempts`);
       const json = await res.json();
-      // server returns { attempts: [...] } where each attempt has: assessment_id, topic_id, score, passed, attempt_number, attempted_at
-      const attempts = json.attempts || [];
-      // sort attempts descending by attempted_at
-      attempts.sort((a,b) => new Date(b.attempted_at) - new Date(a.attempted_at));
+      let attempts = json.attempts || [];
+
+      // Sort attempts descending by attempted_at if present
+      attempts.sort((a,b) => (new Date(b.attempted_at || 0) - new Date(a.attempted_at || 0)));
+
+      // FALLBACK: if the endpoint returned no attempts but student.topic_progress exists,
+      // synthesize a readable attempts list from topic_progress so modal can show something.
+      if ((!attempts || attempts.length === 0) && student && student.topic_progress && typeof student.topic_progress === "object") {
+        const synth = [];
+        Object.entries(student.topic_progress).forEach(([tid, tp]) => {
+          // Only synthesize if attempts > 0 or a last_attempted_at exists
+          const atCount = Number(tp.attempts || 0);
+          if (atCount > 0 || tp.last_attempted_at) {
+            synth.push({
+              id: `${student.id}-${tid}-synth`,
+              assessment_id: `${tid}_assessment`,
+              topic_id: tid,
+              score: (typeof tp.last_score === "number") ? tp.last_score : tp.last_score ?? null,
+              passed: !!tp.passed,
+              attempt_number: tp.attempts || null,
+              attempted_at: tp.last_attempted_at || null,
+              items: [],
+              synthesized: true
+            });
+          }
+        });
+        // sort synthesized by attempted_at desc
+        synth.sort((a,b) => (new Date(b.attempted_at || 0) - new Date(a.attempted_at || 0)));
+        if (synth.length) attempts = synth;
+      }
+
       setStudentDetail({ loading: false, student, attempts });
     } catch (err) {
       console.error("Failed to load student attempts", err);
@@ -349,7 +376,7 @@ export default function TeacherReports() {
                 <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
                   <th style={{ padding: 8, width: 140 }}>ID</th>
                   <th style={{ padding: 8 }}>Name</th>
-                  <th style={{ padding: 8, width: 240 }}>Progress</th>
+                  <th style={{ padding: 8, width: 260 }}>Progress</th>
                   <th style={{ padding: 8, width: 140 }}>Actions</th>
                 </tr>
               </thead>
@@ -373,17 +400,17 @@ export default function TeacherReports() {
                       <td style={{ padding: 8 }}>{s.id}</td>
                       <td style={{ padding: 8 }}>{s.name}</td>
                       <td style={{ padding: 8 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          {/* track */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <div
                             title={tooltipText}
                             style={{
                               flex: 1,
                               background: "#f3f4f6",
-                              height: 18,
-                              borderRadius: 10,
+                              height: 20,
+                              borderRadius: 12,
                               overflow: "hidden",
-                              position: "relative" // needed for absolute centering of the label
+                              position: "relative", // needed for absolute centering of the label
+                              minWidth: 120
                             }}
                           >
                             {/* filled portion */}
@@ -393,6 +420,12 @@ export default function TeacherReports() {
                                 height: "100%",
                                 background: barColor,
                                 transition: "width 300ms",
+                                position: "absolute",
+                                left: 0,
+                                top: 0,
+                                bottom: 0,
+                                borderRadius: 12,
+                                zIndex: 1,
                               }}
                             />
 
@@ -400,14 +433,18 @@ export default function TeacherReports() {
                             <div
                               style={{
                                 position: "absolute",
-                                left: "50%",
-                                top: "50%",
-                                transform: "translate(-50%, -50%)",
+                                left: 0,
+                                right: 0,
+                                top: 0,
+                                bottom: 0,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                zIndex: 2,
                                 fontSize: 12,
                                 fontWeight: 700,
+                                color: "#000", // black for visibility on light and dark bars
                                 pointerEvents: "none",
-                                whiteSpace: "nowrap",
-                                color: percent > 12 ? "#ffffff" : "#111827" // white when enough contrast, dark otherwise
                               }}
                             >
                               {`${attempted}/${totalTopics}`}
