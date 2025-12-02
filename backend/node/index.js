@@ -276,6 +276,28 @@ app.get("/reports/performance", async (req, res) => {
       }
     });
 
+    // Build a per-student map of attempted topic IDs from submissions (synthesized topic_progress)
+    const synthesizedTopicProgress = {}; // studentId -> { topicId: { attempts: n, last_attempted_at, last_score } }
+
+    subsSnap.docs.forEach(doc => {
+      const d = doc.data();
+      const sid = d.student_id;
+      if (!sid) return;
+      const tid = d.topic_id || d.topicId || null;
+      if (!tid) return;
+
+      if (!synthesizedTopicProgress[sid]) synthesizedTopicProgress[sid] = {};
+      if (!synthesizedTopicProgress[sid][tid]) synthesizedTopicProgress[sid][tid] = { attempts: 0, last_attempted_at: null, last_score: null };
+
+      synthesizedTopicProgress[sid][tid].attempts += 1;
+
+      const attemptedAt = d.attempted_at || d.attemptedAt || null;
+      if (!synthesizedTopicProgress[sid][tid].last_attempted_at || (attemptedAt && new Date(attemptedAt) > new Date(synthesizedTopicProgress[sid][tid].last_attempted_at))) {
+        synthesizedTopicProgress[sid][tid].last_attempted_at = attemptedAt;
+        synthesizedTopicProgress[sid][tid].last_score = (typeof d.score === "number") ? d.score : (d.score ?? null);
+      }
+    });
+
     // Now build students array with attempts + progress heuristic
     const students = [];
     studentsSnap.forEach(doc => {

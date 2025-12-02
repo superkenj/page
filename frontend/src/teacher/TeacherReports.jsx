@@ -31,7 +31,7 @@ export default function TeacherReports() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
-  const [sortBy, setSortBy] = useState("name"); // name | score | progress | masteredCount
+  const [sortBy, setSortBy] = useState("name"); // name | progress | masteredCount
   const [selectedAssessment, setSelectedAssessment] = useState("all"); // "all" or assessmentId
   const [studentDetail, setStudentDetail] = useState(null); // { student, attempts: [...] }
   const [itemAnalysis, setItemAnalysis] = useState(null); // analysis for selected assessment
@@ -45,11 +45,8 @@ export default function TeacherReports() {
   async function fetchReport() {
     setLoading(true);
     try {
-      // Get initial aggregates: students, topics, assessments
       const res = await fetch(`${API_BASE}/reports/performance`);
-      // expected: { students: [...], topics: [...], assessments: [...] }
       const json = await res.json();
-      // Backwards compatibility: ensure arrays exist
       setData({
         students: json.students || [],
         topics: json.topics || [],
@@ -63,54 +60,51 @@ export default function TeacherReports() {
     }
   }
 
-  // Helper: robust progress calculation (tries several fields)
-  function calcProgress(student) {
-    // 1) if backend provides explicit progress 0-100
-    if (typeof student.progress === "number") return clamp(Math.round(student.progress));
-
-    // 2) if masteryScore provided 0-1 or 0-100
-    if (typeof student.masteryScore === "number") {
-      if (student.masteryScore <= 1) return clamp(Math.round(student.masteryScore * 100));
-      return clamp(Math.round(student.masteryScore));
+  // Calculate progress as number of topics with attempts vs total topics
+  function topicAttemptsCount(student) {
+    // Primary: topic_progress map (our backend stores attempts/last_score per topic)
+    if (student.topic_progress && typeof student.topic_progress === "object") {
+      const keys = Object.keys(student.topic_progress);
+      if (keys.length > 0) {
+        const count = keys.reduce((acc, tid) => {
+          const tp = student.topic_progress[tid] || {};
+          // consider any attempts > 0 or completed flag as "attempted"
+          if ((tp.attempts && tp.attempts > 0) || tp.last_attempted_at || tp.completed) return acc + 1;
+          return acc;
+        }, 0);
+        return count;
+      }
     }
 
-    // 3) if topic counts available: masteredCount / totalTopics
-    const totalTopics = data.topics?.length || student.totalTopics || 0;
-    if (typeof student.masteredCount === "number" && totalTopics > 0) {
-      return clamp(Math.round((student.masteredCount / totalTopics) * 100));
+    // Secondary: if we have per-student attempts total but not per-topic, fallback to mastered length
+    if (Array.isArray(student.mastered) && student.mastered.length) {
+      return student.mastered.length;
     }
 
-    // 4) if completedLessons / assignedLessons
-    if (typeof student.completedLessons === "number" && typeof student.assignedLessons === "number" && student.assignedLessons > 0) {
-      return clamp(Math.round((student.completedLessons / student.assignedLessons) * 100));
-    }
-
-    // fallback: if score exists assume normalized to 100
-    if (typeof student.score === "number") {
-      return clamp(Math.round(student.score));
-    }
-
+    // Fallback: if student has no topic_progress and no mastered, count 0
     return 0;
   }
 
-  // At-risk detection: progress < 60 OR status FAIL OR repeated low attempts
-  function isAtRisk(student) {
-    const p = calcProgress(student);
-    if (student.status === "FAIL") return true;
-    if (p < 60) return true;
-    // optional: if many attempts but low score (attempts > 2 && score < 50)
-    if ((student.attempts || 0) > 2 && (student.score || 0) < 50) return true;
-    return false;
+  // Helper: compute progress ratio and format
+  function formatProgress(student) {
+    const totalTopics = (data.topics || []).length || 0;
+    const attempted = topicAttemptsCount(student);
+    const percent = totalTopics ? Math.round((attempted / totalTopics) * 100) : 0;
+    return { attempted, totalTopics, percent };
   }
 
-  // Filter + search + sort; also allows assessment filter
+  // Filter + search + sort
   const studentsVisible = useMemo(() => {
     let arr = (data.students || []).slice();
+
     if (selectedAssessment !== "all") {
       // keep students who attempted or are assigned this assessment
       arr = arr.filter(s => {
-        if (!s.assessments) return false;
-        return s.assessments.some(a => a.id === selectedAssessment || a.assessmentId === selectedAssessment);
+        if (!s.topic_progress && !s.attempts) return false;
+        // either topic_progress contains that topic or student has submissions on that assessment
+        if (s.topic_progress && Object.keys(s.topic_progress).some(k => k === selectedAssessment || k === (selectedAssessment.replace('_assessment','')) )) return true;
+        // else fallback keep everyone and let view modal show none
+        return false;
       });
     }
 
@@ -123,14 +117,20 @@ export default function TeacherReports() {
           (s.email || "").toLowerCase().includes(q)
       );
     }
-    if (filter === "pass") arr = arr.filter(s => s.status === "PASS");
-    if (filter === "fail") arr = arr.filter(s => s.status === "FAIL");
-    if (filter === "atrisk") arr = arr.filter(s => isAtRisk(s));
+    if (filter === "atrisk") {
+      // For this simplified view, atrisk = progress < 60%
+      arr = arr.filter(s => {
+        const { percent } = formatProgress(s);
+        return percent < 60;
+      });
+    }
+    // pass/fail filters removed (user asked to remove status)
 
     arr.sort((a, b) => {
       if (sortBy === "name") return (a.name || "").localeCompare(b.name || "");
-      if (sortBy === "score") return (b.score || 0) - (a.score || 0);
-      if (sortBy === "progress") return calcProgress(b) - calcProgress(a);
+      if (sortBy === "progress") {
+        return formatProgress(b).percent - formatProgress(a).percent;
+      }
       if (sortBy === "masteredCount") return (b.masteredCount || 0) - (a.masteredCount || 0);
       return 0;
     });
@@ -138,7 +138,7 @@ export default function TeacherReports() {
     return arr;
   }, [data.students, query, filter, sortBy, selectedAssessment]);
 
-  // Top metrics
+  // Top metrics (retain)
   const passFailCounts = useMemo(() => {
     const pass = (data.students || []).filter(s => s.status === "PASS").length;
     const fail = (data.students || []).filter(s => s.status === "FAIL").length;
@@ -146,41 +146,40 @@ export default function TeacherReports() {
   }, [data.students]);
 
   const avgMastery = useMemo(() => {
-    const arr = (data.students || []).filter(s => typeof calcProgress(s) === "number");
+    const arr = (data.students || []);
     if (!arr.length) return 0;
-    const sum = arr.reduce((acc, s) => acc + calcProgress(s), 0);
+    const sum = arr.reduce((acc, s) => acc + (formatProgress(s).percent || 0), 0);
     return Math.round(sum / arr.length);
   }, [data.students]);
 
   const atRiskCount = useMemo(() => {
-    return (data.students || []).filter(s => isAtRisk(s)).length;
+    return (data.students || []).filter(s => formatProgress(s).percent < 60).length;
   }, [data.students]);
 
   const avgAttempts = useMemo(() => {
     const arr = (data.students || []);
-    const sum = arr.reduce((acc, s) => acc + (s.attempts || 0), 0);
+    const sum = arr.reduce((acc, s) => acc + ((s.attempts && Number(s.attempts)) || 0), 0);
     return arr.length ? Number((sum / arr.length).toFixed(1)) : 0;
   }, [data.students]);
 
-  // CSV export uses visible students and includes progress
+  // CSV export
   function exportCSV() {
-    const rows = studentsVisible.map(s => ({
-      id: s.id,
-      name: s.name,
-      gender: s.gender ? (s.gender[0] || "").toUpperCase() : "",
-      score: s.score ?? "",
-      progress: calcProgress(s),
-      final: s.final ?? "",
-      status: s.status,
-      attempts: s.attempts ?? 0,
-      masteredCount: s.masteredCount ?? "",
-    }));
+    const rows = studentsVisible.map(s => {
+      const { attempted, totalTopics, percent } = formatProgress(s);
+      return {
+        id: s.id,
+        name: s.name,
+        gender: s.gender ? (s.gender[0] || "").toUpperCase() : "",
+        progress: `${attempted}/${totalTopics} (${percent}%)`,
+        attempts: s.attempts ?? 0
+      };
+    });
     const csv = Papa.unparse(rows);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `performance_report_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `performance_report_${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -198,7 +197,7 @@ export default function TeacherReports() {
       const imgW = pageWidth - 40;
       const imgH = (imgProps.height * imgW) / imgProps.width;
       pdf.addImage(imgData, "PNG", 20, 20, imgW, imgH);
-      pdf.save(`performance_report_${new Date().toISOString().slice(0, 10)}.pdf`);
+      pdf.save(`performance_report_${new Date().toISOString().slice(0,10)}.pdf`);
     } catch (err) {
       console.error("PDF export failed", err);
       alert("Failed to export PDF (see console)");
@@ -210,14 +209,18 @@ export default function TeacherReports() {
     window.print();
   }
 
-  // Drill: open student modal and lazy-load attempts
+  // Drill: open student modal and lazy-load attempts (same endpoint)
   async function openStudentDetail(student) {
     setModalOpen(true);
     setStudentDetail({ loading: true, student, attempts: [] });
     try {
       const res = await fetch(`${API_BASE}/reports/student/${encodeURIComponent(student.id)}/attempts`);
       const json = await res.json();
-      setStudentDetail({ loading: false, student, attempts: json.attempts || [] });
+      // server returns { attempts: [...] } where each attempt has: assessment_id, topic_id, score, passed, attempt_number, attempted_at
+      const attempts = json.attempts || [];
+      // sort attempts descending by attempted_at
+      attempts.sort((a,b) => new Date(b.attempted_at) - new Date(a.attempted_at));
+      setStudentDetail({ loading: false, student, attempts });
     } catch (err) {
       console.error("Failed to load student attempts", err);
       setStudentDetail({ loading: false, student, attempts: [], error: true });
@@ -230,7 +233,6 @@ export default function TeacherReports() {
     try {
       const res = await fetch(`${API_BASE}/reports/assessment/${encodeURIComponent(assessmentId)}/item-analysis`);
       const json = await res.json();
-      // expected: { items: [{ questionId, text, pValue, correctPercent, avgTime }] }
       setItemAnalysis({ loading: false, analysis: json });
     } catch (err) {
       console.error("Failed to load item analysis", err);
@@ -273,28 +275,19 @@ export default function TeacherReports() {
 
         <select value={filter} onChange={e => setFilter(e.target.value)} style={{ padding: 8, borderRadius: 6 }}>
           <option value="all">All</option>
-          <option value="pass">Pass</option>
-          <option value="fail">Fail</option>
           <option value="atrisk">At-risk</option>
         </select>
 
         <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ padding: 8, borderRadius: 6 }}>
           <option value="name">Sort: Name</option>
-          <option value="score">Sort: Score</option>
           <option value="progress">Sort: Progress</option>
           <option value="masteredCount">Sort: Mastered</option>
         </select>
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <button onClick={exportCSV} style={{ padding: "8px 10px", borderRadius: 6 }}>
-            ⬇ CSV
-          </button>
-          <button onClick={exportPDF} style={{ padding: "8px 10px", borderRadius: 6 }}>
-            ⬇ PDF
-          </button>
-          <button onClick={printView} style={{ padding: "8px 10px", borderRadius: 6 }}>
-            🖨 Print
-          </button>
+          <button onClick={exportCSV} style={{ padding: "8px 10px", borderRadius: 6 }}>⬇ CSV</button>
+          <button onClick={exportPDF} style={{ padding: "8px 10px", borderRadius: 6 }}>⬇ PDF</button>
+          <button onClick={printView} style={{ padding: "8px 10px", borderRadius: 6 }}>🖨 Print</button>
         </div>
       </div>
 
@@ -363,42 +356,70 @@ export default function TeacherReports() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
               <thead>
                 <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
-                  <th style={{ padding: 8, width: 120 }}>ID</th>
+                  <th style={{ padding: 8, width: 140 }}>ID</th>
                   <th style={{ padding: 8 }}>Name</th>
                   <th style={{ padding: 8, width: 50 }}>G</th>
-                  <th style={{ padding: 8, width: 120, textAlign: "right" }}>Score</th>
-                  <th style={{ padding: 8, width: 160 }}>Progress</th>
-                  <th style={{ padding: 8, width: 110 }}>Status</th>
-                  <th style={{ padding: 8, width: 140 }}>Mastered</th>
+                  <th style={{ padding: 8, width: 240 }}>Progress</th>
                   <th style={{ padding: 8, width: 140 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {studentsVisible.map(s => {
-                  const progress = calcProgress(s);
+                  const { attempted, totalTopics, percent } = formatProgress(s);
+                  const attemptedNames = (s.topic_progress ? Object.keys(s.topic_progress) : [])
+                    .map(tid => {
+                      const tObj = (data.topics || []).find(tt => tt.id === tid);
+                      return tObj ? (tObj.name || tObj.title || tid) : tid;
+                    })
+                    .filter(Boolean);
+
+                  const tooltipText = attemptedNames.length
+                    ? attemptedNames.slice(0, 6).join(", ") + (attemptedNames.length > 6 ? " (and more)" : "")
+                    : "No attempted topics";
+                  // progress bar color
+                  const barColor = percent >= 85 ? "#16a34a" : percent >= 60 ? "#f59e0b" : "#ef4444";
                   return (
                     <tr key={s.id} style={{ borderBottom: "1px solid #fafafa" }}>
                       <td style={{ padding: 8 }}>{s.id}</td>
                       <td style={{ padding: 8 }}>{s.name}</td>
                       <td style={{ padding: 8 }}>{s.gender ? (s.gender[0]?.toUpperCase() === "M" ? "M" : s.gender[0]?.toUpperCase()) : "-"}</td>
-                      <td style={{ padding: 8, textAlign: "right" }}>{(s.score ?? "-") + (s.final ? ` / ${s.final}` : "")}</td>
                       <td style={{ padding: 8 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <div style={{ flex: 1, background: "#f3f4f6", height: 14, borderRadius: 8, overflow: "hidden" }}>
+                          <div
+                            title={tooltipText}
+                            style={{ flex: 1, background: "#f3f4f6", height: 18, borderRadius: 10, overflow: "hidden", position: "relative" }}>
                             <div
                               style={{
-                                width: `${progress}%`,
+                                width: `${percent}%`,
                                 height: "100%",
-                                background: progress >= 85 ? "#16a34a" : progress >= 60 ? "#f59e0b" : "#ef4444",
+                                background: barColor,
                                 transition: "width 300ms",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "#fff",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                paddingLeft: 6,
+                                paddingRight: 6
                               }}
-                            />
+                            >
+                              {/* show numeric equivalent inside the bar: X / Y */}
+                              <span style={{ pointerEvents: "none" }}>{`${attempted}/${totalTopics}`}</span>
+                            </div>
+
+                            {/* If percent is very small, still show numeric on left */}
+                            {percent < 12 && (
+                              <div style={{ position: "absolute", left: 8, top: 0, bottom: 0, display: "flex", alignItems: "center", fontSize: 12, fontWeight: 600 }}>
+                                {`${attempted}/${totalTopics}`}
+                              </div>
+                            )}
                           </div>
-                          <div style={{ width: 44, fontSize: 12, textAlign: "right" }}>{progress}%</div>
+
+                          <div style={{ width: 54, fontSize: 12, textAlign: "right" }}>{percent}%</div>
                         </div>
                       </td>
-                      <td style={{ padding: 8 }}>{s.status}</td>
-                      <td style={{ padding: 8 }}>{s.masteredCount ?? 0}</td>
+
                       <td style={{ padding: 8 }}>
                         <div style={{ display: "flex", gap: 6 }}>
                           <button onClick={() => openStudentDetail(s)} style={{ padding: "6px 8px", borderRadius: 6 }}>
@@ -406,7 +427,6 @@ export default function TeacherReports() {
                           </button>
                           <button
                             onClick={() => {
-                              // quick action: assign remediation (example)
                               fetch(`${API_BASE}/teachers/assign-remediation`, {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
@@ -424,15 +444,6 @@ export default function TeacherReports() {
                             style={{ padding: "6px 8px", borderRadius: 6 }}
                           >
                             Remediate
-                          </button>
-                          <button
-                            onClick={() => {
-                              // quick message action - opens mailto
-                              window.open(`mailto:${s.email || ""}?subject=Regarding your progress`);
-                            }}
-                            style={{ padding: "6px 8px", borderRadius: 6 }}
-                          >
-                            Message
                           </button>
                         </div>
                       </td>
@@ -472,7 +483,7 @@ export default function TeacherReports() {
         </div>
       </div>
 
-      {/* Modal: student detail */}
+      {/* Modal: student detail => show assessments taken grouped by topic */}
       {modalOpen && studentDetail && (
         <div
           style={{
@@ -494,7 +505,7 @@ export default function TeacherReports() {
             style={{ width: 900, maxHeight: "80vh", overflowY: "auto", background: "#fff", padding: 16, borderRadius: 8 }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ margin: 0 }}>{studentDetail.student.name} — Attempts</h3>
+              <h3 style={{ margin: 0 }}>{studentDetail.student.name} — Assessment Attempts</h3>
               <div>
                 <button onClick={() => { setModalOpen(false); setStudentDetail(null); }} style={{ padding: 6, borderRadius: 6 }}>
                   Close
@@ -509,26 +520,55 @@ export default function TeacherReports() {
             ) : (
               <>
                 <div style={{ marginTop: 12 }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
-                        <th style={{ padding: 8 }}>Assessment</th>
-                        <th style={{ padding: 8 }}>Score</th>
-                        <th style={{ padding: 8 }}>Submitted</th>
-                        <th style={{ padding: 8 }}>Duration</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {studentDetail.attempts.map(a => (
-                        <tr key={a.id || `${a.assessmentId}-${a.submittedAt}`} style={{ borderBottom: "1px solid #fafafa" }}>
-                          <td style={{ padding: 8 }}>{a.assessmentTitle || a.assessmentId}</td>
-                          <td style={{ padding: 8 }}>{a.score ?? "-"}</td>
-                          <td style={{ padding: 8 }}>{a.submittedAt ? new Date(a.submittedAt).toLocaleString() : "-"}</td>
-                          <td style={{ padding: 8 }}>{a.durationSeconds ? `${Math.round(a.durationSeconds / 60)}m` : "-"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  {/** Group attempts by topic_id */}
+                  {(() => {
+                    const byTopic = {};
+                    studentDetail.attempts.forEach(a => {
+                      const tid = a.topic_id || a.assessment_id || "unknown";
+                      if (!byTopic[tid]) byTopic[tid] = [];
+                      byTopic[tid].push(a);
+                    });
+
+                    // render sections
+                    return Object.entries(byTopic).map(([tid, attemptsForTopic]) => {
+                      // find topic title from data.topics
+                      const topicObj = (data.topics || []).find(t => t.id === tid) || (data.assessments || []).find(a => a.topic_id === tid);
+                      const topicTitle = topicObj ? (topicObj.name || topicObj.title || topicObj.id) : tid;
+
+                      // sort attempts ascending by attempt_number
+                      attemptsForTopic.sort((x,y) => (x.attempt_number || 0) - (y.attempt_number || 0));
+
+                      return (
+                        <div key={tid} style={{ marginBottom: 14, border: "1px solid #eef2ff", padding: 12, borderRadius: 6 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                            <strong>{topicTitle}</strong>
+                            <span style={{ fontSize: 13, color: "#555" }}>{attemptsForTopic.length} attempt(s)</span>
+                          </div>
+
+                          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 6 }}>
+                            <thead>
+                              <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
+                                <th style={{ padding: 8, width: 120 }}>Attempt #</th>
+                                <th style={{ padding: 8 }}>Score</th>
+                                <th style={{ padding: 8 }}>Passed</th>
+                                <th style={{ padding: 8 }}>Submitted</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {attemptsForTopic.map(at => (
+                                <tr key={at.id || `${at.assessment_id}-${at.attempt_number}`} style={{ borderBottom: "1px solid #fafafa" }}>
+                                  <td style={{ padding: 8 }}>{at.attempt_number ?? "-"}</td>
+                                  <td style={{ padding: 8 }}>{typeof at.score === "number" ? `${at.score}` : (at.score ?? "-")}</td>
+                                  <td style={{ padding: 8 }}>{at.passed ? "Yes" : "No"}</td>
+                                  <td style={{ padding: 8 }}>{at.attempted_at ? new Date(at.attempted_at).toLocaleString() : "-"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </>
             )}
