@@ -487,43 +487,68 @@ app.get("/students/:id/path", async (req, res) => {
 app.get("/reports/student/:id/attempts", async (req, res) => {
   try {
     const studentId = req.params.id;
-    const snap = await db.collection("assessment_submissions")
-      .where("student_id", "==", studentId)
-      .orderBy("attempted_at", "desc")
-      .get();
 
-    const attempts = snap.docs.map(d => {
+    // Query both common variants of the field name to maximize chance of finding docs
+    const [snap1, snap2] = await Promise.all([
+      db.collection("assessment_submissions").where("student_id", "==", studentId).get().catch(() => ({ docs: [] })),
+      db.collection("assessment_submissions").where("studentId", "==", studentId).get().catch(() => ({ docs: [] })),
+    ]);
+
+    // Collect docs, dedupe by doc.id
+    const docsMap = new Map();
+    [...(snap1.docs || []), ...(snap2.docs || [])].forEach(d => docsMap.set(d.id, d));
+
+    const attempts = Array.from(docsMap.values()).map(d => {
       const dd = d.data();
 
-      // normalize attempt number field (support multiple naming patterns)
-      const attemptNumber = dd.attempt_number ?? dd.attemptNumber ?? dd.attempt ?? null;
+      // robust normalization for attempt number
+      const attemptNumber = dd.attempt_number ?? dd.attemptNumber ?? dd.attempt ?? dd.attempt_no ?? null;
+
+      // robust normalization for attempted timestamp
+      const attemptedAt = dd.attempted_at ?? dd.attemptedAt ?? dd.attempted ?? dd.createdAt ?? dd.created_at ?? null;
+
+      // topic/assessment id variants
+      const topicId = dd.topic_id ?? dd.topicId ?? null;
+      const assessmentId = dd.assessment_id ?? dd.assessmentId ?? dd.assessment ?? null;
 
       const items = Array.isArray(dd.items) ? dd.items : [];
 
-      // compute earned / total points from items if they exist
+      // compute earned / total points (best-effort)
       const earnedPoints = items.reduce((acc, it) => acc + (Number(it.points_awarded || 0)), 0);
-      const totalPoints = items.length ? items.reduce((acc, it) => acc + (Number(it.points_possible || 1) || 1), 0) : items.length;
+      const totalPoints = items.length
+        ? items.reduce((acc, it) => acc + ((Number(it.points_possible) || (it.points_awarded != null ? 1 : 1))), 0)
+        : (dd.totalPoints ?? 0);
+
+      // normalize score
+      const score = (typeof dd.score === "number") ? dd.score : (dd.score ?? null);
 
       return {
         id: d.id,
-        assessment_id: dd.assessment_id ?? dd.assessmentId ?? null,
-        assessmentTitle: dd.assessment_id ?? dd.assessmentId ?? dd.topic_id ?? null,
-        topic_id: dd.topic_id ?? dd.topicId ?? null,
-        score: (typeof dd.score === "number") ? dd.score : (dd.score ?? null),
+        assessment_id: assessmentId,
+        assessmentTitle: assessmentId ?? topicId ?? null,
+        topic_id: topicId,
+        score,
         passed: !!dd.passed,
         attempt_number: attemptNumber,
-        attempted_at: dd.attempted_at ?? dd.attemptedAt ?? null,
+        attempted_at: attemptedAt,
         items,
-        earnedPoints,   // number (0 if no items)
-        totalPoints,    // number (0 if no items)
-        raw: dd,        // raw document if frontend wants more
+        earnedPoints,
+        totalPoints,
+        raw: dd,
       };
     });
 
-    res.status(200).json({ attempts });
+    // sort by best timestamp available (attempted_at), fallback to attempt_number desc, fallback to doc id
+    attempts.sort((a, b) => {
+      const ta = a.attempted_at ? new Date(a.attempted_at).getTime() : (a.attempt_number ?? 0);
+      const tb = b.attempted_at ? new Date(b.attempted_at).getTime() : (b.attempt_number ?? 0);
+      return tb - ta;
+    });
+
+    return res.status(200).json({ attempts });
   } catch (err) {
     console.error("reports/student/:id/attempts", err);
-    res.status(500).json({ error: "Failed to fetch attempts" });
+    return res.status(500).json({ error: "Failed to fetch attempts" });
   }
 });
 

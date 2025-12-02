@@ -52,6 +52,8 @@ export default function TeacherReports() {
         topics: json.topics || [],
         assessments: json.assessments || [],
       });
+      console.debug("reports/student attempts response", { ok: res.ok, status: res.status, body: json });
+      let attempts = json.attempts || [];
     } catch (err) {
       console.error("Failed to load report:", err);
       alert("Failed to load reports (see console)");
