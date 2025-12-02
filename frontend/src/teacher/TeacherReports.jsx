@@ -575,48 +575,65 @@ export default function TeacherReports() {
                         const topicObj = (data.topics || []).find(t => t.id === tid) || (data.assessments || []).find(a => a.topic_id === tid);
                         const topicTitle = topicObj ? (topicObj.name || topicObj.title || topicObj.id) : tid;
 
-                        // sort attempts ascending by attempt_number
-                        attemptsForTopic.sort((x,y) => (x.attempt_number || 0) - (y.attempt_number || 0));
+                        // sort attempts ascending by attempt_number (if present) else by date
+                        attemptsForTopic.sort((x,y) => {
+                          const ax = (x.attempt_number != null) ? x.attempt_number : (x.attempted_at ? new Date(x.attempted_at).getTime() : 0);
+                          const ay = (y.attempt_number != null) ? y.attempt_number : (y.attempted_at ? new Date(y.attempted_at).getTime() : 0);
+                          return ax - ay;
+                        });
 
                         return (
                           <div key={tid} style={{ marginBottom: 14, border: "1px solid #eef2ff", padding: 12, borderRadius: 6 }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                              <strong>{topicTitle}</strong>
+                              <strong style={{ textAlign: "left" }}>{topicTitle}</strong>
                               <span style={{ fontSize: 13, color: "#555" }}>{attemptsForTopic.length} attempt(s)</span>
                             </div>
 
-                            <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 6 }}>
-                              <thead>
-                                <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
-                                  <th style={{ padding: 8, width: 120 }}>Attempt #</th>
-                                  <th style={{ padding: 8 }}>Score</th>
-                                  <th style={{ padding: 8 }}>Passed</th>
-                                  <th style={{ padding: 8 }}>Submitted</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {attemptsForTopic.map(at => (
-                                  <tr key={at.id || `${at.assessment_id}-${at.attempt_number}`} style={{ borderBottom: "1px solid #fafafa" }}>
-                                    <td style={{ padding: 8 }}>
-                                      {at.attempt_number ? at.attempt_number : (idx + 1)}
-                                    </td>
-                                    <td style={{ padding: 8 }}>
-                                      {Array.isArray(at.items) && at.items.length ? (
-                                        (() => {
-                                          const earned = at.items.reduce((acc, it) => acc + (Number(it.points_awarded || 0)), 0);
-                                          const totalQ = at.items.length;
-                                          // show "earned/total (percent%)"
-                                          const pct = (typeof at.score === "number") ? `${at.score}%` : "";
-                                          return `${earned}/${totalQ}${pct ? ` (${pct})` : ""}`;
-                                        })()
-                                      ) : (typeof at.score === "number" ? `${at.score}%` : (at.score ?? "-"))}
-                                    </td>
-                                    <td style={{ padding: 8 }}>{at.passed ? "Yes" : "No"}</td>
-                                    <td style={{ padding: 8 }}>{at.attempted_at ? new Date(at.attempted_at).toLocaleString() : "-"}</td>
+                            {/* center the table block under the topic header */}
+                            <div style={{ display: "flex", justifyContent: "center" }}>
+                              <table style={{ width: "92%", borderCollapse: "collapse", marginTop: 6 }}>
+                                <thead>
+                                  <tr style={{ textAlign: "center", borderBottom: "1px solid #eee" }}>
+                                    <th style={{ padding: 8, width: 120 }}>Attempt #</th>
+                                    <th style={{ padding: 8 }}>Score</th>
+                                    <th style={{ padding: 8 }}>Passed</th>
+                                    <th style={{ padding: 8 }}>Submitted</th>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                                </thead>
+                                <tbody>
+                                  {attemptsForTopic.map((at, idx) => {
+                                    // compute earned & totalPossible from items if available
+                                    let earned = null;
+                                    let totalPossible = null;
+                                    if (Array.isArray(at.items) && at.items.length) {
+                                      earned = at.items.reduce((acc, it) => acc + (Number(it.points_awarded || 0)), 0);
+                                      totalPossible = at.items.reduce((acc, it) => acc + (Number(it.points ?? 1)), 0);
+                                    }
+
+                                    // percent fallback if score number stored (0-100)
+                                    const percentDisplay = (typeof at.score === "number") ? `${at.score}%` : null;
+
+                                    return (
+                                      <tr key={at.id || `${at.assessment_id}-${at.attempt_number || idx}`} style={{ borderBottom: "1px solid #fafafa" }}>
+                                        <td style={{ padding: 8, textAlign: "center" }}>
+                                          {at.attempt_number != null ? at.attempt_number : (idx + 1)}
+                                        </td>
+                                        <td style={{ padding: 8, textAlign: "center" }}>
+                                          {earned != null && totalPossible != null ? (
+                                            (() => {
+                                              const pct = totalPossible ? Math.round((earned / totalPossible) * 100) : 0;
+                                              return `${earned}/${totalPossible} (${pct}%)`;
+                                            })()
+                                          ) : (percentDisplay ? percentDisplay : (at.score != null ? at.score : "-"))}
+                                        </td>
+                                        <td style={{ padding: 8, textAlign: "center" }}>{at.passed ? "Yes" : "No"}</td>
+                                        <td style={{ padding: 8, textAlign: "center" }}>{at.attempted_at ? new Date(at.attempted_at).toLocaleString() : "-"}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
                         );
                       });
