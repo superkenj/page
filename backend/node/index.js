@@ -236,19 +236,14 @@ app.get("/reports/topics", async (req, res) => {
 });
 
 // GET /reports/performance
-// Returns:
-// {
-//   students: [{ id, name, gender, score, final, status, masteryCount, recommendedCount }],
-//   topics: [{ id, name, avgScore, masteryRate, totalMaterials }],
-//   byTopicScores: { topicId: { studentId: score, ... }, ... }  // optional
-// }
 
 app.get("/reports/performance", async (req, res) => {
   try {
-    const [studentsSnap, topicsSnap, contentsSnap] = await Promise.all([
+    const [studentsSnap, topicsSnap, contentsSnap, assessmentsSnap] = await Promise.all([
       db.collection("students").get(),
       db.collection("topics").get(),
       db.collection("contents").get(),
+      db.collection("assessments").get(),
     ]);
 
     const topics = topicsSnap.docs.map(d => ({ id: d.id, name: d.data().name, ...d.data() }));
@@ -273,26 +268,42 @@ app.get("/reports/performance", async (req, res) => {
         masteredCount: mastered.length,
         recommendedCount: recommended.length,
         mastered,
-        recommended
+        recommended,
+        // include a simple progress field if available (frontend will still compute fallback)
+        progress: typeof d.progress === "number" ? d.progress : undefined,
+        attempts: d.attempts ?? undefined,
+        // include topic_progress summary if present (helpful for frontend diagnostics)
+        topic_progress: d.topic_progress ?? undefined,
+        email: d.email ?? undefined,
       });
     });
 
-    // Example topic aggregates (avg score placeholder logic)
+    // Provide assessments list for the frontend
+    const assessments = assessmentsSnap.docs.map(doc => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        title: d.title || d.assessment_id || `${d.topic_id}_assessment`,
+        topic_id: d.topic_id || null,
+        dueDate: d.due_date || d.dueDate || null,
+        // include passing_score if available
+        passing_score: d.passing_score ?? d.passingScore ?? null,
+      };
+    });
+
+    // Example topic aggregates (same as before)
     const topicStats = topics.map(t => {
-      // naive: compute average using contents -> cannot derive per-topic test scores without more data;
-      // for now count materials + placeholder metrics
       const totalMaterials = contents.filter(c => c.topic_id === t.id).length;
       return {
         id: t.id,
         name: t.name || t.title || t.id,
         totalMaterials,
-        // avgScore and masteryRate require more detailed per-student-per-topic scores (extend if you have a 'scores' map).
         avgScore: null,
         masteryRate: null
       };
     });
 
-    res.json({ students, topics: topicStats });
+    res.json({ students, topics: topicStats, assessments });
   } catch (err) {
     console.error("reports/performance error", err);
     res.status(500).json({ error: "Failed to build report" });
@@ -395,6 +406,113 @@ app.get("/students/:id/path", async (req, res) => {
       upcoming: [],
       error: "Internal Server Error",
     });
+  }
+});
+
+app.get("/reports/student/:id/attempts", async (req, res) => {
+  try {
+    const studentId = req.params.id;
+    const snap = await db.collection("assessment_submissions")
+      .where("student_id", "==", studentId)
+      .orderBy("attempted_at", "desc")
+      .get();
+
+    const attempts = snap.docs.map(d => {
+      const dd = d.data();
+      return {
+        id: d.id,
+        assessment_id: dd.assessment_id,
+        assessmentTitle: dd.assessment_id, // fallback; frontend can map using assessments list
+        topic_id: dd.topic_id,
+        score: dd.score,
+        passed: dd.passed,
+        attempt_number: dd.attempt_number,
+        attempted_at: dd.attempted_at,
+        items: dd.items || [],
+        // duration if stored later
+        durationSeconds: dd.durationSeconds ?? null,
+      };
+    });
+
+    res.status(200).json({ attempts });
+  } catch (err) {
+    console.error("reports/student/:id/attempts", err);
+    res.status(500).json({ error: "Failed to fetch attempts" });
+  }
+});
+
+app.get("/reports/assessment/:assessmentId/item-analysis", async (req, res) => {
+  try {
+    const assessmentId = req.params.assessmentId;
+
+    // Find submissions for this assessment_id
+    const subSnap = await db.collection("assessment_submissions")
+      .where("assessment_id", "==", assessmentId)
+      .get();
+
+    if (subSnap.empty) {
+      return res.status(200).json({ items: [] });
+    }
+
+    // Gather per-question stats
+    const itemStats = {}; // questionId -> { correctCount, total, texts: Set() }
+    subSnap.docs.forEach(doc => {
+      const dd = doc.data();
+      const items = Array.isArray(dd.items) ? dd.items : [];
+      items.forEach(it => {
+        const qid = it.question_id;
+        if (!itemStats[qid]) itemStats[qid] = { correctCount: 0, total: 0, texts: new Set(), times: [] };
+        itemStats[qid].total += 1;
+        if (it.is_correct) itemStats[qid].correctCount += 1;
+        if (it.question_text) itemStats[qid].texts.add(it.question_text);
+        if (typeof it.timeSpent === "number") itemStats[qid].times.push(it.timeSpent);
+      });
+    });
+
+    // Format response
+    const items = Object.entries(itemStats).map(([qid, st]) => {
+      const correctPercent = st.total ? (st.correctCount / st.total) * 100 : 0;
+      const avgTime = st.times.length ? Math.round(st.times.reduce((a,b)=>a+b,0)/st.times.length) : null;
+      return {
+        questionId: qid,
+        text: Array.from(st.texts)[0] || null,
+        shortText: (Array.from(st.texts)[0] || "").slice(0, 120),
+        totalAttempts: st.total,
+        correctCount: st.correctCount,
+        correctPercent,
+        pValue: correctPercent / 100, // p-value equivalent (0-1)
+        avgTimeSeconds: avgTime,
+      };
+    });
+
+    // Sort by ascending correctPercent so low-performing items come first
+    items.sort((a,b) => (a.correctPercent || 0) - (b.correctPercent || 0));
+
+    res.status(200).json({ items });
+  } catch (err) {
+    console.error("reports/assessment/:assessmentId/item-analysis", err);
+    res.status(500).json({ error: "Failed to compute item analysis" });
+  }
+});
+
+app.post("/teachers/assign-remediation", async (req, res) => {
+  try {
+    const { studentId, assessmentId } = req.body;
+    if (!studentId) return res.status(400).json({ error: "studentId is required" });
+
+    const payload = {
+      studentId,
+      assessmentId: assessmentId || null,
+      createdAt: new Date().toISOString(),
+      createdBy: req.body.createdBy || "teacher-ui",
+      status: "assigned",
+    };
+
+    const docRef = await db.collection("remediations").add(payload);
+    res.status(200).json({ success: true, id: docRef.id });
+  } catch (err) {
+    console.error("POST /teachers/assign-remediation", err);
+    res.status(500).json({ error: "Failed to assign remediation" });
   }
 });
 
