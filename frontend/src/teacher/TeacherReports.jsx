@@ -528,30 +528,98 @@ export default function TeacherReports() {
           </div>
         </div>
 
-        {/* Mastery Snapshot (sample) */}
-        <div style={{ marginTop: 20 }}>
-          <h3 style={{ marginBottom: 12 }}>Mastery Snapshot (sample)</h3>
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-            {studentsVisible.slice(0, 3).map(s => {
-              const radarData =
-                (data.topics || []).slice(0, 6).map(t => ({
-                  topic: t.name,
-                  value: (s.mastered || []).includes(t.id) ? 100 : Math.round((s.topicMastery?.[t.id] || 0) * 100) || 0,
-                }));
+        /* === REPLACE Mastery Snapshot with this block === */
+        {/* Actionable snapshot: Attempts distribution + Lowest-progress students */}
+        <div style={{ marginTop: 20, display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+          {/* Attempts distribution chart */}
+          <div style={{ flex: "0 0 420px", padding: 12, borderRadius: 10, background: "#fff", border: "1px solid #eef2ff" }}>
+            <h4 style={{ margin: "0 0 8px 0" }}>Attempts distribution</h4>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>
+              How many attempts students made (based on aggregated `attempts` from report).
+            </div>
+            <div style={{ height: 160 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={
+                    (() => {
+                      // compute distribution
+                      const dist = { "0": 0, "1": 0, "2": 0, "3+": 0 };
+                      (data.students || []).forEach(s => {
+                        const a = Number(s.attempts || 0);
+                        if (a <= 0) dist["0"]++;
+                        else if (a === 1) dist["1"]++;
+                        else if (a === 2) dist["2"]++;
+                        else dist["3+"]++;
+                      });
+                      return [
+                        { name: "0", value: dist["0"] },
+                        { name: "1", value: dist["1"] },
+                        { name: "2", value: dist["2"] },
+                        { name: "3+", value: dist["3+"] },
+                      ];
+                    })()
+                  }
+                  margin={{ top: 6, right: 8, left: 0, bottom: 6 }}
+                >
+                  <XAxis dataKey="name" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip formatter={(v) => [`${v}`, "Students"]} />
+                  <Bar dataKey="value" fill="#2563eb" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Lowest-progress students (action list) */}
+          <div style={{ flex: 1, minWidth: 320, padding: 12, borderRadius: 10, background: "#fff", border: "1px solid #eef2ff" }}>
+            <h4 style={{ margin: "0 0 8px 0" }}>Students needing attention</h4>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>
+              Lowest progress (based on attempted topics). Click View to inspect attempts.
+            </div>
+
+            {(() => {
+              const list = (data.students || [])
+                .map(s => {
+                  const { attempted, totalTopics, percent } = formatProgress(s);
+                  return { ...s, attempted, totalTopics, percent };
+                })
+                .sort((a,b) => a.percent - b.percent)
+                .slice(0, 5);
+
+              if (!list.length) return <div style={{ color: "#94a3b8" }}>No students available.</div>;
+
               return (
-                <div key={s.id} style={{ width: 300, height: 300, background: "#fff", borderRadius: 8, padding: 8, border: "1px solid #eef2ff" }}>
-                  <h4 style={{ marginTop: 0, marginBottom: 6 }}>{s.name}</h4>
-                  <ResponsiveContainer width="100%" height="85%">
-                    <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-                      <PolarGrid />
-                      <PolarAngleAxis dataKey="topic" />
-                      <PolarRadiusAxis angle={30} domain={[0, 100]} />
-                      <Radar name={s.name} dataKey="value" stroke="#2563eb" fill="#2563eb" fillOpacity={0.3} />
-                    </RadarChart>
-                  </ResponsiveContainer>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {list.map(s => (
+                    <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 6px", borderRadius: 8, background: "#fbfdff", border: "1px solid rgba(37,99,235,0.04)" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name || s.id}</div>
+                        <div style={{ fontSize: 12, color: "#64748b" }}>{`${s.attempted}/${s.totalTopics} • ${s.percent}% • ${s.attempts || 0} attempt(s)`}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={() => openStudentDetail(s)} style={{ padding: "6px 10px", borderRadius: 8, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>View</button>
+                        <button onClick={() => {
+                          // quick remediation assign (existing endpoint)
+                          fetch(`${API_BASE}/teachers/assign-remediation`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ studentId: s.id, assessmentId: selectedAssessment === "all" ? null : selectedAssessment }),
+                          })
+                            .then(r => {
+                              if (!r.ok) throw new Error("failed");
+                              alert("Remediation assigned.");
+                            })
+                            .catch(err => {
+                              console.error(err);
+                              alert("Failed to assign remediation.");
+                            });
+                        }} style={{ padding: "6px 10px", borderRadius: 8, background: "#fff", border: "1px solid rgba(37,99,235,0.14)", cursor: "pointer" }}>Remediate</button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               );
-            })}
+            })()}
           </div>
         </div>
       </div>
