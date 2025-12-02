@@ -127,21 +127,25 @@ export default function TeacherReports() {
     return { totalStudents, avgMastery, avgAttempts, atRisk };
   }, [data.students, data.topics]);
 
-  // Pass/Fail/No data buckets
-  const passFailCounts = useMemo(() => {
-    const students = data.students || [];
-    let pass = 0, fail = 0, nodata = 0;
-    students.forEach(s => {
-      if (s.status === "PASS") pass++;
-      else if (s.status === "FAIL") fail++;
-      else nodata++;
-    });
-    return [
-      { name: "Pass", value: pass },
-      { name: "Fail", value: fail },
-      { name: "No data", value: nodata },
+  // Mastery distribution buckets (0-19,20-39,40-59,60-79,80-100)
+  const masteryBuckets = useMemo(() => {
+    const buckets = [
+      { name: "0-19", value: 0 },
+      { name: "20-39", value: 0 },
+      { name: "40-59", value: 0 },
+      { name: "60-79", value: 0 },
+      { name: "80-100", value: 0 },
     ];
-  }, [data.students]);
+    (data.students || []).forEach(s => {
+      const p = formatProgress(s).percent ?? 0;
+      if (p < 20) buckets[0].value++;
+      else if (p < 40) buckets[1].value++;
+      else if (p < 60) buckets[2].value++;
+      else if (p < 80) buckets[3].value++;
+      else buckets[4].value++;
+    });
+    return buckets;
+  }, [data.students, data.topics]);
 
   // CSV export
   function exportCSV() {
@@ -354,15 +358,18 @@ export default function TeacherReports() {
             </div>
           </div>
 
-          <div style={{ flex: 1, minHeight: 160, ...cardStyle }}>
-            <h4 style={{ margin: "0 0 8px 0" }}>Pass / Fail / No data</h4>
-            <div style={{ height: 140 }}>
+          <div style={{ flex: 1, minHeight: 160, padding: 8 }}>
+            <h4 style={{ margin: 0 }}>Mastery distribution (by progress %)</h4>
+            <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>
+              Shows how many students fall into each progress range (based on attempted topics).
+            </div>
+            <div style={{ height: 140, marginTop: 8 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={passFailCounts} margin={{ top: 8, right: 8, left: 0, bottom: 10 }}>
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <BarChart data={masteryBuckets} margin={{ top: 6, right: 8, left: 0, bottom: 6 }}>
+                  <XAxis dataKey="name" />
                   <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#2563eb" radius={[6,6,0,0]} />
+                  <Tooltip formatter={(val) => [`${val}`, 'Students']} />
+                  <Bar dataKey="value" fill="#2563eb" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
