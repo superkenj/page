@@ -305,7 +305,7 @@ export default function TeacherReports() {
 
   return (
     <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto", fontFamily: "Georgia, 'Times New Roman', serif" }}>
-      <h1 style={{ marginBottom: 10 }}>🧾 Performance Reports (Assessment-first)</h1>
+      <h1 style={{ marginBottom: 10 }}>🧾 Performance Reports</h1>
 
       {/* Controls */}
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
@@ -376,7 +376,7 @@ export default function TeacherReports() {
           </div>
 
           <div style={{ flex: "0 0 320px", padding: 12, borderRadius: 10 }}>
-            <h4 style={{ marginTop: 0 }}>Assessment Item Analysis (selected)</h4>
+            <h4 style={{ marginTop: 0 }}>Assessment Item Analysis</h4>
             <div style={{ ...cardStyle, padding: 10, minHeight: 100 }}>
               {selectedAssessment === "all" ? (
                 <div style={{ fontSize: 13, color: "#555" }}>Select an assessment to view item-level issues (low p-value, low discrimination).</div>
@@ -528,7 +528,6 @@ export default function TeacherReports() {
           </div>
         </div>
 
-        /* === REPLACE Mastery Snapshot with this block === */
         {/* Actionable snapshot: Attempts distribution + Lowest-progress students */}
         <div style={{ marginTop: 20, display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
           {/* Attempts distribution chart */}
