@@ -374,36 +374,49 @@ export default function TeacherReports() {
                       <td style={{ padding: 8 }}>{s.name}</td>
                       <td style={{ padding: 8 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {/* track */}
                           <div
                             title={tooltipText}
-                            style={{ flex: 1, background: "#f3f4f6", height: 18, borderRadius: 10, overflow: "hidden", position: "relative" }}
+                            style={{
+                              flex: 1,
+                              background: "#f3f4f6",
+                              height: 18,
+                              borderRadius: 10,
+                              overflow: "hidden",
+                              position: "relative" // needed for absolute centering of the label
+                            }}
                           >
+                            {/* filled portion */}
                             <div
                               style={{
                                 width: `${percent}%`,
                                 height: "100%",
                                 background: barColor,
                                 transition: "width 300ms",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: "#fff",
+                              }}
+                            />
+
+                            {/* centered label overlay (always centered regardless of fill width) */}
+                            <div
+                              style={{
+                                position: "absolute",
+                                left: "50%",
+                                top: "50%",
+                                transform: "translate(-50%, -50%)",
                                 fontSize: 12,
-                                fontWeight: 600,
-                                paddingLeft: 6,
-                                paddingRight: 6,
-                                textAlign: "center",
+                                fontWeight: 700,
+                                pointerEvents: "none",
+                                whiteSpace: "nowrap",
+                                color: percent > 12 ? "#ffffff" : "#111827" // white when enough contrast, dark otherwise
                               }}
                             >
-                              {/* numeric equivalent inside the bar (centered) */}
-                              <span style={{ pointerEvents: "none" }}>{`${attempted}/${totalTopics}`}</span>
+                              {`${attempted}/${totalTopics}`}
                             </div>
                           </div>
 
                           <div style={{ width: 54, fontSize: 12, textAlign: "right" }}>{percent}%</div>
                         </div>
                       </td>
-
                       <td style={{ padding: 8 }}>
                         <div style={{ display: "flex", gap: 6 }}>
                           <button onClick={() => openStudentDetail(s)} style={{ padding: "6px 8px", borderRadius: 6 }}>
