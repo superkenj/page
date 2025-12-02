@@ -551,7 +551,6 @@ export default function TeacherReports() {
       </div>
 
       {/* Modal: student detail => show assessments taken grouped by topic */}
-      {/* Modal: student detail => show assessments taken grouped by topic */}
       {modalOpen && studentDetail && (
         <div
           style={{
