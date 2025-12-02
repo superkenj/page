@@ -12,8 +12,6 @@ import {
   PolarGrid,
   PolarAngleAxis,
   PolarRadiusAxis,
-  LineChart,
-  Line,
 } from "recharts";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
@@ -34,7 +32,7 @@ export default function TeacherReports() {
   const [sortBy, setSortBy] = useState("name"); // name | progress | masteredCount
   const [selectedAssessment, setSelectedAssessment] = useState("all"); // "all" or assessmentId
   const [studentDetail, setStudentDetail] = useState(null); // { student, attempts: [...] }
-  const [itemAnalysis, setItemAnalysis] = useState(null); // analysis for selected assessment
+  const [itemAnalysis, setItemAnalysis] = useState(null); // normalized analysis { loading, items, error }
   const [modalOpen, setModalOpen] = useState(false);
   const reportRef = useRef();
 
@@ -52,8 +50,7 @@ export default function TeacherReports() {
         topics: json.topics || [],
         assessments: json.assessments || [],
       });
-      console.debug("reports/student attempts response", { ok: res.ok, status: res.status, body: json });
-      let attempts = json.attempts || [];
+      console.debug("reports/performance response", { ok: res.ok, status: res.status, body: json });
     } catch (err) {
       console.error("Failed to load report:", err);
       alert("Failed to load reports (see console)");
@@ -62,23 +59,18 @@ export default function TeacherReports() {
     }
   }
 
-  // Calculate progress as number of topics with attempts vs total topics
+  // Count topics with recorded assessment attempts in student.topic_progress
   function topicAttemptsCount(student) {
-    // Only count *assessment* attempts — look for topic_progress entries with attempts>0 or last_attempted_at
     if (student.topic_progress && typeof student.topic_progress === "object") {
       return Object.keys(student.topic_progress).reduce((acc, tid) => {
         const tp = student.topic_progress[tid] || {};
-        // Only count if this topic has recorded assessment attempts (attempts>0 or last_attempted_at)
         if ((tp.attempts && Number(tp.attempts) > 0) || tp.last_attempted_at) return acc + 1;
         return acc;
       }, 0);
     }
-
-    // No topic_progress -> do NOT fallback to mastered; count is 0 (no assessment attempts recorded)
     return 0;
   }
 
-  // Helper: compute progress ratio and format
   function formatProgress(student) {
     const totalTopics = (data.topics || []).length || 0;
     const attempted = topicAttemptsCount(student);
@@ -86,17 +78,14 @@ export default function TeacherReports() {
     return { attempted, totalTopics, percent };
   }
 
-  // Filter + search + sort
+  // Filter + sort students
   const studentsVisible = useMemo(() => {
     let arr = (data.students || []).slice();
 
     if (selectedAssessment !== "all") {
-      // keep students who attempted or are assigned this assessment
       arr = arr.filter(s => {
         if (!s.topic_progress && !s.attempts) return false;
-        // either topic_progress contains that topic or student has submissions on that assessment
         if (s.topic_progress && Object.keys(s.topic_progress).some(k => k === selectedAssessment || k === (selectedAssessment.replace('_assessment','')) )) return true;
-        // else fallback keep everyone and let view modal show none
         return false;
       });
     }
@@ -110,49 +99,48 @@ export default function TeacherReports() {
           (s.email || "").toLowerCase().includes(q)
       );
     }
+
     if (filter === "atrisk") {
-      // For this simplified view, atrisk = progress < 60%
-      arr = arr.filter(s => {
-        const { percent } = formatProgress(s);
-        return percent < 60;
-      });
+      arr = arr.filter(s => formatProgress(s).percent < 60);
     }
-    // pass/fail filters removed (user asked to remove status)
 
     arr.sort((a, b) => {
       if (sortBy === "name") return (a.name || "").localeCompare(b.name || "");
-      if (sortBy === "progress") {
-        return formatProgress(b).percent - formatProgress(a).percent;
-      }
+      if (sortBy === "progress") return formatProgress(b).percent - formatProgress(a).percent;
       if (sortBy === "masteredCount") return (b.masteredCount || 0) - (a.masteredCount || 0);
       return 0;
     });
 
     return arr;
-  }, [data.students, query, filter, sortBy, selectedAssessment]);
+  }, [data.students, query, filter, sortBy, selectedAssessment, data.topics]);
 
-  // Top metrics (retain)
+  // SUMMARY & METRICS (refined)
+  const totalTopics = (data.topics || []).length || 0;
+  const summary = useMemo(() => {
+    const students = data.students || [];
+    const totalStudents = students.length;
+    const masteryPercents = students.map(s => formatProgress(s).percent);
+    const avgMastery = masteryPercents.length ? Math.round(masteryPercents.reduce((a,b)=>a+b,0)/masteryPercents.length) : 0;
+    const attemptsArr = students.map(s => Number(s.attempts || 0));
+    const avgAttempts = attemptsArr.length ? Number((attemptsArr.reduce((a,b)=>a+b,0)/attemptsArr.length).toFixed(1)) : 0;
+    const atRisk = students.filter(s => formatProgress(s).percent < 60).length;
+    return { totalStudents, avgMastery, avgAttempts, atRisk };
+  }, [data.students, data.topics]);
+
+  // Pass/Fail/No data buckets
   const passFailCounts = useMemo(() => {
-    const pass = (data.students || []).filter(s => s.status === "PASS").length;
-    const fail = (data.students || []).filter(s => s.status === "FAIL").length;
-    return [{ name: "Pass", value: pass }, { name: "Fail", value: fail }];
-  }, [data.students]);
-
-  const avgMastery = useMemo(() => {
-    const arr = (data.students || []);
-    if (!arr.length) return 0;
-    const sum = arr.reduce((acc, s) => acc + (formatProgress(s).percent || 0), 0);
-    return Math.round(sum / arr.length);
-  }, [data.students]);
-
-  const atRiskCount = useMemo(() => {
-    return (data.students || []).filter(s => formatProgress(s).percent < 60).length;
-  }, [data.students]);
-
-  const avgAttempts = useMemo(() => {
-    const arr = (data.students || []);
-    const sum = arr.reduce((acc, s) => acc + ((s.attempts && Number(s.attempts)) || 0), 0);
-    return arr.length ? Number((sum / arr.length).toFixed(1)) : 0;
+    const students = data.students || [];
+    let pass = 0, fail = 0, nodata = 0;
+    students.forEach(s => {
+      if (s.status === "PASS") pass++;
+      else if (s.status === "FAIL") fail++;
+      else nodata++;
+    });
+    return [
+      { name: "Pass", value: pass },
+      { name: "Fail", value: fail },
+      { name: "No data", value: nodata },
+    ];
   }, [data.students]);
 
   // CSV export
@@ -177,7 +165,7 @@ export default function TeacherReports() {
     URL.revokeObjectURL(url);
   }
 
-  // PDF export (capture reportRef)
+  // PDF export
   async function exportPDF() {
     if (!reportRef.current) return alert("Nothing to export");
     const node = reportRef.current;
@@ -197,12 +185,11 @@ export default function TeacherReports() {
     }
   }
 
-  // Print
   function printView() {
     window.print();
   }
 
-  // Drill: open student modal and lazy-load attempts (same endpoint)
+  // Open student modal and load attempts
   async function openStudentDetail(student) {
     setModalOpen(true);
     setStudentDetail({ loading: true, student, attempts: [] });
@@ -211,22 +198,15 @@ export default function TeacherReports() {
       const json = await res.json();
       let attempts = json.attempts || [];
 
-      // Normalize fields for each attempt so UI can rely on consistent names
+      // Normalize fields
       attempts = attempts.map(a => {
         const attemptNumber = a.attempt_number ?? a.attemptNumber ?? a.attempt ?? null;
         const attemptedAt = a.attempted_at ?? a.attemptedAt ?? null;
-
-        // Ensure items array exists
         const items = Array.isArray(a.items) ? a.items : [];
-
-        // compute earned/total when possible
         const earned = items.reduce((acc, it) => acc + (Number(it.points_awarded || 0)), 0);
         const totalQ = items.length;
-        // If the backend provided totalPoints/earnedPoints, prefer that (compat)
         const earnedPoints = (typeof a.earnedPoints === "number") ? a.earnedPoints : earned;
         const totalPoints = (typeof a.totalPoints === "number") ? a.totalPoints : totalQ;
-
-        // keep score if present (percent), else compute percent from score or items
         const score = (typeof a.score === "number") ? a.score : (a.score ?? null);
         const percentFromItems = totalPoints ? Math.round((earnedPoints / (totalPoints || 1)) * 100) : null;
 
@@ -242,14 +222,14 @@ export default function TeacherReports() {
         };
       });
 
-      // Sort attempts: prefer attempted_at desc, else attempt_number desc
+      // sort attempts: prefer attempted_at desc, else attempt_number desc
       attempts.sort((x, y) => {
         const tA = x.attempted_at ? new Date(x.attempted_at).getTime() : (x.attempt_number ?? 0);
         const tB = y.attempted_at ? new Date(y.attempted_at).getTime() : (y.attempt_number ?? 0);
         return tB - tA;
       });
 
-      // FALLBACK: synthesize attempts from student.topic_progress if endpoint returned none
+      // fallback: synthesize attempts from student.topic_progress if none returned
       if ((!attempts || attempts.length === 0) && student && student.topic_progress && typeof student.topic_progress === "object") {
         const synth = [];
         Object.entries(student.topic_progress).forEach(([tid, tp]) => {
@@ -281,44 +261,58 @@ export default function TeacherReports() {
     }
   }
 
-  // Drill: load item analysis for selected assessment
+  // Load and normalize item analysis
   async function loadItemAnalysis(assessmentId) {
     setItemAnalysis({ loading: true });
     try {
       const res = await fetch(`${API_BASE}/reports/assessment/${encodeURIComponent(assessmentId)}/item-analysis`);
       const json = await res.json();
-      setItemAnalysis({ loading: false, analysis: json });
+      let items = [];
+
+      if (!json) items = [];
+      else if (Array.isArray(json)) items = json;
+      else if (Array.isArray(json.items)) items = json.items;
+      else if (json.analysis && Array.isArray(json.analysis.items)) items = json.analysis.items;
+      else items = [];
+
+      items = items.map(it => ({
+        ...it,
+        correctPercent: Number(it.correctPercent ?? it.correctPercent === 0 ? it.correctPercent : it.pValue ? (it.pValue * 100) : 0),
+        totalAttempts: Number(it.totalAttempts ?? it.total ?? 0),
+      }));
+
+      setItemAnalysis({ loading: false, items, error: false });
     } catch (err) {
       console.error("Failed to load item analysis", err);
-      setItemAnalysis({ loading: false, analysis: null, error: true });
+      setItemAnalysis({ loading: false, items: [], error: true });
     }
   }
 
-  // Whenever selectedAssessment changes (and not "all"), fetch analysis
   useEffect(() => {
-    if (selectedAssessment && selectedAssessment !== "all") {
-      loadItemAnalysis(selectedAssessment);
-    } else {
-      setItemAnalysis(null);
-    }
+    if (selectedAssessment && selectedAssessment !== "all") loadItemAnalysis(selectedAssessment);
+    else setItemAnalysis(null);
   }, [selectedAssessment]);
 
   if (loading) return <div style={{ padding: 20 }}>Loading reports...</div>;
 
+  // small shared styles
+  const cardStyle = { background: "#fff", padding: 12, borderRadius: 10, boxShadow: "0 6px 20px rgba(15,23,42,0.04)", border: "1px solid #eef2ff" };
+  const smallText = { fontSize: 13, color: "#444" };
+
   return (
-    <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto" }}>
-      <h1>🧾 Performance Reports (Assessment-first)</h1>
+    <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto", fontFamily: "Georgia, 'Times New Roman', serif" }}>
+      <h1 style={{ marginBottom: 10 }}>🧾 Performance Reports (Assessment-first)</h1>
 
       {/* Controls */}
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
         <input
           placeholder="Search student..."
           value={query}
           onChange={e => setQuery(e.target.value)}
-          style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc", width: 260 }}
+          style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", width: 260, boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)" }}
         />
 
-        <select value={selectedAssessment} onChange={e => setSelectedAssessment(e.target.value)} style={{ padding: 8, borderRadius: 6 }}>
+        <select value={selectedAssessment} onChange={e => setSelectedAssessment(e.target.value)} style={{ padding: 8, borderRadius: 8 }}>
           <option value="all">All assessments</option>
           {(data.assessments || []).map(a => (
             <option key={a.id} value={a.id}>
@@ -327,79 +321,87 @@ export default function TeacherReports() {
           ))}
         </select>
 
-        <select value={filter} onChange={e => setFilter(e.target.value)} style={{ padding: 8, borderRadius: 6 }}>
+        <select value={filter} onChange={e => setFilter(e.target.value)} style={{ padding: 8, borderRadius: 8 }}>
           <option value="all">All</option>
           <option value="atrisk">At-risk</option>
         </select>
 
-        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ padding: 8, borderRadius: 6 }}>
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ padding: 8, borderRadius: 8 }}>
           <option value="name">Sort: Name</option>
           <option value="progress">Sort: Progress</option>
           <option value="masteredCount">Sort: Mastered</option>
         </select>
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <button onClick={exportCSV} style={{ padding: "8px 10px", borderRadius: 6 }}>⬇ CSV</button>
-          <button onClick={exportPDF} style={{ padding: "8px 10px", borderRadius: 6 }}>⬇ PDF</button>
-          <button onClick={printView} style={{ padding: "8px 10px", borderRadius: 6 }}>🖨 Print</button>
+          <button onClick={exportCSV} style={{ padding: "8px 10px", borderRadius: 8 }}>⬇ CSV</button>
+          <button onClick={exportPDF} style={{ padding: "8px 10px", borderRadius: 8 }}>⬇ PDF</button>
+          <button onClick={printView} style={{ padding: "8px 10px", borderRadius: 8 }}>🖨 Print</button>
         </div>
       </div>
 
-      {/* Report content — captured for PDF */}
-      <div ref={reportRef} style={{ background: "white", padding: 16, borderRadius: 10, border: "1px solid #e6eefc" }}>
+      {/* Report content */}
+      <div ref={reportRef} style={{ background: "#fbfdff", padding: 16, borderRadius: 12 }}>
         {/* Top summary + chart */}
         <div style={{ display: "flex", gap: 16, alignItems: "stretch", marginBottom: 18, flexWrap: "wrap" }}>
-          <div style={{ flex: "0 0 260px", minHeight: 120, padding: 12, borderRadius: 8, border: "1px solid #eef2ff" }}>
-            <h3 style={{ margin: 0 }}>Summary</h3>
-            <div style={{ marginTop: 8 }}>
-              <div>Total students: <strong>{data.students.length}</strong></div>
-              <div>Avg mastery: <strong>{avgMastery}%</strong></div>
-              <div>At-risk: <strong>{atRiskCount}</strong></div>
-              <div>Avg attempts: <strong>{avgAttempts}</strong></div>
+          <div style={{ flex: "0 0 260px", minHeight: 120, ...cardStyle }}>
+            <h3 style={{ margin: "0 0 8px 0" }}>Summary</h3>
+            <div style={{ marginTop: 6 }}>
+              <div style={smallText}>Total students: <strong style={{ marginLeft: 6 }}>{summary.totalStudents}</strong></div>
+              <div style={smallText}>Total topics: <strong style={{ marginLeft: 6 }}>{totalTopics}</strong></div>
+              <div style={smallText}>Avg mastery: <strong style={{ marginLeft: 6 }}>{summary.avgMastery}%</strong></div>
+              <div style={smallText}>At-risk: <strong style={{ marginLeft: 6 }}>{summary.atRisk}</strong></div>
+              <div style={smallText}>Avg attempts: <strong style={{ marginLeft: 6 }}>{summary.avgAttempts}</strong></div>
             </div>
           </div>
 
-          <div style={{ flex: 1, minHeight: 160, padding: 8 }}>
-            <h4 style={{ margin: 0 }}>Pass / Fail</h4>
+          <div style={{ flex: 1, minHeight: 160, ...cardStyle }}>
+            <h4 style={{ margin: "0 0 8px 0" }}>Pass / Fail / No data</h4>
             <div style={{ height: 140 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={passFailCounts}>
-                  <XAxis dataKey="name" />
+                <BarChart data={passFailCounts} margin={{ top: 8, right: 8, left: 0, bottom: 10 }}>
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                   <YAxis allowDecimals={false} />
                   <Tooltip />
-                  <Bar dataKey="value" fill="#2563eb" />
+                  <Bar dataKey="value" fill="#2563eb" radius={[6,6,0,0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          <div style={{ flex: "0 0 320px", padding: 8 }}>
+          <div style={{ flex: "0 0 320px", padding: 12, borderRadius: 10 }}>
             <h4 style={{ marginTop: 0 }}>Assessment Item Analysis (selected)</h4>
-            {selectedAssessment === "all" ? (
-              <div style={{ fontSize: 13, color: "#555" }}>Select an assessment to view item-level issues (low p-value, low discrimination).</div>
-            ) : itemAnalysis?.loading ? (
-              <div>Loading analysis...</div>
-            ) : itemAnalysis?.analysis?.items?.length ? (
-              <div style={{ maxHeight: 140, overflowY: "auto" }}>
-                <table style={{ width: "100%", fontSize: 13 }}>
-                  <thead>
-                    <tr><th style={{ textAlign: "left" }}>Q</th><th style={{ textAlign: "right" }}>Correct%</th></tr>
-                  </thead>
-                  <tbody>
-                    {itemAnalysis.analysis.items.map((it, idx) => (
-                      <tr key={it.questionId}>
-                        <td>{(idx+1)}. {it.shortText || it.text?.slice(0,60)}</td>
-                        <td style={{ textAlign: "right" }}>{Math.round((it.correctPercent||0))}%</td>
+            <div style={{ ...cardStyle, padding: 10, minHeight: 100 }}>
+              {selectedAssessment === "all" ? (
+                <div style={{ fontSize: 13, color: "#555" }}>Select an assessment to view item-level issues (low p-value, low discrimination).</div>
+              ) : itemAnalysis?.loading ? (
+                <div>Loading analysis...</div>
+              ) : itemAnalysis?.error ? (
+                <div style={{ color: "#a00" }}>Failed to load analysis.</div>
+              ) : (itemAnalysis?.items && itemAnalysis.items.length) ? (
+                <div style={{ maxHeight: 140, overflowY: "auto" }}>
+                  <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: "left", padding: "6px 8px", width: 28 }}>#</th>
+                        <th style={{ textAlign: "left", padding: "6px 8px" }}>Question</th>
+                        <th style={{ textAlign: "right", padding: "6px 8px", width: 90 }}>Correct%</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : itemAnalysis?.analysis === null ? (
-              <div style={{ color: "#888" }}>No analysis found for this assessment.</div>
-            ) : (
-              <div style={{ color: "#888" }}>Select an assessment to load analysis.</div>
-            )}
+                    </thead>
+                    <tbody>
+                      {itemAnalysis.items.map((it, idx) => (
+                        <tr key={it.questionId || idx} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                          <td style={{ padding: "8px" }}>{idx+1}</td>
+                          <td style={{ padding: "8px", color: "#333" }}>{(it.shortText || it.text || "").slice(0, 80)}{(it.shortText || it.text || "").length > 80 ? "..." : ""}</td>
+                          <td style={{ padding: "8px", textAlign: "right" }}>{Math.round(it.correctPercent || 0)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{ color: "#777", fontSize: 13 }}>No item-analysis data available for this assessment.</div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -412,7 +414,7 @@ export default function TeacherReports() {
                 <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
                   <th style={{ padding: 8, width: 140 }}>ID</th>
                   <th style={{ padding: 8 }}>Name</th>
-                  <th style={{ padding: 8, width: 260 }}>Progress</th>
+                  <th style={{ padding: 8, width: 340 }}>Progress</th>
                   <th style={{ padding: 8, width: 140 }}>Actions</th>
                 </tr>
               </thead>
@@ -429,42 +431,39 @@ export default function TeacherReports() {
                   const tooltipText = attemptedNames.length
                     ? attemptedNames.slice(0, 6).join(", ") + (attemptedNames.length > 6 ? " (and more)" : "")
                     : "No attempted topics";
-                  // progress bar color
                   const barColor = percent >= 85 ? "#16a34a" : percent >= 60 ? "#f59e0b" : "#ef4444";
                   return (
                     <tr key={s.id} style={{ borderBottom: "1px solid #fafafa" }}>
                       <td style={{ padding: 8 }}>{s.id}</td>
                       <td style={{ padding: 8 }}>{s.name}</td>
                       <td style={{ padding: 8 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <div
                             title={tooltipText}
                             style={{
-                              width: "70%",       // move bar more centered
+                              width: "78%",
                               background: "#f3f4f6",
-                              height: 18,
-                              borderRadius: 10,
+                              height: 20,
+                              borderRadius: 12,
                               overflow: "hidden",
-                              position: "relative"
+                              position: "relative",
+                              boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)"
                             }}
                           >
-                            {/* filled portion */}
                             <div
                               style={{
-                                width: `${percent}%`,
+                                width: `${clamp(percent, 0, 100)}%`,
                                 height: "100%",
                                 background: barColor,
                                 transition: "width 300ms",
                                 display: "flex",
                                 alignItems: "center",
-                                justifyContent: "center",   // fully centered
+                                justifyContent: "center",
                                 color: "#fff",
                                 fontSize: 12,
                                 fontWeight: 600
                               }}
                             />
-
-                            {/* centered label overlay (always centered regardless of fill width) */}
                             <div
                               style={{
                                 position: "absolute",
@@ -478,7 +477,7 @@ export default function TeacherReports() {
                                 zIndex: 2,
                                 fontSize: 12,
                                 fontWeight: 700,
-                                color: "#000",
+                                color: "#111",
                                 pointerEvents: "none",
                               }}
                             >
@@ -522,7 +521,7 @@ export default function TeacherReports() {
           </div>
         </div>
 
-        {/* Optional: per-student radar chart for mastery (show top N students) */}
+        {/* Mastery Snapshot (sample) */}
         <div style={{ marginTop: 20 }}>
           <h3 style={{ marginBottom: 12 }}>Mastery Snapshot (sample)</h3>
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
@@ -618,7 +617,6 @@ export default function TeacherReports() {
               <div style={{ color: "red" }}>Failed to load attempts.</div>
             ) : (
               <div style={{ display: "grid", gap: 14 }}>
-                {/* If no attempts were returned, show explicit message */}
                 {(!Array.isArray(studentDetail.attempts) || studentDetail.attempts.length === 0) ? (
                   <div style={{ padding: 14, background: "#fff8f6", border: "1px solid #ffede9", borderRadius: 8, color: "#7f1d1d" }}>
                     No assessment attempts found for this student.
@@ -633,14 +631,9 @@ export default function TeacherReports() {
                     });
 
                     return Object.entries(byTopic).map(([tid, attemptsForTopic]) => {
-                      // find topic title from data.topics or assessments
-                      const topicObj =
-                        (data.topics || []).find((t) => t.id === tid) ||
-                        (data.assessments || []).find((a) => a.topic_id === tid) ||
-                        null;
+                      const topicObj = (data.topics || []).find((t) => t.id === tid) || (data.assessments || []).find((a) => a.topic_id === tid) || null;
                       const topicTitle = topicObj ? (topicObj.name || topicObj.title || topicObj.id) : tid;
 
-                      // sort attempts ascending by attempt_number (if present) else by date ascending
                       attemptsForTopic.sort((x, y) => {
                         const ax = x.attempt_number != null ? x.attempt_number : (x.attempted_at ? new Date(x.attempted_at).getTime() : 0);
                         const ay = y.attempt_number != null ? y.attempt_number : (y.attempted_at ? new Date(y.attempted_at).getTime() : 0);
@@ -668,7 +661,7 @@ export default function TeacherReports() {
                               }} />
                               <div>
                                 <div style={{ fontWeight: 700, color: "#0f172a" }}>{topicTitle}</div>
-                                <div style={{ fontSize: 12, color: "#64748b" }}>{/* optional subtitle - empty for now */}</div>
+                                <div style={{ fontSize: 12, color: "#64748b" }}>{/* optional subtitle */}</div>
                               </div>
                             </div>
 
