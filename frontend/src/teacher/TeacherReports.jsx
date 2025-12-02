@@ -627,21 +627,35 @@ export default function TeacherReports() {
 
                             {/* center the table block under the topic header */}
                             <div style={{ display: "flex", justifyContent: "center" }}>
-                              <table style={{ width: "92%", borderCollapse: "collapse", marginTop: 6 }}>
+                              <table 
+                                style={{
+                                  width: "92%",
+                                  borderCollapse: "collapse",
+                                  marginTop: 6,
+                                  tableLayout: "fixed",        // <- important: stable column widths
+                                  borderSpacing: 0,
+                                }}
+                              >
+                                <colgroup>
+                                  <col style={{ width: 100 }} />   {/* Attempt # */}
+                                  <col style={{ width: 180 }} />   {/* Score */}
+                                  <col style={{ width: 120 }} />   {/* Passed */}
+                                  <col />                          {/* Submitted - flexible */}
+                                </colgroup>
                                 <thead>
                                   <tr style={{ textAlign: "center", borderBottom: "1px solid #eee" }}>
-                                    <th style={{ padding: 8, width: 120 }}>Attempt #</th>
-                                    <th style={{ padding: 8 }}>Score</th>
-                                    <th style={{ padding: 8 }}>Passed</th>
-                                    <th style={{ padding: 8 }}>Submitted</th>
+                                    <th style={{ padding: 8, verticalAlign: "middle" }}>Attempt #</th>
+                                    <th style={{ padding: 8, verticalAlign: "middle" }}>Score</th>
+                                    <th style={{ padding: 8, verticalAlign: "middle" }}>Passed</th>
+                                    <th style={{ padding: 8, verticalAlign: "middle" }}>Submitted</th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {attemptsForTopic.map((at, idx) => (
                                     <tr key={at.id || `${at.assessment_id}-${String(at.attempt_number || idx+1)}`} style={{ borderBottom: "1px solid #fafafa" }}>
-                                      <td style={{ padding: 8 }}>{at.attempt_number ?? (idx + 1)}</td>
+                                      <td style={{ padding: 8, textAlign: "center", verticalAlign: "middle" }}>{at.attempt_number ?? (idx + 1)}</td>
 
-                                      <td style={{ padding: 8 }}>
+                                      <td style={{ padding: 8, textAlign: "center", verticalAlign: "middle" }}>
                                         {Array.isArray(at.items) && at.items.length ? (
                                           // show earned/total and percent
                                           (() => {
@@ -652,9 +666,8 @@ export default function TeacherReports() {
                                           })()
                                         ) : (typeof at.score === "number" ? `${at.score}%` : (at.score ?? (at.percentFromItems !== null ? `${at.percentFromItems}%` : "-")))}
                                       </td>
-
-                                      <td style={{ padding: 8 }}>{at.passed ? "Yes" : "No"}</td>
-                                      <td style={{ padding: 8 }}>{at.attempted_at ? new Date(at.attempted_at).toLocaleString() : "-"}</td>
+                                      <td style={{ padding: 8, textAlign: "center", verticalAlign: "middle" }}>{at.passed ? "Yes" : "No"}</td>
+                                      <td style={{ padding: 8, textAlign: "center", verticalAlign: "middle" }}>{at.attempted_at ? new Date(at.attempted_at).toLocaleString() : "-"}</td>
                                     </tr>
                                   ))}
                                 </tbody>
