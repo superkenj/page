@@ -62,26 +62,17 @@ export default function TeacherReports() {
 
   // Calculate progress as number of topics with attempts vs total topics
   function topicAttemptsCount(student) {
-    // Primary: topic_progress map (our backend stores attempts/last_score per topic)
+    // Only count *assessment* attempts — look for topic_progress entries with attempts>0 or last_attempted_at
     if (student.topic_progress && typeof student.topic_progress === "object") {
-      const keys = Object.keys(student.topic_progress);
-      if (keys.length > 0) {
-        const count = keys.reduce((acc, tid) => {
-          const tp = student.topic_progress[tid] || {};
-          // consider any attempts > 0 or completed flag as "attempted"
-          if ((tp.attempts && tp.attempts > 0) || tp.last_attempted_at || tp.completed) return acc + 1;
-          return acc;
-        }, 0);
-        return count;
-      }
+      return Object.keys(student.topic_progress).reduce((acc, tid) => {
+        const tp = student.topic_progress[tid] || {};
+        // Only count if this topic has recorded assessment attempts (attempts>0 or last_attempted_at)
+        if ((tp.attempts && Number(tp.attempts) > 0) || tp.last_attempted_at) return acc + 1;
+        return acc;
+      }, 0);
     }
 
-    // Secondary: if we have per-student attempts total but not per-topic, fallback to mastered length
-    if (Array.isArray(student.mastered) && student.mastered.length) {
-      return student.mastered.length;
-    }
-
-    // Fallback: if student has no topic_progress and no mastered, count 0
+    // No topic_progress -> do NOT fallback to mastered; count is 0 (no assessment attempts recorded)
     return 0;
   }
 
@@ -358,7 +349,6 @@ export default function TeacherReports() {
                 <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
                   <th style={{ padding: 8, width: 140 }}>ID</th>
                   <th style={{ padding: 8 }}>Name</th>
-                  <th style={{ padding: 8, width: 50 }}>G</th>
                   <th style={{ padding: 8, width: 240 }}>Progress</th>
                   <th style={{ padding: 8, width: 140 }}>Actions</th>
                 </tr>
@@ -382,12 +372,12 @@ export default function TeacherReports() {
                     <tr key={s.id} style={{ borderBottom: "1px solid #fafafa" }}>
                       <td style={{ padding: 8 }}>{s.id}</td>
                       <td style={{ padding: 8 }}>{s.name}</td>
-                      <td style={{ padding: 8 }}>{s.gender ? (s.gender[0]?.toUpperCase() === "M" ? "M" : s.gender[0]?.toUpperCase()) : "-"}</td>
                       <td style={{ padding: 8 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <div
                             title={tooltipText}
-                            style={{ flex: 1, background: "#f3f4f6", height: 18, borderRadius: 10, overflow: "hidden", position: "relative" }}>
+                            style={{ flex: 1, background: "#f3f4f6", height: 18, borderRadius: 10, overflow: "hidden", position: "relative" }}
+                          >
                             <div
                               style={{
                                 width: `${percent}%`,
@@ -401,19 +391,13 @@ export default function TeacherReports() {
                                 fontSize: 12,
                                 fontWeight: 600,
                                 paddingLeft: 6,
-                                paddingRight: 6
+                                paddingRight: 6,
+                                textAlign: "center",
                               }}
                             >
-                              {/* show numeric equivalent inside the bar: X / Y */}
+                              {/* numeric equivalent inside the bar (centered) */}
                               <span style={{ pointerEvents: "none" }}>{`${attempted}/${totalTopics}`}</span>
                             </div>
-
-                            {/* If percent is very small, still show numeric on left */}
-                            {percent < 12 && (
-                              <div style={{ position: "absolute", left: 8, top: 0, bottom: 0, display: "flex", alignItems: "center", fontSize: 12, fontWeight: 600 }}>
-                                {`${attempted}/${totalTopics}`}
-                              </div>
-                            )}
                           </div>
 
                           <div style={{ width: 54, fontSize: 12, textAlign: "right" }}>{percent}%</div>
@@ -520,55 +504,65 @@ export default function TeacherReports() {
             ) : (
               <>
                 <div style={{ marginTop: 12 }}>
-                  {/** Group attempts by topic_id */}
-                  {(() => {
-                    const byTopic = {};
-                    studentDetail.attempts.forEach(a => {
-                      const tid = a.topic_id || a.assessment_id || "unknown";
-                      if (!byTopic[tid]) byTopic[tid] = [];
-                      byTopic[tid].push(a);
-                    });
+                  {/* Debug: log what the backend returned for attempts */}
+                  {console.log("studentDetail.attempts", studentDetail.attempts, "student:", studentDetail.student.id)}
 
-                    // render sections
-                    return Object.entries(byTopic).map(([tid, attemptsForTopic]) => {
-                      // find topic title from data.topics
-                      const topicObj = (data.topics || []).find(t => t.id === tid) || (data.assessments || []).find(a => a.topic_id === tid);
-                      const topicTitle = topicObj ? (topicObj.name || topicObj.title || topicObj.id) : tid;
+                  {/* If no attempts were returned, show explicit message */}
+                  {(!Array.isArray(studentDetail.attempts) || studentDetail.attempts.length === 0) ? (
+                    <div style={{ padding: 12, background: "#fff3f2", border: "1px solid #ffe4e6", borderRadius: 6, color: "#9f1239" }}>
+                      No assessment attempts found for this student.
+                    </div>
+                  ) : (
+                    // Group attempts by topic_id and render them
+                    (() => {
+                      const byTopic = {};
+                      studentDetail.attempts.forEach(a => {
+                        const tid = a.topic_id || a.assessment_id || "unknown";
+                        if (!byTopic[tid]) byTopic[tid] = [];
+                        byTopic[tid].push(a);
+                      });
 
-                      // sort attempts ascending by attempt_number
-                      attemptsForTopic.sort((x,y) => (x.attempt_number || 0) - (y.attempt_number || 0));
+                      // render sections
+                      return Object.entries(byTopic).map(([tid, attemptsForTopic]) => {
+                        // find topic title from data.topics
+                        const topicObj = (data.topics || []).find(t => t.id === tid) || (data.assessments || []).find(a => a.topic_id === tid);
+                        const topicTitle = topicObj ? (topicObj.name || topicObj.title || topicObj.id) : tid;
 
-                      return (
-                        <div key={tid} style={{ marginBottom: 14, border: "1px solid #eef2ff", padding: 12, borderRadius: 6 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                            <strong>{topicTitle}</strong>
-                            <span style={{ fontSize: 13, color: "#555" }}>{attemptsForTopic.length} attempt(s)</span>
-                          </div>
+                        // sort attempts ascending by attempt_number
+                        attemptsForTopic.sort((x,y) => (x.attempt_number || 0) - (y.attempt_number || 0));
 
-                          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 6 }}>
-                            <thead>
-                              <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
-                                <th style={{ padding: 8, width: 120 }}>Attempt #</th>
-                                <th style={{ padding: 8 }}>Score</th>
-                                <th style={{ padding: 8 }}>Passed</th>
-                                <th style={{ padding: 8 }}>Submitted</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {attemptsForTopic.map(at => (
-                                <tr key={at.id || `${at.assessment_id}-${at.attempt_number}`} style={{ borderBottom: "1px solid #fafafa" }}>
-                                  <td style={{ padding: 8 }}>{at.attempt_number ?? "-"}</td>
-                                  <td style={{ padding: 8 }}>{typeof at.score === "number" ? `${at.score}` : (at.score ?? "-")}</td>
-                                  <td style={{ padding: 8 }}>{at.passed ? "Yes" : "No"}</td>
-                                  <td style={{ padding: 8 }}>{at.attempted_at ? new Date(at.attempted_at).toLocaleString() : "-"}</td>
+                        return (
+                          <div key={tid} style={{ marginBottom: 14, border: "1px solid #eef2ff", padding: 12, borderRadius: 6 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                              <strong>{topicTitle}</strong>
+                              <span style={{ fontSize: 13, color: "#555" }}>{attemptsForTopic.length} attempt(s)</span>
+                            </div>
+
+                            <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 6 }}>
+                              <thead>
+                                <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
+                                  <th style={{ padding: 8, width: 120 }}>Attempt #</th>
+                                  <th style={{ padding: 8 }}>Score</th>
+                                  <th style={{ padding: 8 }}>Passed</th>
+                                  <th style={{ padding: 8 }}>Submitted</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      );
-                    });
-                  })()}
+                              </thead>
+                              <tbody>
+                                {attemptsForTopic.map(at => (
+                                  <tr key={at.id || `${at.assessment_id}-${at.attempt_number}`} style={{ borderBottom: "1px solid #fafafa" }}>
+                                    <td style={{ padding: 8 }}>{at.attempt_number ?? "-"}</td>
+                                    <td style={{ padding: 8 }}>{typeof at.score === "number" ? `${at.score}` : (at.score ?? "-")}</td>
+                                    <td style={{ padding: 8 }}>{at.passed ? "Yes" : "No"}</td>
+                                    <td style={{ padding: 8 }}>{at.attempted_at ? new Date(at.attempted_at).toLocaleString() : "-"}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      });
+                    })()
+                  )}
                 </div>
               </>
             )}
