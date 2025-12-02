@@ -404,14 +404,12 @@ export default function TeacherReports() {
                           <div
                             title={tooltipText}
                             style={{
-                              width: "70%",
-                              maxWidth: 420,
-                              minWidth: 140,
+                              width: "70%",       // move bar more centered
                               background: "#f3f4f6",
-                              height: 20,
-                              borderRadius: 12,
+                              height: 18,
+                              borderRadius: 10,
                               overflow: "hidden",
-                              position: "relative",
+                              position: "relative"
                             }}
                           >
                             {/* filled portion */}
@@ -421,12 +419,12 @@ export default function TeacherReports() {
                                 height: "100%",
                                 background: barColor,
                                 transition: "width 300ms",
-                                position: "absolute",
-                                left: 0,
-                                top: 0,
-                                bottom: 0,
-                                borderRadius: 12,
-                                zIndex: 1,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",   // fully centered
+                                color: "#fff",
+                                fontSize: 12,
+                                fontWeight: 600
                               }}
                             />
 
@@ -599,7 +597,9 @@ export default function TeacherReports() {
                               <tbody>
                                 {attemptsForTopic.map(at => (
                                   <tr key={at.id || `${at.assessment_id}-${at.attempt_number}`} style={{ borderBottom: "1px solid #fafafa" }}>
-                                    <td style={{ padding: 8 }}>{at.attempt_number ?? "-"}</td>
+                                    <td style={{ padding: 8 }}>
+                                      {at.attempt_number ? at.attempt_number : (idx + 1)}
+                                    </td>
                                     <td style={{ padding: 8 }}>
                                       {Array.isArray(at.items) && at.items.length ? (
                                         (() => {
