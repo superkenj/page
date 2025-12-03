@@ -510,29 +510,6 @@ export default function TeacherReports() {
                           <button onClick={() => openStudentDetail(s)} style={{ padding: "6px 8px", borderRadius: 6 }}>
                             View
                           </button>
-                          <button
-                            onClick={async () => {
-                              try {
-                                const resp = await fetch(`${API_BASE}/teachers/assign-remediation`, {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ studentId: s.id, assessmentId: selectedAssessment === "all" ? null : selectedAssessment }),
-                                });
-                                if (!resp.ok) throw new Error("failed");
-                                // re-fetch latest student record
-                                const refreshed = await fetchStudentById(s.id);
-                                // open modal with refreshed student so teacher can inspect attempts/allowance
-                                openStudentDetail(refreshed || s);
-                                alert("Remediation assigned — student unlocked for 1 extra attempt.");
-                              } catch (err) {
-                                console.error(err);
-                                alert("Failed to assign remediation (see console).");
-                              }
-                            }}
-                            style={{ padding: "6px 8px", borderRadius: 6 }}
-                          >
-                            Remediate
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -545,6 +522,103 @@ export default function TeacherReports() {
 
         {/* Actionable snapshot: Attempts distribution + Lowest-progress students */}
         <div style={{ marginTop: 20, display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+
+          {/* Lowest-progress students (action list) */}
+          <div style={{ flex: 1, minWidth: 320, padding: 12, borderRadius: 10, background: "#fff", border: "1px solid #eef2ff" }}>
+            <h4 style={{ margin: "0 0 8px 0" }}>Students needing attention</h4>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>
+              Lowest progress (based on attempted topics). Click View to inspect attempts.
+            </div>
+
+            {(() => {
+              const list = (data.students || [])
+                .map(s => {
+                  const { attempted, totalTopics, percent } = formatProgress(s);
+                  return { ...s, attempted, totalTopics, percent };
+                })
+                .sort((a,b) => a.percent - b.percent)
+                .slice(0, 5);
+
+              if (!list.length) return <div style={{ color: "#94a3b8" }}>No students available.</div>;
+
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {list.map(s => (
+                    <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 6px", borderRadius: 8, background: "#fbfdff", border: "1px solid rgba(37,99,235,0.04)" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name || s.id}</div>
+                        <div style={{ fontSize: 12, color: "#64748b" }}>{`${s.attempted}/${s.totalTopics} • ${s.percent}% • ${s.attempts || 0} attempt(s)`}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={() => openStudentDetail(s)} style={{ padding: "6px 10px", borderRadius: 8, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>View</button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              // Determine assessmentId to send
+                              let assessmentIdToSend = selectedAssessment === "all" ? null : selectedAssessment;
+
+                              // Try to infer from the student's topic_progress (most recent attempted topic)
+                              if (!assessmentIdToSend && s && s.topic_progress && typeof s.topic_progress === "object") {
+                                let latestTid = null;
+                                let latestAt = 0;
+                                Object.entries(s.topic_progress).forEach(([tid, tp]) => {
+                                  // try multiple timestamp field name variants
+                                  const lastAttempt = tp && (tp.last_attempted_at || tp.lastAttemptedAt || tp.last_attemptedAt || tp.last_attempted) ? (tp.last_attempted_at || tp.lastAttemptedAt || tp.last_attemptedAt || tp.last_attempted) : null;
+                                  const tAt = lastAttempt ? new Date(lastAttempt).getTime() : 0;
+                                  if (tAt > latestAt) {
+                                    latestAt = tAt;
+                                    latestTid = tid;
+                                  }
+                                });
+                                if (latestTid) assessmentIdToSend = `${latestTid}_assessment`;
+                              }
+
+                              // Fallback: if still null, attempt to infer from student's attempts summary if present
+                              if (!assessmentIdToSend && s && s.topic_progress == null && s.attempts && s.attempts > 0) {
+                                // we don't have topic_progress, but student has aggregated attempts.
+                                // Best effort: prompt teacher to choose an assessment in the dropdown.
+                                return alert("Please select an assessment to remediate, or open the student record and choose the topic to remediate.");
+                              }
+
+                              if (!assessmentIdToSend) {
+                                return alert("Unable to determine which assessment to remediate. Please select an assessment in the dropdown.");
+                              }
+
+                              console.info("assign-remed payload", { studentId: s.id, assessmentId: assessmentIdToSend });
+
+                              const resp = await fetch(`${API_BASE}/teachers/assign-remediation`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ studentId: s.id, assessmentId: assessmentIdToSend }),
+                              });
+
+                              if (!resp.ok) {
+                                const text = await resp.text().catch(() => null);
+                                throw new Error(`server responded ${resp.status} ${text || ""}`);
+                              }
+
+                              // re-fetch latest student record
+                              const refreshed = await fetchStudentById(s.id);
+                              // open modal with refreshed student so teacher can inspect attempts/allowance
+                              openStudentDetail(refreshed || s);
+                              alert("Remediation assigned — student unlocked for 1 extra attempt.");
+                            } catch (err) {
+                              console.error(err);
+                              alert("Failed to assign remediation (see console).");
+                            }
+                          }}
+                          style={{ padding: "6px 10px", borderRadius: 8, background: "#fff", border: "1px solid rgba(37,99,235,0.14)", cursor: "pointer" }}
+                        >
+                          Remediate
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+
           {/* Attempts distribution chart */}
           <div style={{ flex: "0 0 420px", padding: 12, borderRadius: 10, background: "#fff", border: "1px solid #eef2ff" }}>
             <h4 style={{ margin: "0 0 8px 0" }}>Attempts distribution</h4>
@@ -582,63 +656,6 @@ export default function TeacherReports() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </div>
-
-          {/* Lowest-progress students (action list) */}
-          <div style={{ flex: 1, minWidth: 320, padding: 12, borderRadius: 10, background: "#fff", border: "1px solid #eef2ff" }}>
-            <h4 style={{ margin: "0 0 8px 0" }}>Students needing attention</h4>
-            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>
-              Lowest progress (based on attempted topics). Click View to inspect attempts.
-            </div>
-
-            {(() => {
-              const list = (data.students || [])
-                .map(s => {
-                  const { attempted, totalTopics, percent } = formatProgress(s);
-                  return { ...s, attempted, totalTopics, percent };
-                })
-                .sort((a,b) => a.percent - b.percent)
-                .slice(0, 5);
-
-              if (!list.length) return <div style={{ color: "#94a3b8" }}>No students available.</div>;
-
-              return (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {list.map(s => (
-                    <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 6px", borderRadius: 8, background: "#fbfdff", border: "1px solid rgba(37,99,235,0.04)" }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name || s.id}</div>
-                        <div style={{ fontSize: 12, color: "#64748b" }}>{`${s.attempted}/${s.totalTopics} • ${s.percent}% • ${s.attempts || 0} attempt(s)`}</div>
-                      </div>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button onClick={() => openStudentDetail(s)} style={{ padding: "6px 10px", borderRadius: 8, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>View</button>
-                        <button
-                          onClick={async () => {
-                            try {
-                              const resp = await fetch(`${API_BASE}/teachers/assign-remediation`, {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ studentId: s.id, assessmentId: selectedAssessment === "all" ? null : selectedAssessment }),
-                              });
-                              if (!resp.ok) throw new Error("failed");
-                              const refreshed = await fetchStudentById(s.id);
-                              openStudentDetail(refreshed || s);
-                              alert("Remediation assigned — student unlocked for 1 extra attempt.");
-                            } catch (err) {
-                              console.error(err);
-                              alert("Failed to assign remediation (see console).");
-                            }
-                          }}
-                          style={{ padding: "6px 10px", borderRadius: 8, background: "#fff", border: "1px solid rgba(37,99,235,0.14)", cursor: "pointer" }}
-                        >
-                          Remediate
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
           </div>
         </div>
       </div>
