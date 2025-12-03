@@ -218,23 +218,7 @@ export default function StudentDashboard() {
               {/* badge area */}
               <div style={{ position: "absolute", top: 10, right: 10, display: "flex", gap: 8, alignItems: "center" }}>
                 {/* Extra attempt badge (prominent, calming color) */}
-                {status === "ExtraAttempt" && (
-                  <div
-                    style={{
-                      background: color,
-                      color: "white",
-                      fontSize: 12,
-                      fontWeight: "700",
-                      padding: "4px 8px",
-                      borderRadius: 12,
-                      boxShadow: "0 2px 6px rgba(6,182,212,0.12)",
-                    }}
-                  >
-                    +1 extra
-                  </div>
-                )}
 
-                {/* status pill */}
                 <div
                   style={{
                     background: color,
@@ -245,7 +229,7 @@ export default function StudentDashboard() {
                     borderRadius: 12,
                   }}
                 >
-                  {status === "ExtraAttempt" ? "Remediate" : status}
+                  {status === "ExtraAttempt" ? "Try Again" : status}
                 </div>
               </div>
 
