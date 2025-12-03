@@ -1068,7 +1068,6 @@ app.post("/assessments", async (req, res) => {
   }
 });
 
-
 //Grades submission, stores it, updates student's topic_progress and mastered (atomic).
 app.post("/assessments/:topicId/submit", async (req, res) => {
   try {
@@ -1078,7 +1077,33 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
       return res.status(400).json({ error: "student_id and answers[] required" });
     }
 
-    // ---------- save submission (always) ----------
+    // 1) compute the deterministic assessment docId (for audit)
+    const docId = `${topicId}_assessment`;
+
+    // 2) determine attempt number by counting previous submissions for this student & topic
+    const prevSnap = await db
+      .collection("assessment_submissions")
+      .where("topic_id", "==", topicId)
+      .where("student_id", "==", student_id)
+      .get();
+    const attempts = (prevSnap && prevSnap.size) ? prevSnap.size + 1 : 1;
+
+    // 3) Score calculation: you may have your own scoring logic.
+    // For now, we create a placeholder 'items' and compute a simple score if choices/answers known.
+    // (Replace this with your actual grading implementation.)
+    const items = []; // you can fill question-level is_correct & points here
+    let score = null;
+    let passed = false;
+    // If you already returned score from client, use it; else keep null
+    if (typeof req.body.score === "number") {
+      score = req.body.score;
+      passed = !!req.body.passed;
+    } else {
+      // fallback: leave null OR implement grading using the assessment doc
+      score = null;
+      passed = false;
+    }
+
     const submission = {
       assessment_id: docId,
       topic_id: topicId,
@@ -1087,27 +1112,25 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
       score,
       passed,
       attempted_at: new Date().toISOString(),
-      attempt_number: attempts
+      attempt_number: attempts,
     };
+
+    // save submission
     await db.collection("assessment_submissions").add(submission);
 
-    // ---------- update student topic_progress and mastered/lock atomically using a transaction ----------
+    // 4) Update student's topic_progress & mastered using a transaction
     const studentRef = db.collection("students").doc(student_id);
 
-    const result = await db.runTransaction(async (tx) => {
+    const txResult = await db.runTransaction(async (tx) => {
       const studentDoc = await tx.get(studentRef);
       const sd = studentDoc.exists ? studentDoc.data() : {};
-
       const existingTP = sd.topic_progress || {};
       const existingTopic = existingTP[topicId] || {};
 
-      // read any granted extra attempts
       const extraAttemptsAvailable = Number(existingTopic.extraAttempts || 0);
-
-      // allowed attempts = 3 default + any granted extras
       const allowedAttempts = 3 + extraAttemptsAvailable;
 
-      // compute new tpForTopic (update attempts, last_score, etc.)
+      // Build new TP entry
       const tpForTopic = {
         ...(existingTopic || {}),
         attempts: attempts,
@@ -1116,39 +1139,31 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
         passed: passed
       };
 
-      // determine how many extra attempts were consumed by this submission
+      // Determine extra consumed (if attempt > 3)
       let extraConsumed = 0;
       if (attempts > 3 && extraAttemptsAvailable > 0) {
-        // how many of the attempt(s) above 3 are being consumed now
         extraConsumed = Math.min(extraAttemptsAvailable, attempts - 3);
       }
-
-      // remaining extra attempts after consumption
       const remainingExtra = Math.max(0, extraAttemptsAvailable - extraConsumed);
+      tpForTopic.extraAttempts = remainingExtra;
 
-      // store remaining extraAttempts (if any)
-      if (remainingExtra > 0) {
-        tpForTopic.extraAttempts = remainingExtra;
-      } else {
-        // remove or set to 0 to avoid stale positive values
-        tpForTopic.extraAttempts = 0;
-      }
-
-      // compute shouldLock: lock if passed OR attempts reached allowed attempts
+      // Determine shouldLock
       const shouldLock = passed || attempts >= allowedAttempts;
       if (shouldLock) {
         tpForTopic.completed = true;
         tpForTopic.locked = true;
         if (passed) tpForTopic.passed_at = new Date().toISOString();
+      } else {
+        // explicitly ensure locked/completed false when not locking
+        tpForTopic.locked = false;
+        tpForTopic.completed = false;
       }
 
-      // prepare new topic_progress map
       const newTopicProgress = {
         ...existingTP,
         [topicId]: tpForTopic
       };
 
-      // prepare mastered list (preserve existing)
       let mastered = Array.isArray(sd.mastered) ? sd.mastered.map(m => (typeof m === "object" ? m.id : m)) : [];
       let masteredAdded = false;
       if (shouldLock && !mastered.includes(topicId)) {
@@ -1156,27 +1171,25 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
         masteredAdded = true;
       }
 
-      // write both pieces in transaction
       tx.set(studentRef, { topic_progress: newTopicProgress, mastered }, { merge: true });
 
-      return { shouldLock, masteredAdded, remainingExtra };
+      return { shouldLock, masteredAdded, remainingExtra, allowedAttempts };
     });
 
-    // Non-blocking recommended update if mastered
-    if (result.shouldLock) {
-      try {
-        await updateRecommendedAfterMastered(student_id, topicId);
-      } catch (err) {
-        console.error("Non-fatal: updateRecommendedAfterMastered failed:", err);
-      }
+    // if mastered, update recommended (non-blocking)
+    if (txResult.shouldLock) {
+      updateRecommendedAfterMastered(student_id, topicId).catch(err => console.error("updateRecommended failed:", err));
     }
 
+    // return authoritative state to client
     return res.status(200).json({
       success: true,
       score,
       passed,
       attempts,
-      mastered: !!result.shouldLock
+      remainingExtra: txResult.remainingExtra,
+      allowedAttempts: txResult.allowedAttempts,
+      mastered: txResult.shouldLock
     });
 
   } catch (err) {

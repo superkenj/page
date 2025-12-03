@@ -55,9 +55,8 @@ export default function StudentTopicContent() {
         const tp = stu.topic_progress && stu.topic_progress[topicId] ? stu.topic_progress[topicId] : null;
         const extra = tp ? Number(tp.extraAttempts || 0) : 0;
         const attempts = tp ? Number(tp.attempts || 0) : 0;
-        const isLocked = tp
-          ? ((tp.locked === true || tp.completed === true) && extra <= 0) || (attempts >= (3 + extra) && extra <= 0)
-          : false;
+        const allowed = 3 + extra;
+        const isLocked = tp ? (tp.locked === true || tp.completed === true || attempts >= allowed) : false;
         setLocked(isLocked);
       } catch (err) {
         console.error("Error loading topic content:", err);
@@ -121,19 +120,15 @@ export default function StudentTopicContent() {
             // re-sync seen indicator
             if (mounted) setSeen(stu.content_seen || []);
 
-            // topic_progress from student doc
             const tp = stu.topic_progress && stu.topic_progress[topicId] ? stu.topic_progress[topicId] : null;
-            const attemptsFromTP = tp ? (tp.attempts || 0) : 0;
-            const isLockedFromTP = tp ? (tp.locked === true || tp.completed === true || attemptsFromTP >= 3) : false;
-
-            // decide lock state using: submission doc (if present) OR topic_progress from student doc
+            const extraFromTP = tp ? Number(tp.extraAttempts || 0) : 0;
+            const allowedFromTP = 3 + extraFromTP;
             const attemptsFromSubmission = submissionJson ? (submissionJson.attempt_number || submissionJson.attempts || 0) : 0;
             const passedFromSubmission = submissionJson ? !!submissionJson.passed : false;
 
-            const finalLocked =
-              passedFromSubmission === true ||
-              attemptsFromSubmission >= 3 ||
-              isLockedFromTP;
+            const finalLocked = passedFromSubmission === true ||
+              (attemptsFromSubmission >= allowedFromTP) ||
+              (tp && (tp.locked === true || tp.completed === true));
 
             if (mounted) setLocked(finalLocked);
           }
@@ -192,7 +187,7 @@ export default function StudentTopicContent() {
     setAnswers((a) => ({ ...a, [questionId]: value }));
   }
 
-  // ---------- submitAssessment: returns to Content tab on success ----------
+  // submitAssessment: returns to Content tab on success 
   async function submitAssessment() {
     // Prevent submission when locked
     if (locked) {
@@ -251,23 +246,26 @@ export default function StudentTopicContent() {
 
       const json = typeof body === "object" ? body : {};
 
-      // update local submission result for UI
-      setSubmissionResult({ score: json.score ?? null, passed: json.passed ?? false });
+      // --- authoritative locking decision using server response (preferred) ---
+      try {
+        // If server returned numeric attempts/allowedAttempts, trust that.
+        const attemptsFromServer = typeof json.attempts === "number" ? Number(json.attempts) : null;
+        const allowedFromServer = typeof json.allowedAttempts === "number" ? Number(json.allowedAttempts) : null;
+        const passedFromServer = !!json.passed;
+        const masteredFromServer = !!json.mastered;
 
-      // update local submission result for UI
-      setSubmissionResult({ score: json.score ?? null, passed: json.passed ?? false });
+        if (attemptsFromServer !== null || allowedFromServer !== null) {
+          // compute allowed attempts (fallback to 3 if allowed not present)
+          const allowed = allowedFromServer !== null ? allowedFromServer : 3;
+          const finalLocked = passedFromServer || masteredFromServer || (attemptsFromServer !== null && attemptsFromServer >= allowed);
+          setLocked(finalLocked);
+        } else {
+          // fallback: attempt to derive from submission doc + student topic_progress (existing logic)
+          let attemptsFromResponse = json.attempts || null;
+          let masteredFromResponse = typeof json.mastered !== "undefined" ? json.mastered : null;
 
-      // If backend explicitly tells us to lock, do it. Otherwise, re-check server state to be safe.
-      if (json.mastered === true || (json.attempts && json.attempts >= 3) || json.passed === true) {
-        setLocked(true);
-      } else {
-        // If response didn't include attempts/mastered information, fetch authoritative state
-        let attemptsFromResponse = json.attempts || null;
-        let masteredFromResponse = typeof json.mastered !== "undefined" ? json.mastered : null;
-
-        if (attemptsFromResponse === null || masteredFromResponse === null) {
+          // try fetching latest submission if missing
           try {
-            // get latest submission (if any)
             const subRes = await fetch(`${API_BASE}/assessments/${topicId}/submission/${studentId}`);
             if (subRes.ok) {
               const subJson = await subRes.json();
@@ -278,24 +276,28 @@ export default function StudentTopicContent() {
             console.warn("Failed to fetch latest submission during fallback:", e);
           }
 
-          // fetch student document and inspect topic_progress
+          // try fetching student doc to check extraAttempts
           try {
             const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
             if (stuRes.ok) {
               const stu = await stuRes.json();
               const tp = stu.topic_progress && stu.topic_progress[topicId] ? stu.topic_progress[topicId] : null;
+              const extra = tp ? Number(tp.extraAttempts || 0) : 0;
               const attemptsFromTP = tp ? (tp.attempts || 0) : 0;
-              const lockedFromTP = tp ? (tp.locked === true || tp.completed === true || attemptsFromTP >= 3) : false;
-
-              // final decision
-              const finalLocked = lockedFromTP || (attemptsFromResponse >= 3) || (masteredFromResponse === true) || (json.passed === true);
+              const allowed = 3 + extra;
+              const finalLocked = (tp && (tp.locked === true || tp.completed === true)) || (attemptsFromResponse >= allowed) || masteredFromResponse === true || passedFromServer;
               if (finalLocked) setLocked(true);
             }
           } catch (e) {
             console.warn("Failed to fetch student doc during fallback:", e);
           }
         }
+      } catch (errDecide) {
+        console.warn("Error deciding lock state:", errDecide);
       }
+
+      // update local submission result for UI
+      setSubmissionResult({ score: json.score ?? null, passed: json.passed ?? false });
 
       // refresh student record (so dashboard/sidebar picks up mastered/recommended)
       try {
