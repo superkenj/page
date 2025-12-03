@@ -724,10 +724,19 @@ export default function TeacherReports() {
                       byTopic[tid].push(a);
                     });
 
+                    // Replace the current map body with this block:
                     return Object.entries(byTopic).map(([tid, attemptsForTopic]) => {
-                      const topicObj = (data.topics || []).find((t) => t.id === tid) || (data.assessments || []).find((a) => a.topic_id === tid) || null;
+                      const topicObj =
+                        (data.topics || []).find((t) => t.id === tid) ||
+                        (data.assessments || []).find((a) => a.topic_id === tid) ||
+                        null;
                       const topicTitle = topicObj ? (topicObj.name || topicObj.title || topicObj.id) : tid;
 
+                      // compute topic_progress entry for this student (MUST be outside JSX)
+                      const studentTP = (studentDetail.student.topic_progress || {})[tid] || {};
+                      const extraAttempts = Number(studentTP.extraAttempts || 0);
+
+                      // sort attempts ascending by attempt_number (if present) else by date ascending
                       attemptsForTopic.sort((x, y) => {
                         const ax = x.attempt_number != null ? x.attempt_number : (x.attempted_at ? new Date(x.attempted_at).getTime() : 0);
                         const ay = y.attempt_number != null ? y.attempt_number : (y.attempted_at ? new Date(y.attempted_at).getTime() : 0);
@@ -761,7 +770,9 @@ export default function TeacherReports() {
 
                             <div style={{ textAlign: "right" }}>
                               <span style={{
-                                display: "inline-block",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 8,
                                 fontSize: 12,
                                 padding: "6px 10px",
                                 borderRadius: 18,
@@ -770,7 +781,22 @@ export default function TeacherReports() {
                                 fontWeight: 700,
                                 border: "1px solid rgba(37,99,235,0.08)"
                               }}>
-                                {attemptsForTopic.length} attempt(s)
+                                <span>{attemptsForTopic.length} attempt{attemptsForTopic.length !== 1 ? "s" : ""}</span>
+                                {extraAttempts > 0 && (
+                                  <span style={{
+                                    display: "inline-block",
+                                    fontSize: 11,
+                                    padding: "4px 8px",
+                                    borderRadius: 12,
+                                    background: "#fff",
+                                    color: "#2563eb",
+                                    fontWeight: 700,
+                                    boxShadow: "inset 0 -1px 0 rgba(37,99,235,0.06)",
+                                    border: "1px solid rgba(37,99,235,0.06)"
+                                  }}>
+                                    +{extraAttempts} extra
+                                  </span>
+                                )}
                               </span>
                             </div>
                           </div>

@@ -612,7 +612,7 @@ app.post("/teachers/assign-remediation", async (req, res) => {
     const { studentId, assessmentId } = req.body;
     if (!studentId) return res.status(400).json({ error: "studentId is required" });
 
-    // create remediation doc (audit)
+    // store remediation record (audit)
     const payload = {
       studentId,
       assessmentId: assessmentId || null,
@@ -622,41 +622,35 @@ app.post("/teachers/assign-remediation", async (req, res) => {
     };
     const docRef = await db.collection("remediations").add(payload);
 
-    // If an assessmentId was provided, map it to a topicId and grant one extra attempt
+    // If an assessmentId is provided, grant one extra attempt for that topic.
+    // assessmentId is expected to be like "<topicId>_assessment"
     if (assessmentId) {
-      // support assessment id patterns like "<topic>_assessment" or raw topic ids
-      const topicId = assessmentId.endsWith("_assessment") ? assessmentId.replace(/_assessment$/, "") : assessmentId;
-
+      const topicId = assessmentId.replace(/_assessment$/i, "");
       const studentRef = db.collection("students").doc(studentId);
+      // Use a transaction to safely increment the extraAttempts counter
       await db.runTransaction(async (tx) => {
-        const sDoc = await tx.get(studentRef);
-        if (!sDoc.exists) return;
-
-        const sdata = sDoc.data() || {};
-        const tp = sdata.topic_progress && typeof sdata.topic_progress === "object"
-          ? { ...sdata.topic_progress }
-          : {};
-
-        const curr = tp[topicId] || {};
-
-        // Grant a one-time extra attempt and unlock for immediate retry.
-        const updated = {
-          ...curr,
-          extraAttemptsAllowed: (Number(curr.extraAttemptsAllowed) || 0) + 1,
-          // allow immediate retry:
-          locked: false,
-          // If previously marked completed due to lock, unset completed so UI shows active again
-          completed: false,
+        const studDoc = await tx.get(studentRef);
+        if (!studDoc.exists) return;
+        const sd = studDoc.data() || {};
+        const tp = sd.topic_progress || {};
+        const current = (tp[topicId] && Number(tp[topicId].extraAttempts)) || 0;
+        const newTpForTopic = {
+          ...(tp[topicId] || {}),
+          extraAttempts: current + 1,
+          remediationGrantedAt: new Date().toISOString()
         };
-
-        tp[topicId] = updated;
-        tx.set(studentRef, { topic_progress: tp }, { merge: true });
+        const newTopicProgress = { ...tp, [topicId]: newTpForTopic };
+        tx.set(studentRef, { topic_progress: newTopicProgress }, { merge: true });
       });
+      console.log(`Remediation: granted +1 extra attempt to ${studentId} for ${topicId}`);
+    } else {
+      // If no assessmentId, optionally grant a global remediation policy (example: no-op or implement as needed)
+      console.log(`Remediation created for student ${studentId} (no assessmentId specified)`);
     }
 
     res.status(200).json({ success: true, id: docRef.id });
   } catch (err) {
-    console.error("POST /teachers/assign-remediation", err);
+    console.error("POST /teachers/assign-remediation error:", err);
     res.status(500).json({ error: "Failed to assign remediation" });
   }
 });
@@ -1103,71 +1097,67 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
       const sd = studentDoc.exists ? studentDoc.data() : {};
 
       const existingTP = sd.topic_progress || {};
-      const currTP = existingTP[topicId] || {};
+      const existingTopic = existingTP[topicId] || {};
 
-      // Build the new topic_progress entry for this topic
+      // read any granted extra attempts
+      const extraAttemptsAvailable = Number(existingTopic.extraAttempts || 0);
+
+      // allowed attempts = 3 default + any granted extras
+      const allowedAttempts = 3 + extraAttemptsAvailable;
+
+      // compute new tpForTopic (update attempts, last_score, etc.)
       const tpForTopic = {
-        ...(currTP || {}),
+        ...(existingTopic || {}),
         attempts: attempts,
         last_score: score,
         last_attempted_at: new Date().toISOString(),
         passed: passed
       };
 
-      // Extra attempt allowance handling
-      const extra = Number(currTP.extraAttemptsAllowed || 0);
+      // determine how many extra attempts were consumed by this submission
+      let extraConsumed = 0;
+      if (attempts > 3 && extraAttemptsAvailable > 0) {
+        // how many of the attempt(s) above 3 are being consumed now
+        extraConsumed = Math.min(extraAttemptsAvailable, attempts - 3);
+      }
 
-      if (extra > 0) {
-        // consume one extra attempt
-        tpForTopic.extraAttemptsAllowed = extra - 1;
+      // remaining extra attempts after consumption
+      const remainingExtra = Math.max(0, extraAttemptsAvailable - extraConsumed);
 
-        // If we've consumed the allowance and it's now zero, and student still hasn't passed
-        // and they've reached the attempt threshold, re-lock (and optionally mark completed)
-        if (tpForTopic.extraAttemptsAllowed <= 0 && !passed && attempts >= 3) {
-          tpForTopic.locked = true;
-          tpForTopic.completed = true;
-        } else {
-          // keep unlocked so student can continue attempt(s)
-          tpForTopic.locked = false;
-          tpForTopic.completed = false;
-        }
-
-        // If passed in this extra attempt, mark passed_at
-        if (passed) {
-          tpForTopic.passed_at = new Date().toISOString();
-          tpForTopic.locked = true; // lock because mastered
-          tpForTopic.completed = true;
-        }
-
+      // store remaining extraAttempts (if any)
+      if (remainingExtra > 0) {
+        tpForTopic.extraAttempts = remainingExtra;
       } else {
-        // No extra allowance; apply existing lock rules
-        const shouldLock = passed || attempts >= 3;
-        if (shouldLock) {
-          tpForTopic.completed = true;
-          tpForTopic.locked = true;
-          if (passed) tpForTopic.passed_at = new Date().toISOString();
-        } else {
-          // keep unlocked/in-progress
-          tpForTopic.locked = false;
-        }
+        // remove or set to 0 to avoid stale positive values
+        tpForTopic.extraAttempts = 0;
       }
 
-      // prepare mastered list (preserve existing)
-      let mastered = Array.isArray(sd.mastered) ? sd.mastered.map(m => (typeof m === "object" ? m.id : m)) : [];
-      let masteredAdded = false;
-      if ((tpForTopic.locked || tpForTopic.passed) && !mastered.includes(topicId) && tpForTopic.passed) {
-        mastered.push(topicId);
-        masteredAdded = true;
+      // compute shouldLock: lock if passed OR attempts reached allowed attempts
+      const shouldLock = passed || attempts >= allowedAttempts;
+      if (shouldLock) {
+        tpForTopic.completed = true;
+        tpForTopic.locked = true;
+        if (passed) tpForTopic.passed_at = new Date().toISOString();
       }
 
+      // prepare new topic_progress map
       const newTopicProgress = {
         ...existingTP,
         [topicId]: tpForTopic
       };
 
+      // prepare mastered list (preserve existing)
+      let mastered = Array.isArray(sd.mastered) ? sd.mastered.map(m => (typeof m === "object" ? m.id : m)) : [];
+      let masteredAdded = false;
+      if (shouldLock && !mastered.includes(topicId)) {
+        mastered.push(topicId);
+        masteredAdded = true;
+      }
+
+      // write both pieces in transaction
       tx.set(studentRef, { topic_progress: newTopicProgress, mastered }, { merge: true });
 
-      return { shouldLock: tpForTopic.locked || false, masteredAdded };
+      return { shouldLock, masteredAdded, remainingExtra };
     });
 
     // Non-blocking recommended update if mastered
