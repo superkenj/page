@@ -607,12 +607,14 @@ app.get("/reports/assessment/:assessmentId/item-analysis", async (req, res) => {
 });
 
 // ✅ Assign remediation to a student (and grant extra attempt if assessmentId provided)
+// if no assessmentId provided, scan student's topic_progress and grant
+// a single extra attempt to EACH eligible topic (attempts >= 3 && not passed && extraAttempts == 0).
 app.post("/teachers/assign-remediation", async (req, res) => {
   try {
     const { studentId, assessmentId } = req.body;
     if (!studentId) return res.status(400).json({ error: "studentId is required" });
 
-    // store remediation record (audit)
+    // store remediation audit (always create a top-level record)
     const payload = {
       studentId,
       assessmentId: assessmentId || null,
@@ -622,24 +624,28 @@ app.post("/teachers/assign-remediation", async (req, res) => {
     };
     const docRef = await db.collection("remediations").add(payload);
 
-    // If an assessmentId is provided, grant one extra attempt for that topic.
+    const studentRef = db.collection("students").doc(studentId);
+
+    // If assessmentId is provided, preserve existing single-topic behavior (but do not blindly increment more than 1)
     if (assessmentId) {
       const topicId = assessmentId.replace(/_assessment$/i, "");
-      const studentRef = db.collection("students").doc(studentId);
-      // Use a transaction to safely increment the extraAttempts counter
+      // Use a transaction to safely set extraAttempts to 1 if currently 0 (ensures only single extra)
       await db.runTransaction(async (tx) => {
         const studDoc = await tx.get(studentRef);
         if (!studDoc.exists) return;
         const sd = studDoc.data() || {};
         const tp = sd.topic_progress || {};
-        const current = (tp[topicId] && Number(tp[topicId].extraAttempts)) || 0;
+        const currTopic = tp[topicId] || {};
+        const currentExtra = Number(currTopic.extraAttempts || 0);
 
-        // grant +1 extra attempt and clear lock/completed so student can attempt again
+        // only grant if none exists yet (to ensure "Only 1 extra attempt will be given to each topic")
+        const newExtra = currentExtra > 0 ? currentExtra : 1;
+
         const newTpForTopic = {
-          ...(tp[topicId] || {}),
-          extraAttempts: current + 1,
+          ...(currTopic || {}),
+          extraAttempts: newExtra,
           remediationGrantedAt: new Date().toISOString(),
-          // IMPORTANT: clear any lock/completed flags so the frontend will allow access
+          // clear lock/completed to allow the extra attempt
           locked: false,
           completed: false
         };
@@ -647,13 +653,78 @@ app.post("/teachers/assign-remediation", async (req, res) => {
         const newTopicProgress = { ...tp, [topicId]: newTpForTopic };
         tx.set(studentRef, { topic_progress: newTopicProgress }, { merge: true });
       });
-      console.log(`Remediation: granted +1 extra attempt to ${studentId} for ${topicId}`);
-    } else {
-      // If no assessmentId, optionally grant a global remediation policy (example: no-op or implement as needed)
-      console.log(`Remediation created for student ${studentId} (no assessmentId specified)`);
+
+      console.log(`Remediation: granted extra attempt (topic) to ${studentId} for ${topicId}`);
+      return res.status(200).json({ success: true, id: docRef.id, topicsGranted: 1, details: [`${topicId}`] });
     }
 
-    res.status(200).json({ success: true, id: docRef.id });
+    // If no assessmentId provided => scan student's topic_progress and grant a single extra attempt
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) {
+      console.log(`Remediation created but student ${studentId} not found`);
+      return res.status(200).json({ success: true, id: docRef.id, topicsGranted: 0, details: [] });
+    }
+
+    const sd = studentDoc.data() || {};
+    const tp = sd.topic_progress || {};
+
+    // Collect eligible topics: attempts >= 3, not passed, and extraAttempts is 0 or missing
+    const eligibleTopicIds = Object.entries(tp)
+      .filter(([tid, tData]) => {
+        const attempts = Number(tData?.attempts || 0);
+        const passed = !!tData?.passed;
+        const extra = Number(tData?.extraAttempts || 0);
+        return attempts >= 3 && !passed && extra === 0;
+      })
+      .map(([tid]) => tid);
+
+    if (!eligibleTopicIds.length) {
+      console.log(`Remediation: no eligible topics for ${studentId}`);
+      return res.status(200).json({ success: true, id: docRef.id, topicsGranted: 0, details: [] });
+    }
+
+    // Apply updates in a single transaction: set extraAttempts = 1 for each eligible topic, clear locked/completed
+    await db.runTransaction(async (tx) => {
+      const studDocTx = await tx.get(studentRef);
+      if (!studDocTx.exists) return;
+      const sdTx = studDocTx.data() || {};
+      const tpTx = sdTx.topic_progress || {};
+
+      const newTP = { ...tpTx };
+      const grantedDetails = [];
+
+      eligibleTopicIds.forEach((tid) => {
+        const curr = tpTx[tid] || {};
+        // Only set if no extraAttempts (defensive)
+        const currentExtra = Number(curr.extraAttempts || 0);
+        if (currentExtra === 0) {
+          newTP[tid] = {
+            ...(curr || {}),
+            extraAttempts: 1,
+            remediationGrantedAt: new Date().toISOString(),
+            locked: false,
+            completed: false
+          };
+          grantedDetails.push(tid);
+        }
+      });
+
+      tx.set(studentRef, { topic_progress: newTP }, { merge: true });
+      // store the granted topics in a remediation-log subcollection for audit (optional but helpful)
+      const remLogCol = db.collection("remediations_log");
+      grantedDetails.forEach((tid) => {
+        tx.set(remLogCol.doc(), {
+          remediationId: docRef.id,
+          studentId,
+          topicId: tid,
+          grantedAt: new Date().toISOString(),
+          grantedBy: req.body.createdBy || "teacher-ui"
+        });
+      });
+    });
+
+    console.log(`Remediation: granted +1 extra to ${eligibleTopicIds.length} topic(s) for ${studentId}:`, eligibleTopicIds);
+    return res.status(200).json({ success: true, id: docRef.id, topicsGranted: eligibleTopicIds.length, details: eligibleTopicIds });
   } catch (err) {
     console.error("POST /teachers/assign-remediation error:", err);
     res.status(500).json({ error: "Failed to assign remediation" });

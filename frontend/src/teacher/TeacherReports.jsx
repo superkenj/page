@@ -554,7 +554,9 @@ export default function TeacherReports() {
                         <button
                           onClick={async () => {
                             try {
-                              // Determine assessmentId to send
+                              // Determine assessmentId to send (try selectedAssessment, else infer latest topic)
+                              // If we cannot determine a single topic, we will call the endpoint WITHOUT assessmentId
+                              // => backend will scan student's topic_progress and grant +1 for each eligible topic.
                               let assessmentIdToSend = selectedAssessment === "all" ? null : selectedAssessment;
 
                               // Try to infer from the student's topic_progress (most recent attempted topic)
@@ -562,8 +564,7 @@ export default function TeacherReports() {
                                 let latestTid = null;
                                 let latestAt = 0;
                                 Object.entries(s.topic_progress).forEach(([tid, tp]) => {
-                                  // try multiple timestamp field name variants
-                                  const lastAttempt = tp && (tp.last_attempted_at || tp.lastAttemptedAt || tp.last_attemptedAt || tp.last_attempted) ? (tp.last_attempted_at || tp.lastAttemptedAt || tp.last_attemptedAt || tp.last_attempted) : null;
+                                  const lastAttempt = tp && (tp.last_attempted_at || tp.lastAttemptedAt || tp.last_attempted || null);
                                   const tAt = lastAttempt ? new Date(lastAttempt).getTime() : 0;
                                   if (tAt > latestAt) {
                                     latestAt = tAt;
@@ -573,23 +574,18 @@ export default function TeacherReports() {
                                 if (latestTid) assessmentIdToSend = `${latestTid}_assessment`;
                               }
 
-                              // Fallback: if still null, attempt to infer from student's attempts summary if present
-                              if (!assessmentIdToSend && s && s.topic_progress == null && s.attempts && s.attempts > 0) {
-                                // we don't have topic_progress, but student has aggregated attempts.
-                                // Best effort: prompt teacher to choose an assessment in the dropdown.
-                                return alert("Please select an assessment to remediate, or open the student record and choose the topic to remediate.");
-                              }
+                              // If student has no topic_progress but aggregated attempts exist, let backend handle scanning
+                              // (we will send no assessmentId in that case)
+                              // Prepare request body
+                              const body = { studentId: s.id };
+                              if (assessmentIdToSend) body.assessmentId = assessmentIdToSend;
 
-                              if (!assessmentIdToSend) {
-                                return alert("Unable to determine which assessment to remediate. Please select an assessment in the dropdown.");
-                              }
-
-                              console.info("assign-remed payload", { studentId: s.id, assessmentId: assessmentIdToSend });
+                              console.info("assign-remed payload", body);
 
                               const resp = await fetch(`${API_BASE}/teachers/assign-remediation`, {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ studentId: s.id, assessmentId: assessmentIdToSend }),
+                                body: JSON.stringify(body),
                               });
 
                               if (!resp.ok) {
@@ -597,13 +593,21 @@ export default function TeacherReports() {
                                 throw new Error(`server responded ${resp.status} ${text || ""}`);
                               }
 
-                              // re-fetch latest student record
+                              const json = await resp.json().catch(() => ({}));
+
+                              // Provide friendly feedback depending on backend response
+                              if (json.topicsGranted && json.topicsGranted > 0) {
+                                const details = Array.isArray(json.details) && json.details.length ? ` (${json.details.join(", ")})` : "";
+                                alert(`Remediation assigned — ${json.topicsGranted} topic(s) unlocked for 1 extra attempt${details}.`);
+                              } else {
+                                alert("No eligible topics found for remediation (no topics with 3 failed attempts and no extra attempts).");
+                              }
+
+                              // re-fetch latest student record and open detail modal so teacher can inspect
                               const refreshed = await fetchStudentById(s.id);
-                              // open modal with refreshed student so teacher can inspect attempts/allowance
                               openStudentDetail(refreshed || s);
-                              alert("Remediation assigned — student unlocked for 1 extra attempt.");
                             } catch (err) {
-                              console.error(err);
+                              console.error("Remediate error:", err);
                               alert("Failed to assign remediation (see console).");
                             }
                           }}
