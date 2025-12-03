@@ -554,31 +554,14 @@ export default function TeacherReports() {
                         <button
                           onClick={async () => {
                             try {
-                              // Determine assessmentId to send (try selectedAssessment, else infer latest topic)
-                              // If we cannot determine a single topic, we will call the endpoint WITHOUT assessmentId
-                              // => backend will scan student's topic_progress and grant +1 for each eligible topic.
-                              let assessmentIdToSend = selectedAssessment === "all" ? null : selectedAssessment;
-
-                              // Try to infer from the student's topic_progress (most recent attempted topic)
-                              if (!assessmentIdToSend && s && s.topic_progress && typeof s.topic_progress === "object") {
-                                let latestTid = null;
-                                let latestAt = 0;
-                                Object.entries(s.topic_progress).forEach(([tid, tp]) => {
-                                  const lastAttempt = tp && (tp.last_attempted_at || tp.lastAttemptedAt || tp.last_attempted || null);
-                                  const tAt = lastAttempt ? new Date(lastAttempt).getTime() : 0;
-                                  if (tAt > latestAt) {
-                                    latestAt = tAt;
-                                    latestTid = tid;
-                                  }
-                                });
-                                if (latestTid) assessmentIdToSend = `${latestTid}_assessment`;
-                              }
-
-                              // If student has no topic_progress but aggregated attempts exist, let backend handle scanning
-                              // (we will send no assessmentId in that case)
-                              // Prepare request body
+                              // Only send assessmentId when the teacher explicitly selected one
+                              // (selectedAssessment !== "all"). Do NOT infer a topic from topic_progress.
+                              // If no assessmentId is provided, backend will scan topic_progress and grant +1
+                              // to each eligible topic (attempts>=3 && not passed && extraAttempts===0).
                               const body = { studentId: s.id };
-                              if (assessmentIdToSend) body.assessmentId = assessmentIdToSend;
+                              if (selectedAssessment && selectedAssessment !== "all") {
+                                body.assessmentId = selectedAssessment;
+                              }
 
                               console.info("assign-remed payload", body);
 
