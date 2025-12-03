@@ -1069,6 +1069,7 @@ app.post("/assessments", async (req, res) => {
 });
 
 //Grades submission, stores it, updates student's topic_progress and mastered (atomic).
+// Grades submission, stores it, updates student's topic_progress and mastered (atomic).
 app.post("/assessments/:topicId/submit", async (req, res) => {
   try {
     const { topicId } = req.params;
@@ -1077,93 +1078,170 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
       return res.status(400).json({ error: "student_id and answers[] required" });
     }
 
-    // 1) compute the deterministic assessment docId (for audit)
+    // fetch assessment doc (deterministic id)
     const docId = `${topicId}_assessment`;
+    const assessmentDoc = await db.collection("assessments").doc(docId).get();
+    if (!assessmentDoc.exists) {
+      return res.status(404).json({ error: "Assessment not found" });
+    }
+    const assessment = assessmentDoc.data() || {};
+    const questions = Array.isArray(assessment.questions) ? assessment.questions : [];
 
-    // 2) determine attempt number by counting previous submissions for this student & topic
-    const prevSnap = await db
-      .collection("assessment_submissions")
+    // Normalize answers input into map: question_id -> student_answer
+    const ansMap = {};
+    answers.forEach(a => {
+      if (a && a.question_id) ansMap[a.question_id] = a.student_answer;
+    });
+
+    // Grade each question (best-effort). Default points_per_question = q.points || 1
+    const items = [];
+    let earnedPoints = 0;
+    let totalPoints = 0;
+
+    for (const q of questions) {
+      const qid = q.question_id || q.id || null;
+      if (!qid) continue;
+
+      const studentAnswer = ansMap[qid];
+      const pointsPossible = Number(q.points ?? 1) || 1;
+      totalPoints += pointsPossible;
+
+      // determine correctness by type (simple heuristics)
+      let isCorrect = false;
+      try {
+        if (q.type === "multiple_choice") {
+          // accept either q.correct (string) or q.correct_choice
+          const correct = (q.correct_answer ?? q.correct_choice ?? q.correct ?? "").toString().trim();
+          isCorrect = (studentAnswer !== undefined && studentAnswer !== null) && (studentAnswer.toString().trim() === correct);
+        } else if (q.type === "numeric") {
+          const tolerance = Number(q.tolerance ?? 0);
+          const saNum = studentAnswer !== undefined && studentAnswer !== null ? Number(studentAnswer) : NaN;
+          const correctNum = Number(q.correct_answer ?? q.correct ?? NaN);
+          if (!Number.isNaN(saNum) && !Number.isNaN(correctNum)) {
+            isCorrect = Math.abs(saNum - correctNum) <= Math.abs(tolerance);
+          }
+        } else if (q.type === "short_answer") {
+          const correctText = (q.correct_answer ?? q.correct ?? "").toString().trim().toLowerCase();
+          const studentText = (studentAnswer ?? "").toString().trim().toLowerCase();
+          isCorrect = !!(correctText && studentText && studentText === correctText);
+        } else if (q.type === "ordering") {
+          // expect arrays — normalize to JSON string compare
+          const correctOrder = Array.isArray(q.correct_order) ? q.correct_order : (q.correct_answer && Array.isArray(q.correct_answer) ? q.correct_answer : null);
+          if (Array.isArray(correctOrder) && Array.isArray(studentAnswer)) {
+            isCorrect = JSON.stringify(correctOrder.map(s=>String(s).trim())) === JSON.stringify(studentAnswer.map(s=>String(s).trim()));
+          }
+        } else {
+          // fallback: if question has correct_answer do text compare
+          const correct = (q.correct_answer ?? q.correct ?? "").toString().trim().toLowerCase();
+          const studentText = (studentAnswer ?? "").toString().trim().toLowerCase();
+          isCorrect = !!(correct && studentText && studentText === correct);
+        }
+      } catch (e) {
+        // grading error -> treat as incorrect
+        isCorrect = false;
+      }
+
+      const awarded = isCorrect ? pointsPossible : 0;
+      earnedPoints += awarded;
+
+      items.push({
+        question_id: qid,
+        question_text: q.question ?? q.prompt ?? null,
+        student_answer: studentAnswer ?? null,
+        points_possible: pointsPossible,
+        points_awarded: awarded,
+        is_correct: !!isCorrect,
+        type: q.type ?? null
+      });
+    }
+
+    // compute score % (rounded) or null if no points
+    const scorePercent = totalPoints ? Math.round((earnedPoints / totalPoints) * 100) : null;
+
+    // passed? use assessment.passing_score or fallback to 70
+    const passingScore = Number(assessment.passing_score ?? assessment.passingScore ?? 70);
+    const passed = (scorePercent !== null) ? (scorePercent >= passingScore) : false;
+
+    // determine attempt number by counting previous submissions for this student+topic
+    const prevSnap = await db.collection("assessment_submissions")
       .where("topic_id", "==", topicId)
       .where("student_id", "==", student_id)
       .get();
-    const attempts = (prevSnap && prevSnap.size) ? prevSnap.size + 1 : 1;
+    const attempts = (prevSnap && Array.isArray(prevSnap.docs)) ? prevSnap.size + 1 : 1;
 
-    // 3) Score calculation: you may have your own scoring logic.
-    // For now, we create a placeholder 'items' and compute a simple score if choices/answers known.
-    // (Replace this with your actual grading implementation.)
-    const items = []; // you can fill question-level is_correct & points here
-    let score = null;
-    let passed = false;
-    // If you already returned score from client, use it; else keep null
-    if (typeof req.body.score === "number") {
-      score = req.body.score;
-      passed = !!req.body.passed;
-    } else {
-      // fallback: leave null OR implement grading using the assessment doc
-      score = null;
-      passed = false;
-    }
-
+    // Build submission doc
     const submission = {
       assessment_id: docId,
       topic_id: topicId,
       student_id,
       items,
-      score,
+      earnedPoints,
+      totalPoints,
+      score: scorePercent,
       passed,
       attempted_at: new Date().toISOString(),
-      attempt_number: attempts,
+      attempt_number: attempts
     };
 
-    // save submission
+    // Save submission
     await db.collection("assessment_submissions").add(submission);
 
-    // 4) Update student's topic_progress & mastered using a transaction
+    // ---------- update student topic_progress and mastered/lock atomically using a transaction ----------
     const studentRef = db.collection("students").doc(student_id);
 
     const txResult = await db.runTransaction(async (tx) => {
       const studentDoc = await tx.get(studentRef);
       const sd = studentDoc.exists ? studentDoc.data() : {};
+
       const existingTP = sd.topic_progress || {};
       const existingTopic = existingTP[topicId] || {};
 
+      // read any granted extra attempts
       const extraAttemptsAvailable = Number(existingTopic.extraAttempts || 0);
+
+      // allowed attempts = 3 default + any granted extras
       const allowedAttempts = 3 + extraAttemptsAvailable;
 
-      // Build new TP entry
+      // compute new tpForTopic (update attempts, last_score, etc.)
       const tpForTopic = {
         ...(existingTopic || {}),
         attempts: attempts,
-        last_score: score,
+        last_score: scorePercent,
         last_attempted_at: new Date().toISOString(),
         passed: passed
       };
 
-      // Determine extra consumed (if attempt > 3)
+      // determine how many extra attempts were consumed by this submission
       let extraConsumed = 0;
       if (attempts > 3 && extraAttemptsAvailable > 0) {
         extraConsumed = Math.min(extraAttemptsAvailable, attempts - 3);
       }
+
+      // remaining extra attempts after consumption
       const remainingExtra = Math.max(0, extraAttemptsAvailable - extraConsumed);
+
+      // store remaining extraAttempts (if any)
       tpForTopic.extraAttempts = remainingExtra;
 
-      // Determine shouldLock
+      // compute shouldLock: lock if passed OR attempts reached allowed attempts
       const shouldLock = passed || attempts >= allowedAttempts;
       if (shouldLock) {
         tpForTopic.completed = true;
         tpForTopic.locked = true;
         if (passed) tpForTopic.passed_at = new Date().toISOString();
       } else {
-        // explicitly ensure locked/completed false when not locking
-        tpForTopic.locked = false;
+        // ensure locked/completed false if not mastered
         tpForTopic.completed = false;
+        tpForTopic.locked = false;
       }
 
+      // prepare new topic_progress map
       const newTopicProgress = {
         ...existingTP,
         [topicId]: tpForTopic
       };
 
+      // prepare mastered list (preserve existing)
       let mastered = Array.isArray(sd.mastered) ? sd.mastered.map(m => (typeof m === "object" ? m.id : m)) : [];
       let masteredAdded = false;
       if (shouldLock && !mastered.includes(topicId)) {
@@ -1171,29 +1249,34 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
         masteredAdded = true;
       }
 
+      // write both pieces in transaction
       tx.set(studentRef, { topic_progress: newTopicProgress, mastered }, { merge: true });
 
-      return { shouldLock, masteredAdded, remainingExtra, allowedAttempts };
+      return { shouldLock, masteredAdded, remainingExtra };
     });
 
-    // if mastered, update recommended (non-blocking)
+    // Non-blocking recommended update if mastered
     if (txResult.shouldLock) {
-      updateRecommendedAfterMastered(student_id, topicId).catch(err => console.error("updateRecommended failed:", err));
+      try {
+        await updateRecommendedAfterMastered(student_id, topicId);
+      } catch (err) {
+        console.error("Non-fatal: updateRecommendedAfterMastered failed:", err);
+      }
     }
 
-    // return authoritative state to client
+    // Respond with useful info
     return res.status(200).json({
       success: true,
-      score,
+      score: scorePercent,
       passed,
       attempts,
-      remainingExtra: txResult.remainingExtra,
-      allowedAttempts: txResult.allowedAttempts,
-      mastered: txResult.shouldLock
+      earnedPoints,
+      totalPoints,
+      mastered: !!txResult.shouldLock
     });
 
   } catch (err) {
-    console.error("POST /assessments/:topicId/submit", err);
+    console.error("POST /assessments/:topicId/submit error:", err);
     return res.status(500).json({ error: "Server error while submitting. Your attempt may still be recorded." });
   }
 });
