@@ -59,6 +59,18 @@ export default function TeacherReports() {
     }
   }
 
+  async function fetchStudentById(id) {
+    try {
+      const r = await fetch(`${API_BASE}/students/${encodeURIComponent(id)}`);
+      if (!r.ok) return null;
+      const j = await r.json();
+      return j;
+    } catch (err) {
+      console.error("fetchStudentById error", err);
+      return null;
+    }
+  }
+
   // Count topics with recorded assessment attempts in student.topic_progress
   function topicAttemptsCount(student) {
     if (student.topic_progress && typeof student.topic_progress === "object") {
@@ -499,20 +511,23 @@ export default function TeacherReports() {
                             View
                           </button>
                           <button
-                            onClick={() => {
-                              fetch(`${API_BASE}/teachers/assign-remediation`, {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ studentId: s.id, assessmentId: selectedAssessment === "all" ? null : selectedAssessment }),
-                              })
-                                .then(r => {
-                                  if (!r.ok) throw new Error("failed");
-                                  alert("Remediation assigned (backend must implement endpoint).");
-                                })
-                                .catch(err => {
-                                  console.error(err);
-                                  alert("Failed to assign remediation (see console).");
+                            onClick={async () => {
+                              try {
+                                const resp = await fetch(`${API_BASE}/teachers/assign-remediation`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ studentId: s.id, assessmentId: selectedAssessment === "all" ? null : selectedAssessment }),
                                 });
+                                if (!resp.ok) throw new Error("failed");
+                                // re-fetch latest student record
+                                const refreshed = await fetchStudentById(s.id);
+                                // open modal with refreshed student so teacher can inspect attempts/allowance
+                                openStudentDetail(refreshed || s);
+                                alert("Remediation assigned — student unlocked for 1 extra attempt.");
+                              } catch (err) {
+                                console.error(err);
+                                alert("Failed to assign remediation (see console).");
+                              }
                             }}
                             style={{ padding: "6px 8px", borderRadius: 6 }}
                           >
@@ -597,22 +612,27 @@ export default function TeacherReports() {
                       </div>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => openStudentDetail(s)} style={{ padding: "6px 10px", borderRadius: 8, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>View</button>
-                        <button onClick={() => {
-                          // quick remediation assign (existing endpoint)
-                          fetch(`${API_BASE}/teachers/assign-remediation`, {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ studentId: s.id, assessmentId: selectedAssessment === "all" ? null : selectedAssessment }),
-                          })
-                            .then(r => {
-                              if (!r.ok) throw new Error("failed");
-                              alert("Remediation assigned.");
-                            })
-                            .catch(err => {
+                        <button
+                          onClick={async () => {
+                            try {
+                              const resp = await fetch(`${API_BASE}/teachers/assign-remediation`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ studentId: s.id, assessmentId: selectedAssessment === "all" ? null : selectedAssessment }),
+                              });
+                              if (!resp.ok) throw new Error("failed");
+                              const refreshed = await fetchStudentById(s.id);
+                              openStudentDetail(refreshed || s);
+                              alert("Remediation assigned — student unlocked for 1 extra attempt.");
+                            } catch (err) {
                               console.error(err);
-                              alert("Failed to assign remediation.");
-                            });
-                        }} style={{ padding: "6px 10px", borderRadius: 8, background: "#fff", border: "1px solid rgba(37,99,235,0.14)", cursor: "pointer" }}>Remediate</button>
+                              alert("Failed to assign remediation (see console).");
+                            }
+                          }}
+                          style={{ padding: "6px 10px", borderRadius: 8, background: "#fff", border: "1px solid rgba(37,99,235,0.14)", cursor: "pointer" }}
+                        >
+                          Remediate
+                        </button>
                       </div>
                     </div>
                   ))}

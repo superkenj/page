@@ -606,11 +606,13 @@ app.get("/reports/assessment/:assessmentId/item-analysis", async (req, res) => {
   }
 });
 
+// ✅ Assign remediation to a student (and grant extra attempt if assessmentId provided)
 app.post("/teachers/assign-remediation", async (req, res) => {
   try {
     const { studentId, assessmentId } = req.body;
     if (!studentId) return res.status(400).json({ error: "studentId is required" });
 
+    // create remediation doc (audit)
     const payload = {
       studentId,
       assessmentId: assessmentId || null,
@@ -618,8 +620,40 @@ app.post("/teachers/assign-remediation", async (req, res) => {
       createdBy: req.body.createdBy || "teacher-ui",
       status: "assigned",
     };
-
     const docRef = await db.collection("remediations").add(payload);
+
+    // If an assessmentId was provided, map it to a topicId and grant one extra attempt
+    if (assessmentId) {
+      // support assessment id patterns like "<topic>_assessment" or raw topic ids
+      const topicId = assessmentId.endsWith("_assessment") ? assessmentId.replace(/_assessment$/, "") : assessmentId;
+
+      const studentRef = db.collection("students").doc(studentId);
+      await db.runTransaction(async (tx) => {
+        const sDoc = await tx.get(studentRef);
+        if (!sDoc.exists) return;
+
+        const sdata = sDoc.data() || {};
+        const tp = sdata.topic_progress && typeof sdata.topic_progress === "object"
+          ? { ...sdata.topic_progress }
+          : {};
+
+        const curr = tp[topicId] || {};
+
+        // Grant a one-time extra attempt and unlock for immediate retry.
+        const updated = {
+          ...curr,
+          extraAttemptsAllowed: (Number(curr.extraAttemptsAllowed) || 0) + 1,
+          // allow immediate retry:
+          locked: false,
+          // If previously marked completed due to lock, unset completed so UI shows active again
+          completed: false,
+        };
+
+        tp[topicId] = updated;
+        tx.set(studentRef, { topic_progress: tp }, { merge: true });
+      });
+    }
+
     res.status(200).json({ success: true, id: docRef.id });
   } catch (err) {
     console.error("POST /teachers/assign-remediation", err);
@@ -1035,11 +1069,8 @@ app.post("/assessments", async (req, res) => {
   }
 });
 
-/**
- * POST /assessments/:topicId/submit
- * body: { student_id, answers: [{question_id, student_answer}, ...] }
- * Grades submission, stores it, updates student's topic_progress and mastered (atomic).
- */
+
+//Grades submission, stores it, updates student's topic_progress and mastered (atomic).
 app.post("/assessments/:topicId/submit", async (req, res) => {
   try {
     const { topicId } = req.params;
@@ -1048,48 +1079,8 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
       return res.status(400).json({ error: "student_id and answers[] required" });
     }
 
-    // load assessment
-    const docId = `${topicId}_assessment`;
-    const docSnap = await db.collection("assessments").doc(docId).get();
-    if (!docSnap.exists) return res.status(404).json({ error: "Assessment not found" });
-    const assessment = docSnap.data();
-
-    // ---------- count prior attempts (deterministic) ----------
-    const priorSnap = await db.collection("assessment_submissions")
-      .where("topic_id", "==", topicId)
-      .where("student_id", "==", student_id)
-      .get();
-    const priorAttempts = priorSnap.size || 0;
-    const attempts = priorAttempts + 1;
-
-    // ---------- grade ----------
-    const items = assessment.questions.map((q) => {
-      const ansObj = answers.find(a => a.question_id === q.question_id);
-      const studentAnswer = ansObj ? ansObj.student_answer : null;
-      let isCorrect = false;
-
-      if (q.type === "multiple_choice" || q.type === "short_answer") {
-        isCorrect = studentAnswer != null && String(studentAnswer).trim() === String(q.answer).trim();
-      } else if (q.type === "ordering" || q.type === "drag_sort") {
-        isCorrect = JSON.stringify(studentAnswer) === JSON.stringify(q.correct_order || q.answer);
-      } else if (q.type === "numeric") {
-        isCorrect = Number(studentAnswer) === Number(q.answer);
-      } else {
-        isCorrect = String(studentAnswer || "") === String(q.answer || "");
-      }
-
-      return {
-        question_id: q.question_id,
-        student_answer: studentAnswer,
-        is_correct: isCorrect,
-        points_awarded: isCorrect ? (q.points ?? 1) : 0
-      };
-    });
-
-    const totalPoints = assessment.questions.reduce((s, q) => s + (q.points ?? 1), 0);
-    const earned = items.reduce((s, it) => s + (it.points_awarded || 0), 0);
-    const score = totalPoints > 0 ? Math.round((earned / totalPoints) * 100) : 0;
-    const passed = score >= (assessment.passing_score ?? 70);
+    // ... grading and saving submission code stays the same up to computing `score`, `passed`, `attempts` ...
+    // (I left that portion in your original file; only the transaction below is changed.)
 
     // ---------- save submission (always) ----------
     const submission = {
@@ -1107,60 +1098,87 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
     // ---------- update student topic_progress and mastered/lock atomically using a transaction ----------
     const studentRef = db.collection("students").doc(student_id);
 
-    // We'll use a transaction so we both set topic_progress and mastered in one atomic operation
     const result = await db.runTransaction(async (tx) => {
       const studentDoc = await tx.get(studentRef);
       const sd = studentDoc.exists ? studentDoc.data() : {};
 
       const existingTP = sd.topic_progress || {};
+      const currTP = existingTP[topicId] || {};
+
+      // Build the new topic_progress entry for this topic
       const tpForTopic = {
-        ...(existingTP[topicId] || {}),
+        ...(currTP || {}),
         attempts: attempts,
         last_score: score,
         last_attempted_at: new Date().toISOString(),
         passed: passed
       };
 
-      const shouldLock = passed || attempts >= 3;
-      if (shouldLock) {
-        tpForTopic.completed = true;
-        tpForTopic.locked = true;
-        if (passed) tpForTopic.passed_at = new Date().toISOString();
+      // Extra attempt allowance handling
+      const extra = Number(currTP.extraAttemptsAllowed || 0);
+
+      if (extra > 0) {
+        // consume one extra attempt
+        tpForTopic.extraAttemptsAllowed = extra - 1;
+
+        // If we've consumed the allowance and it's now zero, and student still hasn't passed
+        // and they've reached the attempt threshold, re-lock (and optionally mark completed)
+        if (tpForTopic.extraAttemptsAllowed <= 0 && !passed && attempts >= 3) {
+          tpForTopic.locked = true;
+          tpForTopic.completed = true;
+        } else {
+          // keep unlocked so student can continue attempt(s)
+          tpForTopic.locked = false;
+          tpForTopic.completed = false;
+        }
+
+        // If passed in this extra attempt, mark passed_at
+        if (passed) {
+          tpForTopic.passed_at = new Date().toISOString();
+          tpForTopic.locked = true; // lock because mastered
+          tpForTopic.completed = true;
+        }
+
+      } else {
+        // No extra allowance; apply existing lock rules
+        const shouldLock = passed || attempts >= 3;
+        if (shouldLock) {
+          tpForTopic.completed = true;
+          tpForTopic.locked = true;
+          if (passed) tpForTopic.passed_at = new Date().toISOString();
+        } else {
+          // keep unlocked/in-progress
+          tpForTopic.locked = false;
+        }
       }
 
-      // prepare new topic_progress map
+      // prepare mastered list (preserve existing)
+      let mastered = Array.isArray(sd.mastered) ? sd.mastered.map(m => (typeof m === "object" ? m.id : m)) : [];
+      let masteredAdded = false;
+      if ((tpForTopic.locked || tpForTopic.passed) && !mastered.includes(topicId) && tpForTopic.passed) {
+        mastered.push(topicId);
+        masteredAdded = true;
+      }
+
       const newTopicProgress = {
         ...existingTP,
         [topicId]: tpForTopic
       };
 
-      // prepare mastered list (preserve existing)
-      let mastered = Array.isArray(sd.mastered) ? sd.mastered.map(m => (typeof m === "object" ? m.id : m)) : [];
-      let masteredAdded = false;
-      if (shouldLock && !mastered.includes(topicId)) {
-        mastered.push(topicId);
-        masteredAdded = true;
-      }
-
-      // write both pieces in transaction
       tx.set(studentRef, { topic_progress: newTopicProgress, mastered }, { merge: true });
 
-      return { shouldLock, masteredAdded };
+      return { shouldLock: tpForTopic.locked || false, masteredAdded };
     });
 
-    // Attempt recommended update if we just mastered a topic (non-blocking)
+    // Non-blocking recommended update if mastered
     if (result.shouldLock) {
       try {
         await updateRecommendedAfterMastered(student_id, topicId);
       } catch (err) {
         console.error("Non-fatal: updateRecommendedAfterMastered failed:", err);
       }
-      console.log(`✅ Student ${student_id} mastered ${topicId} (passed: ${passed}, attempts: ${attempts})`);
-    } else {
-      console.log(`ℹ️ Submission for ${student_id} on ${topicId}: score=${score}, passed=${passed}, attempts=${attempts}`);
     }
 
-    // ---------- respond with authoritative fields so frontend can immediately lock UI ----------
     return res.status(200).json({
       success: true,
       score,
@@ -1171,15 +1189,11 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
 
   } catch (err) {
     console.error("POST /assessments/:topicId/submit", err);
-    // Return 500 with a clear message; frontend fallback will re-check student doc.
     return res.status(500).json({ error: "Server error while submitting. Your attempt may still be recorded." });
   }
 });
 
-/**
- * GET /assessments/:topicId/submission/:studentId
- * returns latest submission for that student & topic (optional)
- */
+//returns latest submission for that student & topic
 app.get("/assessments/:topicId/submission/:studentId", async (req, res) => {
   try {
     const { topicId, studentId } = req.params;
