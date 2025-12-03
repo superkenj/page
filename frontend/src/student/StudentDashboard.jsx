@@ -16,6 +16,9 @@ export default function StudentDashboard() {
   });
   const [loading, setLoading] = useState(true);
 
+  // new: keep student's topic_progress so we can detect extraAttempts
+  const [topicProgress, setTopicProgress] = useState({}); // { topicId: { attempts, extraAttempts, ... } }
+
   // Normalize helper: accept array of ids or objects {id,...}
   function normalizeToIds(arr) {
     if (!Array.isArray(arr)) return [];
@@ -38,6 +41,10 @@ export default function StudentDashboard() {
 
       const allTopics = Array.isArray(tJson) ? tJson : tJson.topics || [];
       setTopics(allTopics);
+
+      // store topic_progress for extraAttempts detection
+      const tp = sJson.topic_progress && typeof sJson.topic_progress === "object" ? sJson.topic_progress : {};
+      setTopicProgress(tp);
 
       // Normalize path fields to id arrays
       const p = {
@@ -100,11 +107,21 @@ export default function StudentDashboard() {
   const recommendedSet = new Set(path.recommended || []);
   const inProgressSet = new Set(path.inProgress || []);
 
+  // compute extraAttempt set from topicProgress
+  const extraAttemptSet = new Set(
+    Object.entries(topicProgress || {})
+      .filter(([tid, tdata]) => Number(tdata?.extraAttempts || 0) > 0)
+      .map(([tid]) => tid)
+  );
+
   // build a lookup so we can inspect topic metadata (prerequisites)
   const topicsMap = Object.fromEntries((topics || []).map((t) => [t.id, t]));
 
   function getStatus(topicId) {
-    // In-Progress always wins
+    // New priority: ExtraAttempt first
+    if (extraAttemptSet.has(topicId)) return "ExtraAttempt";
+
+    // In-Progress always wins after extra
     if (inProgressSet.has(topicId)) return "In Progress";
 
     // Mastered wins over recommended/upcoming
@@ -113,8 +130,7 @@ export default function StudentDashboard() {
     // If explicitly recommended by path -> Recommended
     if (recommendedSet.has(topicId)) return "Recommended";
 
-    // NEW: treat a starter topic (no prereqs) as "Recommended" if not mastered.
-    // This handles the initial card that has no prerequisites.
+    // treat a starter topic (no prereqs) as "Recommended" if not mastered.
     const topic = topicsMap[topicId];
     const prereqs = (topic && Array.isArray(topic.prerequisites)) ? topic.prerequisites : [];
     if (prereqs.length === 0 && !masteredSet.has(topicId)) {
@@ -125,22 +141,25 @@ export default function StudentDashboard() {
   }
 
   function getColorForStatus(status) {
+    // Softer modern palette — avoid red
     switch (status) {
+      case "ExtraAttempt":
+        return "#06b6d4"; // cyan/teal (calm, attention without alarm)
       case "In Progress":
-        return "#3b82f6";
+        return "#3b82f6"; // blue
       case "Recommended":
-        return "#facc15";
+        return "#f59e0b"; // warm amber (less harsh than red)
       case "Mastered":
-        return "#16a34a";
+        return "#16a34a"; // green
       default:
-        return "#9ca3af";
+        return "#6b7280"; // slate gray for Upcoming
     }
   }
 
   if (loading) return <div style={{ padding: 20 }}>Loading dashboard...</div>;
 
-  // ordering: In Progress, Recommended, Upcoming, Mastered (you can adjust)
-  const order = { "In Progress": 1, Recommended: 2, Upcoming: 3, Mastered: 4 };
+  // ordering: ExtraAttempt, In Progress, Recommended, Upcoming, Mastered
+  const order = { ExtraAttempt: 0, "In Progress": 1, Recommended: 2, Upcoming: 3, Mastered: 4 };
   const sorted = [...topics].sort((a, b) => order[getStatus(a.id)] - order[getStatus(b.id)]);
 
   return (
@@ -169,19 +188,25 @@ export default function StudentDashboard() {
         {sorted.map((t) => {
           const status = getStatus(t.id);
           const color = getColorForStatus(status);
+
+          // background variants — subtle & soft
+          const background =
+            status === "Mastered"
+              ? "#ecfdf5"
+              : status === "In Progress"
+              ? "#eff6ff"
+              : status === "Recommended"
+              ? "#fffbeb"
+              : status === "ExtraAttempt"
+              ? "#ecfeff" // very light cyan for extra attempt cards
+              : "#f3f4f6";
+
           return (
             <div
               key={t.id}
               onClick={() => navigate(`/student-dashboard/${id}/topic/${t.id}`)}
               style={{
-                background:
-                  status === "Mastered"
-                    ? "#ecfdf5"
-                    : status === "In Progress"
-                    ? "#eff6ff"
-                    : status === "Recommended"
-                    ? "#fffbeb"
-                    : "#f3f4f6",
+                background,
                 border: `2px solid ${color}`,
                 borderRadius: 10,
                 padding: 16,
@@ -190,20 +215,38 @@ export default function StudentDashboard() {
                 transition: "transform 0.15s",
               }}
             >
-              <div
-                style={{
-                  position: "absolute",
-                  top: 10,
-                  right: 10,
-                  background: color,
-                  color: "white",
-                  fontSize: 12,
-                  fontWeight: "bold",
-                  padding: "3px 8px",
-                  borderRadius: 12,
-                }}
-              >
-                {status}
+              {/* badge area */}
+              <div style={{ position: "absolute", top: 10, right: 10, display: "flex", gap: 8, alignItems: "center" }}>
+                {/* Extra attempt badge (prominent, calming color) */}
+                {status === "ExtraAttempt" && (
+                  <div
+                    style={{
+                      background: color,
+                      color: "white",
+                      fontSize: 12,
+                      fontWeight: "700",
+                      padding: "4px 8px",
+                      borderRadius: 12,
+                      boxShadow: "0 2px 6px rgba(6,182,212,0.12)",
+                    }}
+                  >
+                    +1 extra
+                  </div>
+                )}
+
+                {/* status pill */}
+                <div
+                  style={{
+                    background: color,
+                    color: "white",
+                    fontSize: 12,
+                    fontWeight: "700",
+                    padding: "3px 8px",
+                    borderRadius: 12,
+                  }}
+                >
+                  {status === "ExtraAttempt" ? "Remediate" : status}
+                </div>
               </div>
 
               <h3 style={{ marginBottom: 8 }}>{t.name}</h3>
