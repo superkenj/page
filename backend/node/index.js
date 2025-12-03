@@ -623,7 +623,6 @@ app.post("/teachers/assign-remediation", async (req, res) => {
     const docRef = await db.collection("remediations").add(payload);
 
     // If an assessmentId is provided, grant one extra attempt for that topic.
-    // assessmentId is expected to be like "<topicId>_assessment"
     if (assessmentId) {
       const topicId = assessmentId.replace(/_assessment$/i, "");
       const studentRef = db.collection("students").doc(studentId);
@@ -634,11 +633,17 @@ app.post("/teachers/assign-remediation", async (req, res) => {
         const sd = studDoc.data() || {};
         const tp = sd.topic_progress || {};
         const current = (tp[topicId] && Number(tp[topicId].extraAttempts)) || 0;
+
+        // grant +1 extra attempt and clear lock/completed so student can attempt again
         const newTpForTopic = {
           ...(tp[topicId] || {}),
           extraAttempts: current + 1,
-          remediationGrantedAt: new Date().toISOString()
+          remediationGrantedAt: new Date().toISOString(),
+          // IMPORTANT: clear any lock/completed flags so the frontend will allow access
+          locked: false,
+          completed: false
         };
+
         const newTopicProgress = { ...tp, [topicId]: newTpForTopic };
         tx.set(studentRef, { topic_progress: newTopicProgress }, { merge: true });
       });
@@ -1072,9 +1077,6 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
     if (!student_id || !Array.isArray(answers)) {
       return res.status(400).json({ error: "student_id and answers[] required" });
     }
-
-    // ... grading and saving submission code stays the same up to computing `score`, `passed`, `attempts` ...
-    // (I left that portion in your original file; only the transaction below is changed.)
 
     // ---------- save submission (always) ----------
     const submission = {

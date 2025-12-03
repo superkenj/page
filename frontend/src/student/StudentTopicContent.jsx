@@ -52,10 +52,12 @@ export default function StudentTopicContent() {
         const stu = await stuRes.json();
         setSeen(stu.content_seen || []);
 
-        // ---------- set local locked state based on student's topic_progress ----------
-        // if teacher/backend already wrote topic_progress for this topic, use it
         const tp = stu.topic_progress && stu.topic_progress[topicId] ? stu.topic_progress[topicId] : null;
-        const isLocked = tp ? (tp.locked === true || tp.completed === true || (tp.attempts || 0) >= 3) : false;
+        const extra = tp ? Number(tp.extraAttempts || 0) : 0;
+        const attempts = tp ? Number(tp.attempts || 0) : 0;
+        const isLocked = tp
+          ? ((tp.locked === true || tp.completed === true) && extra <= 0) || (attempts >= (3 + extra) && extra <= 0)
+          : false;
         setLocked(isLocked);
       } catch (err) {
         console.error("Error loading topic content:", err);
