@@ -331,7 +331,7 @@ export default function StudentDashboard() {
                     borderRadius: 12,
                   }}
                 >
-                  {status === "ExtraAttempt" ? "Try Again" : status === "TemporaryOpen" ? "Open (temp)" : status}
+                  {status === "ExtraAttempt" ? "Retake Assessment" : status === "TemporaryOpen" ? "Open (temp)" : status}
                 </div>
               </div>
 
