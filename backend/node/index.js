@@ -723,6 +723,14 @@ app.post("/teachers/assign-remediation", async (req, res) => {
       });
     });
 
+    for (const tid of grantedDetails) {
+      try {
+        await createOverride(studentId, tid, 3, req.body.createdBy || "teacher-ui");
+      } catch (err) {
+        console.error("Failed to create temp override for topic:", tid, err);
+      }
+    }
+
     console.log(`Remediation: granted +1 extra to ${eligibleTopicIds.length} topic(s) for ${studentId}:`, eligibleTopicIds);
     return res.status(200).json({ success: true, id: docRef.id, topicsGranted: eligibleTopicIds.length, details: eligibleTopicIds });
   } catch (err) {
@@ -828,6 +836,106 @@ app.get("/topics/graph", async (req, res) => {
   } catch (err) {
     console.error("Error generating topic graph:", err);
     res.status(500).json({ error: "Failed to build topic graph" });
+  }
+});
+
+/**
+ * Create or upsert a temp open override for a student+topic.
+ * Writes to 'topic_overrides' collection:
+ * { studentId, topicId, temp_open_until (ISO), createdAt, createdBy }
+ */
+async function createOverride(studentId, topicId, days = 3, createdBy = "system") {
+  try {
+    const tempUntil = new Date(Date.now() + (days * 24 * 60 * 60 * 1000)).toISOString();
+    // Use deterministic id for single active override per student-topic to simplify upsert:
+    const docId = `${studentId}_${topicId}_override`;
+    await db.collection("topic_overrides").doc(docId).set({
+      studentId,
+      topicId,
+      temp_open_until: tempUntil,
+      createdAt: new Date().toISOString(),
+      createdBy,
+    }, { merge: true });
+    return { success: true, id: docId, temp_open_until: tempUntil };
+  } catch (err) {
+    console.error("createOverride error:", err);
+    return { success: false, error: String(err) };
+  }
+}
+
+// GET active overrides for a student
+app.get("/students/:id/overrides", async (req, res) => {
+  try {
+    const studentId = req.params.id;
+    const nowIso = new Date().toISOString();
+    const snap = await db.collection("topic_overrides")
+      .where("studentId", "==", studentId)
+      .where("temp_open_until", ">", nowIso)
+      .get();
+
+    const overrides = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    return res.json({ server_time_utc: new Date().toISOString(), overrides });
+  } catch (err) {
+    console.error("GET /students/:id/overrides error:", err);
+    return res.status(500).json({ error: "Failed to fetch overrides" });
+  }
+});
+
+// POST /topics/:id/schedule
+// body: { open_at?: ISO, close_at?: ISO, manual_lock?: boolean }
+app.post("/topics/:id/schedule", async (req, res) => {
+  try {
+    const topicId = req.params.id;
+    const { open_at, close_at, manual_lock } = req.body;
+
+    // validate datetimes if provided
+    if (open_at && isNaN(new Date(open_at).getTime())) {
+      return res.status(400).json({ error: "open_at must be an ISO datetime" });
+    }
+    if (close_at && isNaN(new Date(close_at).getTime())) {
+      return res.status(400).json({ error: "close_at must be an ISO datetime" });
+    }
+    if (open_at && close_at && new Date(open_at) > new Date(close_at)) {
+      return res.status(400).json({ error: "open_at must be before close_at" });
+    }
+
+    const update = {};
+    if (open_at !== undefined) update.open_at = open_at || null;
+    if (close_at !== undefined) update.close_at = close_at || null;
+    if (manual_lock !== undefined) update.manual_lock = !!manual_lock;
+
+    await db.collection("topics").doc(topicId).set(update, { merge: true });
+
+    return res.json({ success: true, id: topicId, updated: update });
+  } catch (err) {
+    console.error("POST /topics/:id/schedule error:", err);
+    return res.status(500).json({ error: "Failed to save schedule" });
+  }
+});
+
+// POST /topics/:id/temporary-open-class
+// body: { days?: number, createdBy?: string }
+app.post("/topics/:id/temporary-open-class", async (req, res) => {
+  try {
+    const topicId = req.params.id;
+    const days = Number(req.body.days || 3);
+    const createdBy = req.body.createdBy || "teacher-ui";
+
+    // fetch all students
+    const studentsSnap = await db.collection("students").get();
+    const students = studentsSnap.docs.map(d => d.id);
+
+    const results = [];
+    const batchLimit = 500; // Firestore batch limit, but we'll do simple sequential writes to keep it safe
+    for (const sid of students) {
+      const r = await createOverride(sid, topicId, days, createdBy);
+      results.push(r);
+    }
+
+    return res.json({ success: true, topicId, createdFor: students.length, results });
+  } catch (err) {
+    console.error("POST /topics/:id/temporary-open-class error:", err);
+    return res.status(500).json({ error: "Failed to temp-open class" });
   }
 });
 

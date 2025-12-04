@@ -3,6 +3,37 @@ import { useParams, useNavigate } from "react-router-dom";
 
 const API_BASE = "https://page-jirk.onrender.com";
 
+function Countdown({ targetUtcIso, serverTimeUtcIso, compact = false }) {
+  const [now, setNow] = useState(Date.now());
+
+  // compute delta between client and server
+  const serverMs = serverTimeUtcIso ? new Date(serverTimeUtcIso).getTime() : Date.now();
+  const clientMs = Date.now();
+  const delta = clientMs - serverMs; // client - server
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const canonicalNow = now - delta;
+  const target = new Date(targetUtcIso).getTime();
+  const msLeft = target - canonicalNow;
+  if (msLeft <= 0) return <span>00:00:00</span>;
+
+  const days = Math.floor(msLeft / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((msLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((msLeft % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((msLeft % (1000 * 60)) / 1000);
+
+  if (compact) {
+    if (days > 0) return <span>{days}d {hours}h</span>;
+    return <span>{String(hours).padStart(2, "0")}:{String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}</span>;
+  }
+
+  return <span>{days}d {hours}h {minutes}m {seconds}s</span>;
+}
+
 export default function StudentDashboard() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -19,6 +50,10 @@ export default function StudentDashboard() {
   // new: keep student's topic_progress so we can detect extraAttempts
   const [topicProgress, setTopicProgress] = useState({}); // { topicId: { attempts, extraAttempts, ... } }
 
+  // CHANGED: overrides + server time
+  const [overrides, setOverrides] = useState({}); // { topicId: { temp_open_until } }
+  const [serverTimeUtc, setServerTimeUtc] = useState(null);
+
   // Normalize helper: accept array of ids or objects {id,...}
   function normalizeToIds(arr) {
     if (!Array.isArray(arr)) return [];
@@ -29,15 +64,17 @@ export default function StudentDashboard() {
     try {
       setLoading(true);
 
-      const [tRes, pRes, sRes] = await Promise.all([
+      const [tRes, pRes, sRes, oRes] = await Promise.all([
         fetch(`${API_BASE}/topics/list`),
         fetch(`${API_BASE}/students/${id}/path`),
         fetch(`${API_BASE}/students/${id}`),
+        fetch(`${API_BASE}/students/${id}/overrides`) // CHANGED: fetch active overrides
       ]);
 
       const tJson = await tRes.json();
       const pJson = await pRes.json();
       const sJson = await sRes.json();
+      const oJson = await oRes.json().catch(() => ({ server_time_utc: new Date().toISOString(), overrides: [] }));
 
       const allTopics = Array.isArray(tJson) ? tJson : tJson.topics || [];
       setTopics(allTopics);
@@ -45,6 +82,14 @@ export default function StudentDashboard() {
       // store topic_progress for extraAttempts detection
       const tp = sJson.topic_progress && typeof sJson.topic_progress === "object" ? sJson.topic_progress : {};
       setTopicProgress(tp);
+
+      // CHANGED: store overrides map + server time
+      setServerTimeUtc(oJson.server_time_utc || new Date().toISOString());
+      const ovMap = {};
+      (oJson.overrides || []).forEach((r) => {
+        if (r.topicId) ovMap[r.topicId] = r;
+      });
+      setOverrides(ovMap);
 
       // Normalize path fields to id arrays
       const p = {
@@ -117,9 +162,19 @@ export default function StudentDashboard() {
   // build a lookup so we can inspect topic metadata (prerequisites)
   const topicsMap = Object.fromEntries((topics || []).map((t) => [t.id, t]));
 
+  // CHANGED: helper to check if a topic is currently temporarily open for this student
+  function isTempOpen(topicId) {
+    const o = overrides[topicId];
+    if (!o || !o.temp_open_until) return false;
+    return new Date(o.temp_open_until).getTime() > (new Date(serverTimeUtc || new Date()).getTime());
+  }
+
   function getStatus(topicId) {
     // New priority: ExtraAttempt first
     if (extraAttemptSet.has(topicId)) return "ExtraAttempt";
+
+    // CHANGED: Temporary open override (teacher granted or remediation)
+    if (isTempOpen(topicId)) return "TemporaryOpen";
 
     // In-Progress always wins after extra
     if (inProgressSet.has(topicId)) return "In Progress";
@@ -137,6 +192,21 @@ export default function StudentDashboard() {
       return "Recommended";
     }
 
+    // CHANGED: check locking states — if topic is scheduled/locked, return 'Locked' so UI can show countdown
+    if (topic) {
+      const now = new Date(serverTimeUtc || new Date()).getTime();
+      if (topic.manual_lock) {
+        // manual lock
+        return "Locked";
+      }
+      if (topic.open_at && new Date(topic.open_at).getTime() > now) {
+        return "Locked";
+      }
+      if (topic.close_at && new Date(topic.close_at).getTime() <= now) {
+        return "Closed";
+      }
+    }
+
     return "Upcoming";
   }
 
@@ -145,12 +215,17 @@ export default function StudentDashboard() {
     switch (status) {
       case "ExtraAttempt":
         return "#06b6d4"; // cyan/teal (calm, attention without alarm)
+      case "TemporaryOpen":
+        return "#0ea5a4"; // teal-ish for temp open
       case "In Progress":
         return "#3b82f6"; // blue
       case "Recommended":
         return "#f59e0b"; // warm amber (less harsh than red)
       case "Mastered":
         return "#16a34a"; // green
+      case "Locked":
+      case "Closed":
+        return "#6b7280"; // slate gray for Locked/Closed
       default:
         return "#6b7280"; // slate gray for Upcoming
     }
@@ -158,9 +233,9 @@ export default function StudentDashboard() {
 
   if (loading) return <div style={{ padding: 20 }}>Loading dashboard...</div>;
 
-  // ordering: ExtraAttempt, In Progress, Recommended, Upcoming, Mastered
-  const order = { ExtraAttempt: 0, "In Progress": 1, Recommended: 2, Upcoming: 3, Mastered: 4 };
-  const sorted = [...topics].sort((a, b) => order[getStatus(a.id)] - order[getStatus(b.id)]);
+  // ordering: ExtraAttempt, TemporaryOpen, In Progress, Recommended, Upcoming, Mastered
+  const order = { ExtraAttempt: 0, TemporaryOpen: 1, "In Progress": 2, Recommended: 3, Upcoming: 4, Mastered: 5, Locked: 6, Closed: 7 };
+  const sorted = [...topics].sort((a, b) => (order[getStatus(a.id)] ?? 99) - (order[getStatus(b.id)] ?? 99));
 
   return (
     <div style={{ padding: "20px 40px" }}>
@@ -198,13 +273,42 @@ export default function StudentDashboard() {
               : status === "Recommended"
               ? "#fffbeb"
               : status === "ExtraAttempt"
-              ? "#ecfeff" // very light cyan for extra attempt cards
+              ? "#ecfeff"
+              : status === "TemporaryOpen"
+              ? "#ecfdf4"
               : "#f3f4f6";
+
+          // compute countdown display (for locked/open)
+          let countdownEl = null;
+          if (status === "TemporaryOpen") {
+            const o = overrides[t.id];
+            if (o?.temp_open_until && serverTimeUtc) {
+              countdownEl = <div style={{ fontSize: 12, marginTop: 6 }}>Open for <Countdown targetUtcIso={o.temp_open_until} serverTimeUtcIso={serverTimeUtc} compact /></div>;
+            }
+          } else if (status === "Locked") {
+            // show when it opens if open_at exists
+            if (t.open_at && serverTimeUtc) {
+              countdownEl = <div style={{ fontSize: 12, marginTop: 6 }}>Opens in <Countdown targetUtcIso={t.open_at} serverTimeUtcIso={serverTimeUtc} compact /></div>;
+            } else {
+              countdownEl = <div style={{ fontSize: 12, marginTop: 6 }}>Locked</div>;
+            }
+          } else if (status === "Closed") {
+            countdownEl = <div style={{ fontSize: 12, marginTop: 6 }}>Closed</div>;
+          }
 
           return (
             <div
               key={t.id}
-              onClick={() => navigate(`/student-dashboard/${id}/topic/${t.id}`)}
+              onClick={() => {
+                // If locked & not temp-open, prevent navigation and show a toast instead
+                const st = getStatus(t.id);
+                if (st === "Locked" || st === "Closed") {
+                  // allow teacher/probing? For now show a warning
+                  window.alert("This topic is currently locked. It will open at the scheduled time or if your teacher grants access.");
+                  return;
+                }
+                navigate(`/student-dashboard/${id}/topic/${t.id}`);
+              }}
               style={{
                 background,
                 border: `2px solid ${color}`,
@@ -217,8 +321,6 @@ export default function StudentDashboard() {
             >
               {/* badge area */}
               <div style={{ position: "absolute", top: 10, right: 10, display: "flex", gap: 8, alignItems: "center" }}>
-                {/* Extra attempt badge (prominent, calming color) */}
-
                 <div
                   style={{
                     background: color,
@@ -229,12 +331,14 @@ export default function StudentDashboard() {
                     borderRadius: 12,
                   }}
                 >
-                  {status === "ExtraAttempt" ? "Try Again" : status}
+                  {status === "ExtraAttempt" ? "Try Again" : status === "TemporaryOpen" ? "Open (temp)" : status}
                 </div>
               </div>
 
               <h3 style={{ marginBottom: 8 }}>{t.name}</h3>
               <p style={{ fontSize: 14, color: "#374151" }}>{t.description}</p>
+
+              {countdownEl}
             </div>
           );
         })}

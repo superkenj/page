@@ -20,6 +20,12 @@ export default function TeacherTopicContents() {
   const [assessment, setAssessment] = useState(null); // null = not loaded, {} = empty
   const [savingAssessment, setSavingAssessment] = useState(false);
 
+  // --- schedule UI state
+  const [openAtInput, setOpenAtInput] = useState("");
+  const [closeAtInput, setCloseAtInput] = useState("");
+  const [manualLock, setManualLock] = useState(false);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+
   // load topic & contents (existing)
   useEffect(() => {
     async function loadData() {
@@ -33,12 +39,75 @@ export default function TeacherTopicContents() {
         setTopic(found);
         const cJson = await cRes.json();
         setContents(cJson || []);
+
+        if (found) {
+          setOpenAtInput(found.open_at ? found.open_at.substring(0,16) : ""); 
+          setCloseAtInput(found.close_at ? found.close_at.substring(0,16) : "");
+          setManualLock(!!found.manual_lock);
+        }
       } catch (err) {
         console.error("loadData error", err);
       }
     }
     loadData();
   }, [topicId]);
+
+    // Save schedule to backend
+  async function saveSchedule() {
+    setSavingSchedule(true);
+    try {
+      // convert from local datetime-local string to UTC ISO (assume the UI value is local)
+      // For simplicity we send the raw ISO-like string and let the server treat it as UTC ISO-ish.
+      const payload = {
+        open_at: openAtInput ? new Date(openAtInput).toISOString() : null,
+        close_at: closeAtInput ? new Date(closeAtInput).toISOString() : null,
+        manual_lock: !!manualLock
+      };
+
+      const res = await fetch(`${API_BASE}/topics/${topicId}/schedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || "Failed to save schedule");
+      }
+
+      alert("Schedule saved.");
+      // refresh topic data
+      const tRes = await fetch(`${API_BASE}/topics/list`);
+      const tJson = await tRes.json();
+      const found = Array.isArray(tJson) ? tJson.find((t) => t.id === topicId) : null;
+      setTopic(found);
+    } catch (err) {
+      console.error("saveSchedule error", err);
+      alert("Failed to save schedule.");
+    } finally {
+      setSavingSchedule(false);
+    }
+  }
+
+  // Temporarily open topic for whole class (default 3 days)
+  async function tempOpenClass(days = 3) {
+    if (!window.confirm(`Open this topic for all students for ${days} day(s)?`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/topics/${topicId}/temporary-open-class`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days, createdBy: "teacher-ui" })
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || "Failed to open temporarily for class");
+      }
+      alert("Topic temporarily opened for class.");
+    } catch (err) {
+      console.error("tempOpenClass error", err);
+      alert("Failed to open temporarily.");
+    }
+  }
 
   // load assessment when tab switches to assessment
   useEffect(() => {
@@ -261,6 +330,41 @@ export default function TeacherTopicContents() {
             }}
           >
             Assessment
+          </button>
+        </div>
+      </div>
+
+      {/* Schedule controls (NEW) */}
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
+        <div>
+          <label style={{ display: "block", fontWeight: 600 }}>Open at (local)</label>
+          <input
+            type="datetime-local"
+            value={openAtInput}
+            onChange={(e) => setOpenAtInput(e.target.value)}
+            style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
+          />
+        </div>
+        <div>
+          <label style={{ display: "block", fontWeight: 600 }}>Close at (local)</label>
+          <input
+            type="datetime-local"
+            value={closeAtInput}
+            onChange={(e) => setCloseAtInput(e.target.value)}
+            style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+          <label style={{ fontWeight: 600 }}>Manual lock</label>
+          <input type="checkbox" checked={manualLock} onChange={(e) => setManualLock(e.target.checked)} />
+        </div>
+
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <button onClick={() => saveSchedule()} disabled={savingSchedule} style={{ background: "#2563eb", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none" }}>
+            {savingSchedule ? "Saving..." : "Save Schedule"}
+          </button>
+          <button onClick={() => tempOpenClass(3)} style={{ background: "#06b6d4", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none" }}>
+            Temporarily open for class (3 days)
           </button>
         </div>
       </div>
