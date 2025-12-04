@@ -964,66 +964,71 @@ app.post("/students/:id/content_seen", async (req, res) => {
       await studentRef.update({ content_seen: seen });
     }
 
-    // ✅ Step 1: Get content info (to know which topic it belongs to)
+    // Step 1: Get content info (to know which topic it belongs to)
     const contentDoc = await db.collection("contents").doc(content_id).get();
-    if (contentDoc.exists) {
-      const { topic_id } = contentDoc.data();
 
-      // ✅ Step 2: Get all contents under this topic
-      const topicContentsSnap = await db
-        .collection("contents")
-        .where("topic_id", "==", topic_id)
-        .get();
-      const topicContentIds = topicContentsSnap.docs.map((d) => d.id);
-
-      // ✅ Step 3: Reload latest student data
-      const updatedStudentSnap = await studentRef.get();
-      const updatedData = updatedStudentSnap.data();
-      const updatedSeen = Array.isArray(updatedData.content_seen)
-        ? updatedData.content_seen
-        : [];
-
-      // ✅ Step 4: Check if all contents for this topic are viewed
-      const allSeen = topicContentIds.every((cid) => updatedSeen.includes(cid));
-
-      // ✅ Step 5: Normalize mastered to simple string IDs
-      let mastered = Array.isArray(updatedData.mastered)
-        ? updatedData.mastered.map((m) => (typeof m === "object" ? m.id : m))
-        : [];
-
-      // ✅ Step 6: If all contents are seen, promote to mastered
-      if (allSeen && !mastered.includes(topic_id)) {
-        mastered.push(topic_id);
-        await studentRef.update({ mastered });
-        console.log(`✅ Topic ${topic_id} mastered by ${id}`);
-
-        // 🔄 Automatically recommend dependent topics
-        await updateRecommendedAfterMastered(id, topic_id);
-      }
-
-      // ✅ Return fresh data
-      const refreshedDoc = await studentRef.get();
-      const refreshed = refreshedDoc.data();
-
-      res.status(200).json({
+    if (!contentDoc.exists) {
+      // If content doesn't exist, return the updated seen list once
+      const updatedDoc = await studentRef.get();
+      const updatedData = updatedDoc.data();
+      return res.status(200).json({
         success: true,
-        content_seen: refreshed.content_seen || [],
-        mastered: refreshed.mastered || [],
+        content_seen: updatedData.content_seen || [],
+        mastered: updatedData.mastered || [],
+        note: "content not found"
       });
     }
 
-    // ✅ Respond with updated content_seen (and optionally mastered)
-    const updatedDoc = await studentRef.get();
-    const updatedData = updatedDoc.data();
+    const { topic_id } = contentDoc.data() || {};
 
-    res.status(200).json({
+    // Step 2: Get all contents under this topic
+    const topicContentsSnap = await db
+      .collection("contents")
+      .where("topic_id", "==", topic_id)
+      .get();
+    const topicContentIds = topicContentsSnap.docs.map((d) => d.id);
+
+    // Step 3: Reload latest student data
+    const updatedStudentSnap = await studentRef.get();
+    const updatedData = updatedStudentSnap.data();
+    const updatedSeen = Array.isArray(updatedData.content_seen)
+      ? updatedData.content_seen
+      : [];
+
+    // Step 4: Check if all contents for this topic are viewed
+    const allSeen = topicContentIds.length === 0 ? false : topicContentIds.every((cid) => updatedSeen.includes(cid));
+
+    // Step 5: Normalize mastered to simple string IDs
+    let mastered = Array.isArray(updatedData.mastered)
+      ? updatedData.mastered.map((m) => (typeof m === "object" ? m.id : m))
+      : [];
+
+    // Step 6: If all contents are seen, promote to mastered
+    if (allSeen && !mastered.includes(topic_id)) {
+      mastered.push(topic_id);
+      await studentRef.update({ mastered });
+      console.log(`✅ Topic ${topic_id} mastered by ${id}`);
+
+      // Automatically recommend dependent topics (non-blocking)
+      updateRecommendedAfterMastered(id, topic_id).catch(err =>
+        console.error("Non-fatal: updateRecommendedAfterMastered failed:", err)
+      );
+    }
+
+    // Single final response
+    const refreshed = (await studentRef.get()).data();
+    return res.status(200).json({
       success: true,
-      content_seen: updatedData.content_seen || [],
-      mastered: updatedData.mastered || [],
+      content_seen: refreshed.content_seen || [],
+      mastered: refreshed.mastered || [],
     });
   } catch (err) {
     console.error("Error updating content_seen:", err);
-    res.status(500).json({ error: "Failed to update content_seen" });
+    // If headers already sent, log and return (defensive)
+    if (res.headersSent) {
+      return;
+    }
+    return res.status(500).json({ error: "Failed to update content_seen" });
   }
 });
 
