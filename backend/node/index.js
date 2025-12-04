@@ -770,24 +770,48 @@ app.get("/topics/list", async (req, res) => {
     const topics = snapshot.docs.map((doc) => {
       const d = doc.data() || {};
 
+      // Helper to normalize Firestore Timestamp -> ISO string
+      function toIsoMaybe(val) {
+        if (!val && val !== 0) return null;
+        // Firestore Timestamp has toDate() method
+        if (typeof val === "object" && typeof val.toDate === "function") {
+          try {
+            return val.toDate().toISOString();
+          } catch (e) {
+            return null;
+          }
+        }
+        // If it's already an ISO string (or something convertible), attempt to parse & return ISO
+        try {
+          const dt = new Date(val);
+          if (!isNaN(dt.getTime())) return dt.toISOString();
+        } catch (e) {}
+        // fallback: null
+        return null;
+      }
+
       return {
         id: doc.id,
         name: d.name || d.title || doc.id,
         description: d.description || "",
         prerequisites: Array.isArray(d.prerequisites) ? d.prerequisites : [],
 
-        // 🔥 NORMALIZED schedule fields:
-        open_at: d.open_at ? String(d.open_at) : null,
-        close_at: d.close_at ? String(d.close_at) : null,
+        // NORMALIZED schedule fields (ISO strings or null)
+        open_at: toIsoMaybe(d.open_at),
+        close_at: toIsoMaybe(d.close_at),
         manual_lock: !!d.manual_lock,
 
-        // 🔄 preserve other custom fields safely:
+        // preserve other custom fields safely:
         cluster: d.cluster || null,
         order: d.order || null,
         icon: d.icon || null,
-        // (add any other expected custom fields explicitly if needed)
       };
     });
+
+    // optional debug: print first topic's open/close for quick verification
+    if (topics.length > 0) {
+      console.log("topics/list sample open/close:", topics[0].id, topics[0].open_at, topics[0].close_at);
+    }
 
     return res.status(200).json(topics);
   } catch (err) {
@@ -795,6 +819,7 @@ app.get("/topics/list", async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 });
+
 
 app.get("/server-time", (req, res) => {
   return res.json({ server_time_utc: new Date().toISOString() });
