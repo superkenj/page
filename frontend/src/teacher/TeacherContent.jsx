@@ -16,6 +16,14 @@ export default function TeacherContent() {
   const [assessmentModalOpen, setAssessmentModalOpen] = useState(false);
   const [assessmentTopicId, setAssessmentTopicId] = useState(null);
 
+  // ---------- Schedule modal state ----------
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [scheduleTopicId, setScheduleTopicId] = useState(null);
+  const [scheduleOpenAt, setScheduleOpenAt] = useState("");
+  const [scheduleCloseAt, setScheduleCloseAt] = useState("");
+  const [scheduleManualLock, setScheduleManualLock] = useState(false);
+  const [savingScheduleModal, setSavingScheduleModal] = useState(false);
+
   // Inline edit for content items
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({ link: "", type: "video", description: "" });
@@ -87,13 +95,81 @@ export default function TeacherContent() {
     setAssessmentTopicId(topicId);
     setAssessmentModalOpen(true);
   }
+
   function closeAssessmentModal() {
     setAssessmentTopicId(null);
     setAssessmentModalOpen(false);
   }
+
   async function onAssessmentSaved() {
     // optional: refresh list or show toast
     await loadAll();
+  }
+
+    // Open the schedule modal for a topic (prefill using topic data)
+  function openScheduleModal(topic) {
+    setScheduleTopicId(topic.id);
+    setScheduleOpenAt(topic.open_at ? topic.open_at.substring(0,16) : "");
+    setScheduleCloseAt(topic.close_at ? topic.close_at.substring(0,16) : "");
+    setScheduleManualLock(!!topic.manual_lock);
+    setScheduleModalOpen(true);
+  }
+
+  async function saveScheduleModal() {
+    if (!scheduleTopicId) return;
+    setSavingScheduleModal(true);
+    try {
+      const payload = {
+        open_at: scheduleOpenAt ? new Date(scheduleOpenAt).toISOString() : null,
+        close_at: scheduleCloseAt ? new Date(scheduleCloseAt).toISOString() : null,
+        manual_lock: !!scheduleManualLock
+      };
+
+      const res = await fetch(`${API_BASE}/topics/${scheduleTopicId}/schedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || "Failed to save schedule");
+      }
+
+      // refresh lists and close modal
+      await loadAll();
+      setScheduleModalOpen(false);
+      setScheduleTopicId(null);
+      alert("Schedule saved.");
+    } catch (err) {
+      console.error("saveScheduleModal error", err);
+      alert("Failed to save schedule.");
+    } finally {
+      setSavingScheduleModal(false);
+    }
+  }
+
+  async function tempOpenTopicFromModal(days = 3) {
+    if (!scheduleTopicId) return;
+    if (!confirm(`Open topic for all students for ${days} day(s)?`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/topics/${scheduleTopicId}/temporary-open-class`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days, createdBy: "teacher-ui" }),
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || "Failed to temp-open");
+      }
+      alert("Topic temporarily opened for class.");
+      // refresh topics to show immediate effect if needed
+      await loadAll();
+      setScheduleModalOpen(false);
+    } catch (err) {
+      console.error("tempOpenTopicFromModal error", err);
+      alert("Failed to open temporarily.");
+    }
   }
 
   async function handleAddContentSave() {
@@ -284,6 +360,36 @@ export default function TeacherContent() {
         </div>
       )}
 
+      {scheduleModalOpen && (
+        <div style={modalOverlay}>
+          <div style={modalCard}>
+            <h3 style={{ marginTop: 0 }}>{scheduleTopicId ? `Schedule — ${topics.find(t=>t.id===scheduleTopicId)?.name || scheduleTopicId}` : "Schedule"}</h3>
+
+            <label style={labelStyle}>Open at (local)</label>
+            <input type="datetime-local" value={scheduleOpenAt} onChange={e => setScheduleOpenAt(e.target.value)} style={inputStyle} />
+
+            <label style={labelStyle}>Close at (local)</label>
+            <input type="datetime-local" value={scheduleCloseAt} onChange={e => setScheduleCloseAt(e.target.value)} style={inputStyle} />
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+              <input id="sched-manual" type="checkbox" checked={scheduleManualLock} onChange={e => setScheduleManualLock(e.target.checked)} />
+              <label htmlFor="sched-manual" style={{ fontWeight: 600 }}>Manual lock</label>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              <button onClick={() => { setScheduleModalOpen(false); }} style={{ background: "#ddd", padding: "8px 12px", borderRadius: 6 }}>Cancel</button>
+              <button onClick={saveScheduleModal} disabled={savingScheduleModal} style={{ background: "#2563eb", color: "#fff", padding: "8px 12px", borderRadius: 6 }}>
+                {savingScheduleModal ? "Saving..." : "Save Schedule"}
+              </button>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+                <button onClick={() => tempOpenTopicFromModal(1)} style={{ background: "#06b6d4", color: "#fff", padding: "8px 12px", borderRadius: 6 }}>Open 1 day</button>
+                <button onClick={() => tempOpenTopicFromModal(3)} style={{ background: "#0ea5a4", color: "#fff", padding: "8px 12px", borderRadius: 6 }}>Open 3 days</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Topics cards grid */}
       <div style={cardsWrapper}>
         {visible.map((topic) => (
@@ -352,6 +458,13 @@ export default function TeacherContent() {
                     style={{ background: "#ef4444", color: "white", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer" }}
                   >
                     🗑️ Delete Topic
+                  </button>
+
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openScheduleModal(topic); }}
+                    style={{ background: "#06b6d4", color: "white", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer" }}
+                  >
+                    🗓 Manage Schedule
                   </button>
 
                   <button
