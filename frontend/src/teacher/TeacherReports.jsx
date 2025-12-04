@@ -586,6 +586,16 @@ export default function TeacherReports() {
                                 alert("No eligible topics found for remediation (no topics with 3 failed attempts and no extra attempts).");
                               }
 
+                              // refresh teacher report data so this table shows updated attempts/mastery
+                              await fetchReport().catch(err => console.warn("Failed to refresh reports after remediation", err));
+
+                              // notify student dashboards (and any other listeners) to reload relevant data
+                              // student dashboards check event.detail.studentId and will reload only if it matches
+                              window.dispatchEvent(new CustomEvent("studentDataUpdated", { detail: { studentId: s.id } }));
+                              window.dispatchEvent(new CustomEvent("studentPathUpdated", { detail: { studentId: s.id } }));
+                              // also send a generic all-students event in case some clients only listen to that
+                              window.dispatchEvent(new Event("studentDataUpdatedAll"));
+
                               // re-fetch latest student record and open detail modal so teacher can inspect
                               const refreshed = await fetchStudentById(s.id);
                               openStudentDetail(refreshed || s);

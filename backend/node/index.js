@@ -655,6 +655,17 @@ app.post("/teachers/assign-remediation", async (req, res) => {
       });
 
       console.log(`Remediation: granted extra attempt (topic) to ${studentId} for ${topicId}`);
+
+      // create a per-student temporary open override so the student UI shows the card as open
+      try {
+        // default 3 days to match your other flows; make configurable from UI if you want
+        await createOverride(studentId, topicId, 3, req.body.createdBy || "teacher-ui");
+        console.log(`Remediation: created temp override for ${studentId} -> ${topicId}`);
+      } catch (err) {
+        console.error("Failed to create temp override for single-topic remediation:", err);
+        // don't fail the whole request because of override creation; remediation was still granted
+      }
+
       return res.status(200).json({ success: true, id: docRef.id, topicsGranted: 1, details: [`${topicId}`] });
     }
 
@@ -684,6 +695,7 @@ app.post("/teachers/assign-remediation", async (req, res) => {
     }
 
     // Apply updates in a single transaction: set extraAttempts = 1 for each eligible topic, clear locked/completed
+    let grantedTopicIds = [];
     await db.runTransaction(async (tx) => {
       const studDocTx = await tx.get(studentRef);
       if (!studDocTx.exists) return;
@@ -691,7 +703,7 @@ app.post("/teachers/assign-remediation", async (req, res) => {
       const tpTx = sdTx.topic_progress || {};
 
       const newTP = { ...tpTx };
-      const grantedDetails = [];
+      const grantedDetailsLocal = [];
 
       eligibleTopicIds.forEach((tid) => {
         const curr = tpTx[tid] || {};
@@ -705,14 +717,16 @@ app.post("/teachers/assign-remediation", async (req, res) => {
             locked: false,
             completed: false
           };
-          grantedDetails.push(tid);
+          grantedDetailsLocal.push(tid);
         }
       });
 
+      // persist student changes
       tx.set(studentRef, { topic_progress: newTP }, { merge: true });
-      // store the granted topics in a remediation-log subcollection for audit (optional but helpful)
+
+      // store the granted topics in a remediation-log subcollection for audit
       const remLogCol = db.collection("remediations_log");
-      grantedDetails.forEach((tid) => {
+      grantedDetailsLocal.forEach((tid) => {
         tx.set(remLogCol.doc(), {
           remediationId: docRef.id,
           studentId,
@@ -721,10 +735,15 @@ app.post("/teachers/assign-remediation", async (req, res) => {
           grantedBy: req.body.createdBy || "teacher-ui"
         });
       });
+
+      // expose granted list outside transaction via closure
+      grantedTopicIds = grantedDetailsLocal;
     });
 
-    for (const tid of grantedDetails) {
+    // create per-student temporary overrides for the granted topics (non-blocking)
+    for (const tid of grantedTopicIds) {
       try {
+        // keep the same default of 3 days for remediation temp open
         await createOverride(studentId, tid, 3, req.body.createdBy || "teacher-ui");
       } catch (err) {
         console.error("Failed to create temp override for topic:", tid, err);
@@ -743,19 +762,42 @@ app.post("/teachers/assign-remediation", async (req, res) => {
 // 🔹 TOPICS ROUTES
 // ------------------------------------------------
 
-// ✅ Get all topics
+// ✅ Get all topics (normalized for student card locking)
 app.get("/topics/list", async (req, res) => {
   try {
     const snapshot = await db.collection("topics").get();
-    const topics = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    res.status(200).json(topics); // return pure array
+
+    const topics = snapshot.docs.map((doc) => {
+      const d = doc.data() || {};
+
+      return {
+        id: doc.id,
+        name: d.name || d.title || doc.id,
+        description: d.description || "",
+        prerequisites: Array.isArray(d.prerequisites) ? d.prerequisites : [],
+
+        // 🔥 NORMALIZED schedule fields:
+        open_at: d.open_at ? String(d.open_at) : null,
+        close_at: d.close_at ? String(d.close_at) : null,
+        manual_lock: !!d.manual_lock,
+
+        // 🔄 preserve other custom fields safely:
+        cluster: d.cluster || null,
+        order: d.order || null,
+        icon: d.icon || null,
+        // (add any other expected custom fields explicitly if needed)
+      };
+    });
+
+    return res.status(200).json(topics);
   } catch (err) {
     console.error("Error fetching topics:", err);
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
+});
+
+app.get("/server-time", (req, res) => {
+  return res.json({ server_time_utc: new Date().toISOString() });
 });
 
 // Topic graph for visualization (DAG With Levels)
@@ -914,25 +956,43 @@ app.post("/topics/:id/schedule", async (req, res) => {
 });
 
 // POST /topics/:id/temporary-open-class
-// body: { days?: number, createdBy?: string }
 app.post("/topics/:id/temporary-open-class", async (req, res) => {
   try {
     const topicId = req.params.id;
-    const days = Number(req.body.days || 3);
+    const days = Math.max(1, Number(req.body.days || 3));
     const createdBy = req.body.createdBy || "teacher-ui";
 
-    // fetch all students
     const studentsSnap = await db.collection("students").get();
-    const students = studentsSnap.docs.map(d => d.id);
+    const studentIds = studentsSnap.docs.map(d => d.id);
 
-    const results = [];
-    const batchLimit = 500; // Firestore batch limit, but we'll do simple sequential writes to keep it safe
-    for (const sid of students) {
-      const r = await createOverride(sid, topicId, days, createdBy);
-      results.push(r);
+    if (!studentIds.length) {
+      return res.json({ success: true, topicId, createdFor: 0, results: [] });
     }
 
-    return res.json({ success: true, topicId, createdFor: students.length, results });
+    const nowIso = new Date().toISOString();
+    const tempUntil = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+
+    const results = [];
+    const batchSize = 450;
+    for (let i = 0; i < studentIds.length; i += batchSize) {
+      const batch = db.batch();
+      const chunk = studentIds.slice(i, i + batchSize);
+      chunk.forEach((sid) => {
+        const docId = `${sid}_${topicId}_override`;
+        const ref = db.collection("topic_overrides").doc(docId);
+        batch.set(ref, {
+          studentId: sid,
+          topicId,
+          temp_open_until: tempUntil,
+          createdAt: nowIso,
+          createdBy,
+        }, { merge: true });
+        results.push({ studentId: sid, docId, temp_open_until: tempUntil });
+      });
+      await batch.commit();
+    }
+
+    return res.json({ success: true, topicId, createdFor: studentIds.length, results });
   } catch (err) {
     console.error("POST /topics/:id/temporary-open-class error:", err);
     return res.status(500).json({ error: "Failed to temp-open class" });

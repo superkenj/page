@@ -141,6 +141,10 @@ export default function TeacherContent() {
       setScheduleModalOpen(false);
       setScheduleTopicId(null);
       alert("Schedule saved.");
+
+      // Notify student dashboards to refresh immediately
+      window.dispatchEvent(new Event("studentDataUpdated"));
+      window.dispatchEvent(new Event("studentPathUpdated"));
     } catch (err) {
       console.error("saveScheduleModal error", err);
       alert("Failed to save schedule.");
@@ -166,6 +170,10 @@ export default function TeacherContent() {
       // refresh topics to show immediate effect if needed
       await loadAll();
       setScheduleModalOpen(false);
+
+      // Notify student dashboards to refresh (they will read /students/:id/overrides)
+      window.dispatchEvent(new Event("studentDataUpdated"));
+      window.dispatchEvent(new Event("studentPathUpdated"));
     } catch (err) {
       console.error("tempOpenTopicFromModal error", err);
       alert("Failed to open temporarily.");

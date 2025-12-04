@@ -6,19 +6,22 @@ const API_BASE = "https://page-jirk.onrender.com";
 function Countdown({ targetUtcIso, serverTimeUtcIso, compact = false }) {
   const [now, setNow] = useState(Date.now());
 
-  // compute delta between client and server
+  // compute delta between client and server (defensive)
   const serverMs = serverTimeUtcIso ? new Date(serverTimeUtcIso).getTime() : Date.now();
   const clientMs = Date.now();
-  const delta = clientMs - serverMs; // client - server
+  const delta = Number.isFinite(serverMs) ? clientMs - serverMs : 0; // if server time invalid, assume 0
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
 
+  // defensive: if target is missing or invalid, show "00:00:00"
+  const targetMs = targetUtcIso ? new Date(targetUtcIso).getTime() : NaN;
+  if (!Number.isFinite(targetMs)) return <span>00:00:00</span>;
+
   const canonicalNow = now - delta;
-  const target = new Date(targetUtcIso).getTime();
-  const msLeft = target - canonicalNow;
+  const msLeft = targetMs - canonicalNow;
   if (msLeft <= 0) return <span>00:00:00</span>;
 
   const days = Math.floor(msLeft / (1000 * 60 * 60 * 24));
@@ -83,11 +86,25 @@ export default function StudentDashboard() {
       const tp = sJson.topic_progress && typeof sJson.topic_progress === "object" ? sJson.topic_progress : {};
       setTopicProgress(tp);
 
-      // CHANGED: store overrides map + server time
+      // store server time
       setServerTimeUtc(oJson.server_time_utc || new Date().toISOString());
+
+      // build overrides map keyed by topicId (accepting different field names)
       const ovMap = {};
       (oJson.overrides || []).forEach((r) => {
-        if (r.topicId) ovMap[r.topicId] = r;
+        if (!r) return;
+        // tolerate different field names coming from firestore/legacy
+        const tid = r.topicId || r.topic_id || r.topic || r.topicId?.toString();
+        const tempUntil = r.temp_open_until || r.tempOpenUntil || r.temp_open || r.temp || null;
+
+        if (tid) {
+          ovMap[tid] = {
+            // preserve raw doc but normalize key names we use in UI
+            ...r,
+            topicId: tid,
+            temp_open_until: tempUntil ? String(tempUntil) : null,
+          };
+        }
       });
       setOverrides(ovMap);
 
@@ -130,15 +147,22 @@ export default function StudentDashboard() {
   useEffect(() => {
     loadAll(); // initial load
 
-    const handleContentSeen = () => {
-      console.log("🔄 Detected contentSeenUpdated — refreshing dashboard...");
+    const handleContentSeen = (e) => {
+      // If the event contains a studentId and it's not this dashboard's student, ignore it
+      try {
+        const sid = e?.detail?.studentId;
+        if (sid && sid !== id && sid !== "all") return;
+      } catch (err) {
+        // ignore malformed event, continue to reload
+      }
+      console.log("🔄 Detected content/path/data update — refreshing dashboard...");
       loadAll();
     };
 
-    // Listen for both events other parts of app might dispatch
     window.addEventListener("contentSeenUpdated", handleContentSeen);
     window.addEventListener("studentPathUpdated", handleContentSeen);
     window.addEventListener("studentDataUpdated", handleContentSeen);
+    window.addEventListener("studentDataUpdatedAll", handleContentSeen); // optional generic event
 
     return () => {
       window.removeEventListener("contentSeenUpdated", handleContentSeen);
@@ -194,15 +218,22 @@ export default function StudentDashboard() {
 
     // CHANGED: check locking states — if topic is scheduled/locked, return 'Locked' so UI can show countdown
     if (topic) {
-      const now = new Date(serverTimeUtc || new Date()).getTime();
+      const now = Number.isFinite(new Date(serverTimeUtc || new Date()).getTime())
+        ? new Date(serverTimeUtc || new Date()).getTime()
+        : Date.now();
+
       if (topic.manual_lock) {
-        // manual lock
         return "Locked";
       }
-      if (topic.open_at && new Date(topic.open_at).getTime() > now) {
+
+      // defensive parse
+      const openAtMs = topic.open_at ? new Date(topic.open_at).getTime() : NaN;
+      const closeAtMs = topic.close_at ? new Date(topic.close_at).getTime() : NaN;
+
+      if (Number.isFinite(openAtMs) && openAtMs > now) {
         return "Locked";
       }
-      if (topic.close_at && new Date(topic.close_at).getTime() <= now) {
+      if (Number.isFinite(closeAtMs) && closeAtMs <= now) {
         return "Closed";
       }
     }
@@ -283,17 +314,26 @@ export default function StudentDashboard() {
           if (status === "TemporaryOpen") {
             const o = overrides[t.id];
             if (o?.temp_open_until && serverTimeUtc) {
-              countdownEl = <div style={{ fontSize: 12, marginTop: 6 }}>Open for <Countdown targetUtcIso={o.temp_open_until} serverTimeUtcIso={serverTimeUtc} compact /></div>;
+              countdownEl = <div style={{ fontSize: 12, marginTop: 6 }}>
+                Open for <Countdown targetUtcIso={o.temp_open_until} serverTimeUtcIso={serverTimeUtc} compact />
+                {t.close_at ? <span> · Closes: <Countdown targetUtcIso={t.close_at} serverTimeUtcIso={serverTimeUtc} compact /></span> : null}
+              </div>;
             }
           } else if (status === "Locked") {
             // show when it opens if open_at exists
             if (t.open_at && serverTimeUtc) {
-              countdownEl = <div style={{ fontSize: 12, marginTop: 6 }}>Opens in <Countdown targetUtcIso={t.open_at} serverTimeUtcIso={serverTimeUtc} compact /></div>;
+              countdownEl = <div style={{ fontSize: 12, marginTop: 6 }}>
+                Opens in <Countdown targetUtcIso={t.open_at} serverTimeUtcIso={serverTimeUtc} compact />
+                {t.close_at ? <span> · Closes: <Countdown targetUtcIso={t.close_at} serverTimeUtcIso={serverTimeUtc} compact /></span> : null}
+              </div>;
             } else {
               countdownEl = <div style={{ fontSize: 12, marginTop: 6 }}>Locked</div>;
             }
           } else if (status === "Closed") {
-            countdownEl = <div style={{ fontSize: 12, marginTop: 6 }}>Closed</div>;
+            // show when it closed and when it will reopen if open_at in future
+            countdownEl = <div style={{ fontSize: 12, marginTop: 6 }}>
+              Closed{t.open_at ? <span> · Reopens in <Countdown targetUtcIso={t.open_at} serverTimeUtcIso={serverTimeUtc} compact /></span> : null}
+            </div>;
           }
 
           return (
