@@ -25,6 +25,16 @@ export default function StudentTopicContent() {
   const [submissionResult, setSubmissionResult] = useState(null); // { score, passed }
   const [locked, setLocked] = useState(false); // NEW: assessment locked after pass or 3 attempts
 
+  // NEW: attempt meta (for popup)
+  const [attempts, setAttempts] = useState(0);
+  const [extraAttempts, setExtraAttempts] = useState(0);
+  const [allowedAttempts, setAllowedAttempts] = useState(3);
+
+  // NEW: assessment session + soft timer
+  const [assessmentInProgress, setAssessmentInProgress] = useState(false);
+  const [timeLeftSec, setTimeLeftSec] = useState(null); // null = no timer
+  const [timeExpired, setTimeExpired] = useState(false);
+
   // ---------------- helper ----------------
   function shuffle(arr) {
     const a = Array.isArray(arr) ? [...arr] : [];
@@ -54,10 +64,15 @@ export default function StudentTopicContent() {
 
         const tp = stu.topic_progress && stu.topic_progress[topicId] ? stu.topic_progress[topicId] : null;
         const extra = tp ? Number(tp.extraAttempts || 0) : 0;
-        const attempts = tp ? Number(tp.attempts || 0) : 0;
+        const attemptsUsed = tp ? Number(tp.attempts || 0) : 0;
         const allowed = 3 + extra;
-        const isLocked = tp ? (tp.locked === true || tp.completed === true || attempts >= allowed) : false;
+        const isLocked = tp ? (tp.locked === true || tp.completed === true || attemptsUsed >= allowed) : false;
+
         setLocked(isLocked);
+        setAttempts(attemptsUsed);
+        setExtraAttempts(extra);
+        setAllowedAttempts(allowed);
+
       } catch (err) {
         console.error("Error loading topic content:", err);
       } finally {
@@ -169,6 +184,38 @@ export default function StudentTopicContent() {
     }
   }, [locked, tab]);
 
+  // Start soft timer when an assessment is in progress and the assessment defines a time_limit_minutes
+  useEffect(() => {
+    if (!assessmentInProgress || !assessment) return;
+
+    // don't reset if timer already running or expired
+    if (timeLeftSec !== null || timeExpired) return;
+
+    const limitMinutes = Number(assessment.time_limit_minutes ?? assessment.timeLimitMinutes ?? 0);
+    if (!Number.isFinite(limitMinutes) || limitMinutes <= 0) return;
+
+    setTimeLeftSec(Math.round(limitMinutes * 60));
+  }, [assessmentInProgress, assessment, timeLeftSec, timeExpired]);
+
+  // Tick countdown every second while assessment is in progress
+  useEffect(() => {
+    if (!assessmentInProgress || timeLeftSec === null || timeExpired) return;
+
+    const iv = setInterval(() => {
+      setTimeLeftSec((prev) => {
+        if (prev === null) return prev;
+        if (prev <= 1) {
+          // time is up: stop inputs but still allow submit
+          setTimeExpired(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(iv);
+  }, [assessmentInProgress, timeLeftSec, timeExpired]);
+
   async function markSeen(contentId) {
     try {
       const res = await fetch(`${API_BASE}/students/${studentId}/content_seen`, {
@@ -193,6 +240,15 @@ export default function StudentTopicContent() {
     }
     return link;
   }
+
+  function formatSeconds(total) {
+    if (total == null) return "";
+    const safe = Math.max(0, Math.floor(total));
+    const m = Math.floor(safe / 60);
+    const s = safe % 60;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+
 
   // Answer handlers
   function setAnswer(questionId, value) {
@@ -348,7 +404,10 @@ export default function StudentTopicContent() {
         }
       }
 
-      // Return the user to the content tab so they can review materials
+      // Reset assessment session + timer and return to Content
+      setAssessmentInProgress(false);
+      setTimeLeftSec(null);
+      setTimeExpired(false);
       setTab("content");
     } catch (err) {
       console.error("submitAssessment network/error:", err);
@@ -375,7 +434,13 @@ export default function StudentTopicContent() {
       {/* TAB SWITCHER: full width, both buttons split evenly */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <button
-          onClick={() => setTab("content")}
+          onClick={() => {
+            if (assessmentInProgress && !locked) {
+              alert("You are currently in an ongoing assessment. Please submit it before returning to the Content tab.");
+              return;
+            }
+            setTab("content");
+          }}
           style={{
             flex: 1,
             padding: "10px 12px",
@@ -391,7 +456,25 @@ export default function StudentTopicContent() {
         </button>
         <button
           onClick={() => {
-            if (!locked) setTab("assessment");
+            if (locked) return;
+
+            const attemptsLeft = Math.max(0, (allowedAttempts || 3) - (attempts || 0));
+            const isRemedial = (attempts || 0) >= 3 || (extraAttempts || 0) > 0;
+
+            let msg = `You have used ${attempts || 0} out of ${allowedAttempts || 3} attempts for this topic.\n`;
+            msg += `Attempts left: ${attemptsLeft}.\n\n`;
+            if (isRemedial) {
+              msg += "This attempt is part of your remediation for this topic.\n\n";
+            }
+            msg += "Do you want to start the assessment now? Once started, you won't be able to return to the Content tab until you submit.";
+
+            const ok = window.confirm(msg);
+            if (!ok) return;
+
+            setTab("assessment");
+            setAssessmentInProgress(true);
+            setTimeExpired(false);
+            // Timer (if any) will start automatically once the assessment metadata is loaded.
           }}
           disabled={locked}
           style={{
@@ -442,7 +525,28 @@ export default function StudentTopicContent() {
       {/* ASSESSMENT TAB */}
       {tab === "assessment" && (
         <div style={{ marginTop: 8, maxWidth: 900 }}>
-          <h2 style={{ color: "#2563eb" }}>📝 Assessment</h2>
+          <h2
+            style={{
+              color: "#2563eb",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <span>📝 Assessment</span>
+            {timeLeftSec !== null && (
+              <span
+                style={{
+                  fontSize: 14,
+                  color: timeExpired ? "#b91c1c" : "#0f766e",
+                }}
+              >
+                {timeExpired
+                  ? "Time is up"
+                  : `Time left: ${formatSeconds(timeLeftSec)}`}
+              </span>
+            )}
+          </h2>
 
           {assessmentLoading ? (
             <div>Loading assessment...</div>
@@ -454,6 +558,21 @@ export default function StudentTopicContent() {
             <div style={{ background: "#fff", borderRadius: 8, padding: 12, border: "1px solid #e6eefc" }}>
               <h3 style={{ marginTop: 0 }}>{assessment.title}</h3>
               {assessment.instructions && <p style={{ color: "#475569" }}>{assessment.instructions}</p>}
+
+              {timeExpired && (
+                <div
+                  style={{
+                    marginBottom: 8,
+                    padding: 8,
+                    borderRadius: 6,
+                    background: "#fef2f2",
+                    color: "#b91c1c",
+                    fontSize: 13,
+                  }}
+                >
+                  Time is up. You can no longer change your answers, but you can still submit this attempt.
+                </div>
+              )}
 
               {(assessment.questions || []).map((q, idx) => (
                 <div key={q.question_id} style={{ border: "1px solid #eef2ff", padding: 10, borderRadius: 8, marginBottom: 10 }}>
@@ -472,7 +591,7 @@ export default function StudentTopicContent() {
                             name={q.question_id}
                             checked={answers[q.question_id] === c}
                             onChange={() => setAnswer(q.question_id, c)}
-                            disabled={locked}
+                            disabled={locked || timeExpired}
                           />
                           <span>{c}</span>
                         </label>
@@ -486,7 +605,7 @@ export default function StudentTopicContent() {
                       onChange={(e) => setAnswer(q.question_id, e.target.value)}
                       placeholder="Type your answer"
                       style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
-                      disabled={locked}
+                      disabled={locked || timeExpired}
                     />
                   )}
 
@@ -497,7 +616,7 @@ export default function StudentTopicContent() {
                       onChange={(e) => setAnswer(q.question_id, e.target.value)}
                       placeholder="Numeric answer"
                       style={{ width: "200px", padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
-                      disabled={locked}
+                      disabled={locked || timeExpired}
                     />
                   )}
 
@@ -509,7 +628,7 @@ export default function StudentTopicContent() {
                         onChange={(e) => setAnswer(q.question_id, e.target.value.split("|").map(s => s.trim()))}
                         placeholder="item1 | item2 | item3"
                         style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
-                        disabled={locked}
+                        disabled={locked || timeExpired}
                       />
                     </>
                   )}
@@ -524,7 +643,18 @@ export default function StudentTopicContent() {
               )}
 
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => setTab("content")} style={{ background: "#ddd", padding: "8px 12px", borderRadius: 6 }}>Back to Content</button>
+                <button
+                  onClick={() => {
+                    if (assessmentInProgress && !locked) {
+                      alert("Please submit your assessment before going back to the Content tab.");
+                      return;
+                    }
+                    setTab("content");
+                  }}
+                  style={{ background: "#ddd", padding: "8px 12px", borderRadius: 6 }}
+                >
+                  Back to Content
+                </button>
                 <button
                   onClick={submitAssessment}
                   disabled={submitting || locked}
