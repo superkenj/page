@@ -373,10 +373,24 @@ export default function StudentTopicContent() {
         if (stuRes.ok) {
           const stu = await stuRes.json();
           setSeen(stu.content_seen || []);
-          // also double-check tp if server response lacked attempts/mastered
+
+          // also update attempts/extraAttempts/allowed from latest topic_progress
           const tp = stu.topic_progress && stu.topic_progress[topicId] ? stu.topic_progress[topicId] : null;
-          const isLockedFromTP = tp ? (tp.locked === true || tp.completed === true || (tp.attempts || 0) >= 3) : false;
-          if (isLockedFromTP) setLocked(true);
+          if (tp) {
+            const extraFromTP = Number(tp.extraAttempts || 0);
+            const attemptsFromTP = Number(tp.attempts || 0);
+            const allowedFromTP = 3 + extraFromTP;
+
+            setAttempts(attemptsFromTP);
+            setExtraAttempts(extraFromTP);
+            setAllowedAttempts(allowedFromTP);
+
+            const isLockedFromTP =
+              tp.locked === true ||
+              tp.completed === true ||
+              attemptsFromTP >= allowedFromTP;
+            if (isLockedFromTP) setLocked(true);
+          }
         }
       } catch (e) {
         console.warn("Failed to refresh student after submit:", e);
