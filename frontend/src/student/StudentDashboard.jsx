@@ -372,10 +372,8 @@ export default function StudentDashboard() {
             <div
               key={t.id}
               onClick={() => {
-                // If locked & not temp-open, prevent navigation and show a toast instead
                 const st = getStatus(t.id);
                 if (st === "Locked" || st === "Closed") {
-                  // allow teacher/probing? For now show a warning
                   window.alert("This topic is currently locked. It will open at the scheduled time or if your teacher grants access.");
                   return;
                 }
@@ -389,9 +387,13 @@ export default function StudentDashboard() {
                 cursor: "pointer",
                 position: "relative",
                 transition: "transform 0.15s",
+                display: "flex",           // <-- make card a column flex container
+                flexDirection: "column",
+                justifyContent: "space-between",
+                minHeight: 180,            // adjust as needed so cards have consistent height
               }}
             >
-              {/* badge area */}
+              {/* badge area (top-right) */}
               <div style={{ position: "absolute", top: 10, right: 12, display: "flex", gap: 8, alignItems: "center" }}>
                 <div
                   style={{
@@ -408,10 +410,16 @@ export default function StudentDashboard() {
                 </div>
               </div>
 
-              <h3 style={{ marginBottom: 8 }}>{t.name}</h3>
-              <p style={{ fontSize: 14, color: "#374151" }}>{t.description}</p>
+              {/* main content (top) */}
+              <div style={{ paddingRight: 8 }}>
+                <h3 style={{ marginBottom: 8, fontSize: 18 }}>{t.name}</h3>
+                <p style={{ fontSize: 14, color: "#374151", marginBottom: 6 }}>{t.description}</p>
+              </div>
 
-              {timePanel}
+              {/* time panel (sticks to bottom because of column + space-between) */}
+              <div style={{ marginTop: 12 }}>
+                {timePanel}
+              </div>
             </div>
           );
         })}
