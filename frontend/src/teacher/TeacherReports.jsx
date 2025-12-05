@@ -1,3 +1,4 @@
+// TeacherReports.jsx
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import {
   BarChart,
@@ -29,7 +30,6 @@ export default function TeacherReports() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("name"); // name | progress | masteredCount
-  const [selectedAssessment, setSelectedAssessment] = useState("all"); // "all" or assessmentId
   const [selectedTopic, setSelectedTopic] = useState("all"); // "all" or topicId
   const [countMode, setCountMode] = useState("unique-students"); // "topic-level" | "unique-students"
   const [studentDetail, setStudentDetail] = useState(null); // { student, attempts: [...] }
@@ -44,11 +44,22 @@ export default function TeacherReports() {
   // when topics load, default selectedTopic to first topic (per-topic view default)
   useEffect(() => {
     if (data.topics && data.topics.length && selectedTopic === "all") {
-      // set default to the first topic id (but keep "all" available)
+      // default to first topic id (but keep "all" available)
       setSelectedTopic(data.topics[0].id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.topics]);
+
+  // When selectedTopic changes, automatically load item analysis for its single assessment (1:1)
+  useEffect(() => {
+    if (selectedTopic && selectedTopic !== "all") {
+      const assessmentId = `${selectedTopic}_assessment`;
+      loadItemAnalysis(assessmentId);
+    } else {
+      setItemAnalysis(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTopic]);
 
   async function fetchReport() {
     setLoading(true);
@@ -104,20 +115,10 @@ export default function TeacherReports() {
   const studentsVisible = useMemo(() => {
     let arr = (data.students || []).slice();
 
-    // if an assessment is selected, restrict to students who have that assessment/topic in their topic_progress
-    if (selectedAssessment !== "all") {
-      arr = arr.filter(s => {
-        if (!s.topic_progress && !s.attempts) return false;
-        if (s.topic_progress && Object.keys(s.topic_progress).some(k => k === selectedAssessment || k === (selectedAssessment.replace('_assessment','')) )) return true;
-        return false;
-      });
-    }
-
-    // if a specific topic is selected, restrict to students who have any activity or presence of that topic OR include all and show those without attempts depending on filter
+    // if a specific topic is selected, restrict to students who have any activity or presence of that topic
     if (selectedTopic !== "all") {
       arr = arr.filter(s => {
         if (!s.topic_progress) return false;
-        // topic ids in student data may be direct keys
         return Object.keys(s.topic_progress).some(k => k === selectedTopic || k === (selectedTopic.replace('_assessment','')));
       });
     }
@@ -144,7 +145,7 @@ export default function TeacherReports() {
     });
 
     return arr;
-  }, [data.students, query, filter, sortBy, selectedAssessment, selectedTopic, data.topics]);
+  }, [data.students, query, filter, sortBy, selectedTopic, data.topics]);
 
   // SUMMARY & METRICS (refined)
   const totalTopics = (data.topics || []).length || 0;
@@ -159,7 +160,7 @@ export default function TeacherReports() {
     return { totalStudents, avgMastery, avgAttempts, atRisk };
   }, [data.students, data.topics]);
 
-  // Mastery distribution buckets (0-19,20-39,40-59,60-79,80-100)
+  // Mastery distribution buckets (0-19,20-39,40-59,60-79,80-100) — five buckets as requested
   const masteryBuckets = useMemo(() => {
     const buckets = [
       { name: "0-19", value: 0 },
@@ -324,11 +325,6 @@ export default function TeacherReports() {
     }
   }
 
-  useEffect(() => {
-    if (selectedAssessment && selectedAssessment !== "all") loadItemAnalysis(selectedAssessment);
-    else setItemAnalysis(null);
-  }, [selectedAssessment]);
-
   if (loading) return <div style={{ padding: 20 }}>Loading reports...</div>;
 
   // small shared styles
@@ -453,15 +449,6 @@ export default function TeacherReports() {
           <option value="topic-level">Topic-level (counts each problematic topic instance)</option>
         </select>
 
-        <select value={selectedAssessment} onChange={e => setSelectedAssessment(e.target.value)} style={{ padding: 8, borderRadius: 8 }}>
-          <option value="all">All assessments</option>
-          {(data.assessments || []).map(a => (
-            <option key={a.id} value={a.id}>
-              {a.title} {a.dueDate ? `(${a.dueDate.slice(0, 10)})` : ""}
-            </option>
-          ))}
-        </select>
-
         <select value={filter} onChange={e => setFilter(e.target.value)} style={{ padding: 8, borderRadius: 8 }}>
           <option value="all">All</option>
           <option value="atrisk">At-risk</option>
@@ -515,8 +502,8 @@ export default function TeacherReports() {
           <div style={{ flex: "0 0 320px", padding: 12, borderRadius: 10 }}>
             <h4 style={{ marginTop: 0 }}>Assessment Item Analysis</h4>
             <div style={{ ...cardStyle, padding: 10, minHeight: 100 }}>
-              {selectedAssessment === "all" ? (
-                <div style={{ fontSize: 13, color: "#555" }}>Select an assessment to view item-level issues (low p-value, low discrimination).</div>
+              {selectedTopic === "all" ? (
+                <div style={{ fontSize: 13, color: "#555" }}>Select a topic to view item-level issues (low p-value, low discrimination).</div>
               ) : itemAnalysis?.loading ? (
                 <div>Loading analysis...</div>
               ) : itemAnalysis?.error ? (
@@ -543,7 +530,7 @@ export default function TeacherReports() {
                   </table>
                 </div>
               ) : (
-                <div style={{ color: "#777", fontSize: 13 }}>No item-analysis data available for this assessment.</div>
+                <div style={{ color: "#777", fontSize: 13 }}>No item-analysis data available for this topic's assessment.</div>
               )}
             </div>
           </div>
@@ -667,7 +654,8 @@ export default function TeacherReports() {
                             onClick={async () => {
                               try {
                                 const body = { studentId: s.id };
-                                if (selectedAssessment && selectedAssessment !== "all") body.assessmentId = selectedAssessment;
+                                // if a specific topic is selected, tell backend which assessment (single assessment per topic)
+                                if (selectedTopic && selectedTopic !== "all") body.assessmentId = `${selectedTopic}_assessment`;
 
                                 const resp = await fetch(`${API_BASE}/teachers/assign-remediation`, {
                                   method: "POST",
@@ -747,7 +735,6 @@ export default function TeacherReports() {
                           onClick={async () => {
                             try {
                               const body = { studentId: s.id };
-                              if (selectedAssessment && selectedAssessment !== "all") body.assessmentId = selectedAssessment;
                               if (selectedTopic && selectedTopic !== "all") body.assessmentId = `${selectedTopic}_assessment`;
                               const resp = await fetch(`${API_BASE}/teachers/assign-remediation`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
                               if (!resp.ok) throw new Error(`server ${resp.status}`);
