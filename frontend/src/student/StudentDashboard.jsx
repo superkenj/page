@@ -391,87 +391,27 @@ export default function StudentDashboard() {
                 transition: "transform 0.15s",
               }}
             >
-              {/* badge left / countdown right (top row) */}
-              <div style={{ position: "absolute", top: 10, left: 12 }}>
+              {/* badge area */}
+              <div style={{ position: "absolute", top: 10, right: 12, display: "flex", gap: 8, alignItems: "center" }}>
                 <div
                   style={{
                     background: color,
                     color: "white",
-                    fontSize: 13,       // slightly larger
+                    fontSize: 13,
                     fontWeight: 700,
                     padding: "5px 10px",
                     borderRadius: 14,
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.08)"
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
                   }}
                 >
                   {status === "ExtraAttempt" ? "Retake Assessment" : status === "TemporaryOpen" ? "Open (temp)" : status}
                 </div>
               </div>
 
-              <div style={{ position: "absolute", top: 8, right: 12, display: "flex", alignItems: "center" }}>
-                {/* show a larger, live countdown on the top-right when appropriate */}
-                {(() => {
-                  // Prefer: TemporaryOpen -> show temp open_until remaining
-                  if (status === "TemporaryOpen") {
-                    const o = overrides[t.id];
-                    if (o?.temp_open_until && serverTimeUtc) {
-                      return (
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#064e3b", background: "rgba(14,165,164,0.08)", padding: "6px 10px", borderRadius: 12 }}>
-                          <Countdown targetUtcIso={o.temp_open_until} serverTimeUtcIso={serverTimeUtc} compact />
-                        </div>
-                      );
-                    }
-                  }
-
-                  // Locked / Upcoming -> show Opens in ... if open_at exists
-                  if ((status === "Locked" || status === "Upcoming") && t.open_at && serverTimeUtc) {
-                    return (
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", background: "rgba(15,23,42,0.04)", padding: "6px 10px", borderRadius: 12 }}>
-                        Opens in <span style={{ marginLeft: 6 }}><Countdown targetUtcIso={t.open_at} serverTimeUtcIso={serverTimeUtc} compact /></span>
-                      </div>
-                    );
-                  }
-
-                  // Locked with no open_at -> show locked badge (small)
-                  if (status === "Locked") {
-                    return <div style={{ fontSize: 13, color: "#6b7280", padding: "6px 10px", borderRadius: 12 }}>Locked</div>;
-                  }
-
-                  // Closed -> show how long until it reopens if open_at exists
-                  if (status === "Closed") {
-                    if (t.open_at && serverTimeUtc) {
-                      return (
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#6b7280", background: "rgba(107,114,128,0.06)", padding: "6px 10px", borderRadius: 12 }}>
-                          Reopens in <span style={{ marginLeft: 6 }}><Countdown targetUtcIso={t.open_at} serverTimeUtcIso={serverTimeUtc} compact /></span>
-                        </div>
-                      );
-                    }
-                    return <div style={{ fontSize: 13, color: "#6b7280" }}>Closed</div>;
-                  }
-
-                  // If topic has a close_at in the future and it's currently open, show closes countdown (useful)
-                  if (t.close_at && serverTimeUtc) {
-                    // ensure current canonical time is before close_at
-                    const canonicalNow = Date.now() + (Number.isFinite(serverOffsetMs) ? serverOffsetMs : 0);
-                    const closeMs = new Date(t.close_at).getTime();
-                    if (!isNaN(closeMs) && closeMs > canonicalNow) {
-                      return (
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#7f1d1d", background: "rgba(124,58,237,0.04)", padding: "6px 10px", borderRadius: 12 }}>
-                          Closes in <span style={{ marginLeft: 6 }}><Countdown targetUtcIso={t.close_at} serverTimeUtcIso={serverTimeUtc} compact /></span>
-                        </div>
-                      );
-                    }
-                  }
-
-                  return null;
-                })()}
-              </div>
-
               <h3 style={{ marginBottom: 8 }}>{t.name}</h3>
               <p style={{ fontSize: 14, color: "#374151" }}>{t.description}</p>
 
               {timePanel}
-              {countdownEl}
             </div>
           );
         })}
