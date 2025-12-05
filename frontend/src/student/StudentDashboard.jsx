@@ -207,59 +207,58 @@ export default function StudentDashboard() {
   const topicsMap = Object.fromEntries((topics || []).map((t) => [t.id, t]));
 
   // CHANGED: helper to check if a topic is currently temporarily open for this student
-  function isTempOpen(topicId) {
+  function isTempOpen(topicId, canonicalNowMs = null) {
     const o = overrides[topicId];
     if (!o || !o.temp_open_until) return false;
-    return new Date(o.temp_open_until).getTime() > (new Date(serverTimeUtc || new Date()).getTime());
+
+    const tempUtcMs = new Date(o.temp_open_until).getTime();
+    if (!Number.isFinite(tempUtcMs)) return false;
+
+    const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+    let nowUtcMs;
+    if (Number.isFinite(canonicalNowMs)) {
+      nowUtcMs = canonicalNowMs;
+    } else {
+      const serverMs = serverTimeUtc ? new Date(serverTimeUtc).getTime() : NaN;
+      nowUtcMs = Number.isFinite(serverMs) ? serverMs : Date.now();
+    }
+
+    const tempManilaMs = tempUtcMs + MANILA_OFFSET_MS;
+    const nowManilaMs = nowUtcMs + MANILA_OFFSET_MS;
+
+    return tempManilaMs > nowManilaMs;
   }
 
   function getStatus(topicId) {
-    // New priority: ExtraAttempt first
     if (extraAttemptSet.has(topicId)) return "ExtraAttempt";
 
-    // Temporary open override (teacher granted or remediation)
-    if (isTempOpen(topicId)) return "TemporaryOpen";
+    const canonicalNowUtcMs = Date.now() + (Number.isFinite(serverOffsetMs) ? serverOffsetMs : 0);
 
-    // In-Progress always wins after extra
+    if (isTempOpen(topicId, canonicalNowUtcMs)) return "TemporaryOpen";
+
     if (inProgressSet.has(topicId)) return "In Progress";
-
-    // Mastered wins over recommended/upcoming
     if (masteredSet.has(topicId)) return "Mastered";
-
-    // If explicitly recommended by path -> Recommended
     if (recommendedSet.has(topicId)) return "Recommended";
 
-    // treat a starter topic (no prereqs) as "Recommended" if not mastered.
     const topic = topicsMap[topicId];
-    const prereqs = (topic && Array.isArray(topic.prerequisites)) ? topic.prerequisites : [];
-    if (prereqs.length === 0 && !masteredSet.has(topicId)) {
-      return "Recommended";
-    }
+    const prereqs = topic?.prerequisites || [];
+    if (prereqs.length === 0 && !masteredSet.has(topicId)) return "Recommended";
 
-    // compute a live canonical "now" aligned to server-time using serverOffsetMs.
-    // We rely on the component's `tick` to force re-evaluation every second.
-    const canonicalNow = Date.now() + (Number.isFinite(serverOffsetMs) ? serverOffsetMs : 0);
+    const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
+    const nowManilaMs = canonicalNowUtcMs + MANILA_OFFSET_MS;
 
     if (topic) {
-      if (topic.manual_lock) {
-        return "Locked";
-      }
+      if (topic.manual_lock) return "Locked";
 
-      // defensive parse
-      const openAtMs = topic.open_at ? new Date(topic.open_at).getTime() : NaN;
-      const closeAtMs = topic.close_at ? new Date(topic.close_at).getTime() : NaN;
+      const openUtcMs = topic.open_at ? new Date(topic.open_at).getTime() : NaN;
+      const closeUtcMs = topic.close_at ? new Date(topic.close_at).getTime() : NaN;
 
-      // If open time is in the future -> Locked (shows Opens in ...)
-      if (Number.isFinite(openAtMs) && openAtMs > canonicalNow) {
-        return "Locked";
-      }
-      // If close time exists and has already passed -> Closed
-      if (Number.isFinite(closeAtMs) && closeAtMs <= canonicalNow) {
-        return "Closed";
-      }
+      const openMs = Number.isFinite(openUtcMs) ? openUtcMs + MANILA_OFFSET_MS : NaN;
+      const closeMs = Number.isFinite(closeUtcMs) ? closeUtcMs + MANILA_OFFSET_MS : NaN;
 
-      // If open/close window exists and current time is within -> treat as Upcoming -> student will see it as available
-      // but we already handled TemporaryOpen earlier via overrides.
+      if (Number.isFinite(openMs) && openMs > nowManilaMs) return "Locked";
+      if (Number.isFinite(closeMs) && closeMs <= nowManilaMs) return "Closed";
     }
 
     return "Upcoming";
@@ -318,8 +317,13 @@ export default function StudentDashboard() {
         {sorted.map((t) => {
           const status = getStatus(t.id);
           const color = getColorForStatus(status);
-          const humanOpen = t.open_at ? new Date(t.open_at).toLocaleString() : null;
-          const humanClose = t.close_at ? new Date(t.close_at).toLocaleString() : null;
+          const humanOpen = t.open_at
+            ? new Date(t.open_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })
+            : null;
+
+          const humanClose = t.close_at
+            ? new Date(t.close_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })
+            : null;
           const timePanel = ( 
             <div style={{ marginTop: 10, fontSize: 14, color: "#111827", lineHeight: "1.4" }}>
               {humanOpen && <div><strong>Opens:</strong> {humanOpen}</div>}
