@@ -334,6 +334,50 @@ app.get("/reports/performance", async (req, res) => {
       }
       if (progress === null) progress = 0;
 
+            // --- compute attention (per-topic) ---
+      // We prefer explicit topic_progress on the student; if not present, fall back to the synthesizedTopicProgress
+      const topicProgress = (d.topic_progress && typeof d.topic_progress === "object") ? d.topic_progress : (synthesizedTopicProgress[sid] || {});
+
+      // build a little assessments map (topic_id -> assessment data) for passing score lookup
+      const assessmentsMap = Object.fromEntries(
+        (assessmentsSnap && Array.isArray(assessmentsSnap.docs) ? assessmentsSnap.docs : [])
+          .map(doc => {
+            const ad = doc.data() || {};
+            return [ (ad.topic_id || ad.topicId || null), ad ];
+          })
+          .filter(([k]) => !!k)
+      );
+
+      const attentionReasons = [];
+      Object.entries(topicProgress).forEach(([tid, tp]) => {
+        // attempts normalization
+        const attemptsCount = Number(tp?.attempts || 0);
+        // last score normalization (several possible field names)
+        const lastScore = (tp?.last_score ?? tp?.lastScore ?? tp?.score ?? tp?.last?.score);
+        const lastScoreNum = (typeof lastScore === "number") ? lastScore : (Number(lastScore) || null);
+
+        // find passing score for this topic (if assessment exists), fallback 50
+        const assessmentForTopic = assessmentsMap[tid] || null;
+        const passingScore = assessmentForTopic ? (Number(assessmentForTopic.passing_score ?? assessmentForTopic.passingScore ?? 50)) : 50;
+
+        // attention rule: attempts >= 3 and lastScore is present and < passingScore
+        if (attemptsCount >= 3) {
+          const failedByScore = (lastScoreNum == null) ? true : (lastScoreNum < passingScore);
+          if (failedByScore) {
+            attentionReasons.push({
+              topicId: tid,
+              topicLabel: (topics.find(tt => tt.id === tid)?.name || topics.find(tt => tt.id === tid)?.title || tid),
+              attempts: attemptsCount,
+              lastScore: lastScoreNum,
+              passingScore
+            });
+          }
+        }
+      });
+
+      const needsAttention = attentionReasons.length > 0;
+      const attentionCount = attentionReasons.length;
+
       students.push({
         id: sid,
         name: d.name || "",
@@ -350,6 +394,11 @@ app.get("/reports/performance", async (req, res) => {
         lastScore: subs.lastScore ?? null,
         topic_progress: d.topic_progress ?? undefined,
         email: d.email ?? undefined,
+
+        // NEW: attention meta for teacher UI
+        needsAttention,
+        attentionCount,
+        attentionReasons,
       });
     });
 

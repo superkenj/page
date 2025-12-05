@@ -454,7 +454,34 @@ export default function TeacherReports() {
                   return (
                     <tr key={s.id} style={{ borderBottom: "1px solid #fafafa" }}>
                       <td style={{ padding: 8 }}>{s.id}</td>
-                      <td style={{ padding: 8 }}>{s.name}</td>
+                      <td style={{ padding: 8, display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontWeight: 700, color: "#0f172a" }}>{s.name}</span>
+                            {s.attentionCount > 0 && (
+                              <span
+                                title={ (s.attentionReasons || []).map(r=> `${r.topicLabel}: ${r.attempts} attempts (${r.lastScore != null ? r.lastScore + '%' : 'no score'})`).join('\n') }
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  padding: "4px 8px",
+                                  borderRadius: 999,
+                                  background: s.attentionCount > 0 ? "#fff7ed" : "transparent",
+                                  color: "#92400e",
+                                  fontWeight: 700,
+                                  fontSize: 12,
+                                  border: "1px solid rgba(245,158,11,0.12)"
+                                }}
+                              >
+                                ⚠ {s.attentionCount}
+                              </span>
+                            )}
+                          </div>
+                          {/* optional subtitle */}
+                          <div style={{ fontSize: 12, color: "#64748b" }}>{s.id}</div>
+                        </div>
+                      </td>
                       <td style={{ padding: 8 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <div
@@ -510,6 +537,50 @@ export default function TeacherReports() {
                           <button onClick={() => openStudentDetail(s)} style={{ padding: "6px 8px", borderRadius: 6 }}>
                             View
                           </button>
+
+                          <button
+                            onClick={async () => {
+                              try {
+                                const body = { studentId: s.id };
+                                if (selectedAssessment && selectedAssessment !== "all") body.assessmentId = selectedAssessment;
+
+                                const resp = await fetch(`${API_BASE}/teachers/assign-remediation`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify(body),
+                                });
+
+                                if (!resp.ok) {
+                                  const text = await resp.text().catch(()=>null);
+                                  throw new Error(`server ${resp.status} ${text || ""}`);
+                                }
+                                const json = await resp.json().catch(()=>({}));
+                                if (json.topicsGranted && json.topicsGranted > 0) {
+                                  const details = Array.isArray(json.details) && json.details.length ? ` (${json.details.join(", ")})` : "";
+                                  alert(`Remediation assigned — ${json.topicsGranted} topic(s) unlocked for 1 extra attempt${details}.`);
+                                } else {
+                                  alert("No eligible topics found for remediation (no topics with 3 failed attempts and no extra attempts).");
+                                }
+
+                                // refresh data
+                                await fetchReport();
+                                // notify other clients
+                                window.dispatchEvent(new CustomEvent("studentDataUpdated", { detail: { studentId: s.id } }));
+                                window.dispatchEvent(new CustomEvent("studentPathUpdated", { detail: { studentId: s.id } }));
+                                window.dispatchEvent(new Event("studentDataUpdatedAll"));
+
+                                // open refreshed detail
+                                const refreshed = await fetchStudentById(s.id);
+                                openStudentDetail(refreshed || s);
+                              } catch (err) {
+                                console.error("Remediate error (table):", err);
+                                alert("Failed to assign remediation (see console).");
+                              }
+                            }}
+                            style={{ padding: "6px 10px", borderRadius: 8, background: "#fff", border: "1px solid rgba(37,99,235,0.14)", cursor: "pointer" }}
+                          >
+                            Remediate
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -523,84 +594,51 @@ export default function TeacherReports() {
         {/* Actionable snapshot: Attempts distribution + Lowest-progress students */}
         <div style={{ marginTop: 20, display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
 
-          {/* Lowest-progress students (action list) */}
+          {/* Compact "Needs attention" snapshot (top 5) */}
           <div style={{ flex: 1, minWidth: 320, padding: 12, borderRadius: 10, background: "#fff", border: "1px solid #eef2ff" }}>
-            <h4 style={{ margin: "0 0 8px 0" }}>Students needing attention</h4>
+            <h4 style={{ margin: "0 0 8px 0" }}>Needs attention (top students)</h4>
             <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>
-              Lowest progress (based on attempted topics). Click View to inspect attempts.
+              Students flagged because they have ≥3 attempts on a topic but still below the passing threshold. Act inline from the table.
             </div>
 
             {(() => {
-              const list = (data.students || [])
-                .map(s => {
-                  const { attempted, totalTopics, percent } = formatProgress(s);
-                  return { ...s, attempted, totalTopics, percent };
-                })
-                .sort((a,b) => a.percent - b.percent)
+              const attentionList = (data.students || [])
+                .filter(s => s.needsAttention)
+                .sort((a,b) => (b.attentionCount || 0) - (a.attentionCount || 0))
                 .slice(0, 5);
 
-              if (!list.length) return <div style={{ color: "#94a3b8" }}>No students available.</div>;
+              if (!attentionList.length) return <div style={{ color: "#94a3b8" }}>No students currently flagged.</div>;
 
               return (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {list.map(s => (
+                  {attentionList.map(s => (
                     <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 6px", borderRadius: 8, background: "#fbfdff", border: "1px solid rgba(37,99,235,0.04)" }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name || s.id}</div>
-                        <div style={{ fontSize: 12, color: "#64748b" }}>{`${s.attempted}/${s.totalTopics} • ${s.percent}% • ${s.attempts || 0} attempt(s)`}</div>
+                        <div style={{ fontSize: 12, color: "#64748b" }}>{`${s.attentionCount || 0} topic(s) • ${s.attempts || 0} attempt(s)`}</div>
                       </div>
+
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => openStudentDetail(s)} style={{ padding: "6px 10px", borderRadius: 8, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>View</button>
                         <button
                           onClick={async () => {
                             try {
-                              // Only send assessmentId when the teacher explicitly selected one
-                              // (selectedAssessment !== "all"). Do NOT infer a topic from topic_progress.
-                              // If no assessmentId is provided, backend will scan topic_progress and grant +1
-                              // to each eligible topic (attempts>=3 && not passed && extraAttempts===0).
                               const body = { studentId: s.id };
-                              if (selectedAssessment && selectedAssessment !== "all") {
-                                body.assessmentId = selectedAssessment;
-                              }
-
-                              console.info("assign-remed payload", body);
-
-                              const resp = await fetch(`${API_BASE}/teachers/assign-remediation`, {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify(body),
-                              });
-
-                              if (!resp.ok) {
-                                const text = await resp.text().catch(() => null);
-                                throw new Error(`server responded ${resp.status} ${text || ""}`);
-                              }
-
-                              const json = await resp.json().catch(() => ({}));
-
-                              // Provide friendly feedback depending on backend response
+                              if (selectedAssessment && selectedAssessment !== "all") body.assessmentId = selectedAssessment;
+                              const resp = await fetch(`${API_BASE}/teachers/assign-remediation`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                              if (!resp.ok) throw new Error(`server ${resp.status}`);
+                              const json = await resp.json().catch(()=>({}));
                               if (json.topicsGranted && json.topicsGranted > 0) {
-                                const details = Array.isArray(json.details) && json.details.length ? ` (${json.details.join(", ")})` : "";
-                                alert(`Remediation assigned — ${json.topicsGranted} topic(s) unlocked for 1 extra attempt${details}.`);
+                                alert(`Remediation assigned — ${json.topicsGranted} topic(s) unlocked.`);
                               } else {
-                                alert("No eligible topics found for remediation (no topics with 3 failed attempts and no extra attempts).");
+                                alert("No eligible topics found for remediation.");
                               }
-
-                              // refresh teacher report data so this table shows updated attempts/mastery
-                              await fetchReport().catch(err => console.warn("Failed to refresh reports after remediation", err));
-
-                              // notify student dashboards (and any other listeners) to reload relevant data
-                              // student dashboards check event.detail.studentId and will reload only if it matches
+                              await fetchReport();
                               window.dispatchEvent(new CustomEvent("studentDataUpdated", { detail: { studentId: s.id } }));
-                              window.dispatchEvent(new CustomEvent("studentPathUpdated", { detail: { studentId: s.id } }));
-                              // also send a generic all-students event in case some clients only listen to that
-                              window.dispatchEvent(new Event("studentDataUpdatedAll"));
-
-                              // re-fetch latest student record and open detail modal so teacher can inspect
                               const refreshed = await fetchStudentById(s.id);
                               openStudentDetail(refreshed || s);
                             } catch (err) {
-                              console.error("Remediate error:", err);
+                              console.error("Remediate error (snapshot):", err);
                               alert("Failed to assign remediation (see console).");
                             }
                           }}
