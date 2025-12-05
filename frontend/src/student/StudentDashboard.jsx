@@ -57,6 +57,17 @@ export default function StudentDashboard() {
   const [overrides, setOverrides] = useState({}); // { topicId: { temp_open_until } }
   const [serverTimeUtc, setServerTimeUtc] = useState(null);
 
+  // small ticker so component re-renders every second (drives live countdown + status refresh)
+  const [tick, setTick] = useState(0);
+
+  // offset to convert client Date.now() -> server-time (ms). computed in loadAll after fetching server_time_utc
+  const [serverOffsetMs, setServerOffsetMs] = useState(0);
+
+  useEffect(() => {
+    const iv = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(iv);
+  }, []);
+
   // Normalize helper: accept array of ids or objects {id,...}
   function normalizeToIds(arr) {
     if (!Array.isArray(arr)) return [];
@@ -86,8 +97,17 @@ export default function StudentDashboard() {
       const tp = sJson.topic_progress && typeof sJson.topic_progress === "object" ? sJson.topic_progress : {};
       setTopicProgress(tp);
 
-      // store server time
-      setServerTimeUtc(oJson.server_time_utc || new Date().toISOString());
+      // store server time (ISO) and compute offset server - client so we can compute canonical server "now"
+      const serverIso = oJson.server_time_utc || new Date().toISOString();
+      setServerTimeUtc(serverIso);
+
+      try {
+        const serverMs = new Date(serverIso).getTime();
+        // offset = serverMs - clientNow
+        setServerOffsetMs(Number.isFinite(serverMs) ? serverMs - Date.now() : 0);
+      } catch (e) {
+        setServerOffsetMs(0);
+      }
 
       // build overrides map keyed by topicId (accepting different field names)
       const ovMap = {};
@@ -197,7 +217,7 @@ export default function StudentDashboard() {
     // New priority: ExtraAttempt first
     if (extraAttemptSet.has(topicId)) return "ExtraAttempt";
 
-    // CHANGED: Temporary open override (teacher granted or remediation)
+    // Temporary open override (teacher granted or remediation)
     if (isTempOpen(topicId)) return "TemporaryOpen";
 
     // In-Progress always wins after extra
@@ -216,12 +236,11 @@ export default function StudentDashboard() {
       return "Recommended";
     }
 
-    // CHANGED: check locking states — if topic is scheduled/locked, return 'Locked' so UI can show countdown
-    if (topic) {
-      const now = Number.isFinite(new Date(serverTimeUtc || new Date()).getTime())
-        ? new Date(serverTimeUtc || new Date()).getTime()
-        : Date.now();
+    // compute a live canonical "now" aligned to server-time using serverOffsetMs.
+    // We rely on the component's `tick` to force re-evaluation every second.
+    const canonicalNow = Date.now() + (Number.isFinite(serverOffsetMs) ? serverOffsetMs : 0);
 
+    if (topic) {
       if (topic.manual_lock) {
         return "Locked";
       }
@@ -230,12 +249,17 @@ export default function StudentDashboard() {
       const openAtMs = topic.open_at ? new Date(topic.open_at).getTime() : NaN;
       const closeAtMs = topic.close_at ? new Date(topic.close_at).getTime() : NaN;
 
-      if (Number.isFinite(openAtMs) && openAtMs > now) {
+      // If open time is in the future -> Locked (shows Opens in ...)
+      if (Number.isFinite(openAtMs) && openAtMs > canonicalNow) {
         return "Locked";
       }
-      if (Number.isFinite(closeAtMs) && closeAtMs <= now) {
+      // If close time exists and has already passed -> Closed
+      if (Number.isFinite(closeAtMs) && closeAtMs <= canonicalNow) {
         return "Closed";
       }
+
+      // If open/close window exists and current time is within -> treat as Upcoming -> student will see it as available
+      // but we already handled TemporaryOpen earlier via overrides.
     }
 
     return "Upcoming";
@@ -297,7 +321,7 @@ export default function StudentDashboard() {
           const humanOpen = t.open_at ? new Date(t.open_at).toLocaleString() : null;
           const humanClose = t.close_at ? new Date(t.close_at).toLocaleString() : null;
           const timePanel = ( 
-            <div style={{ marginTop: 10, fontSize: 12, color: "#374151", lineHeight: "1.3" }}>
+            <div style={{ marginTop: 10, fontSize: 14, color: "#111827", lineHeight: "1.4" }}>
               {humanOpen && <div><strong>Opens:</strong> {humanOpen}</div>}
               {humanClose && <div><strong>Closes:</strong> {humanClose}</div>}
             </div>
@@ -367,25 +391,85 @@ export default function StudentDashboard() {
                 transition: "transform 0.15s",
               }}
             >
-              {/* badge area */}
-              <div style={{ position: "absolute", top: 10, right: 10, display: "flex", gap: 8, alignItems: "center" }}>
+              {/* badge left / countdown right (top row) */}
+              <div style={{ position: "absolute", top: 10, left: 12 }}>
                 <div
                   style={{
                     background: color,
                     color: "white",
-                    fontSize: 12,
-                    fontWeight: "700",
-                    padding: "3px 8px",
-                    borderRadius: 12,
+                    fontSize: 13,       // slightly larger
+                    fontWeight: 700,
+                    padding: "5px 10px",
+                    borderRadius: 14,
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.08)"
                   }}
                 >
                   {status === "ExtraAttempt" ? "Retake Assessment" : status === "TemporaryOpen" ? "Open (temp)" : status}
                 </div>
               </div>
 
+              <div style={{ position: "absolute", top: 8, right: 12, display: "flex", alignItems: "center" }}>
+                {/* show a larger, live countdown on the top-right when appropriate */}
+                {(() => {
+                  // Prefer: TemporaryOpen -> show temp open_until remaining
+                  if (status === "TemporaryOpen") {
+                    const o = overrides[t.id];
+                    if (o?.temp_open_until && serverTimeUtc) {
+                      return (
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#064e3b", background: "rgba(14,165,164,0.08)", padding: "6px 10px", borderRadius: 12 }}>
+                          <Countdown targetUtcIso={o.temp_open_until} serverTimeUtcIso={serverTimeUtc} compact />
+                        </div>
+                      );
+                    }
+                  }
+
+                  // Locked / Upcoming -> show Opens in ... if open_at exists
+                  if ((status === "Locked" || status === "Upcoming") && t.open_at && serverTimeUtc) {
+                    return (
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", background: "rgba(15,23,42,0.04)", padding: "6px 10px", borderRadius: 12 }}>
+                        Opens in <span style={{ marginLeft: 6 }}><Countdown targetUtcIso={t.open_at} serverTimeUtcIso={serverTimeUtc} compact /></span>
+                      </div>
+                    );
+                  }
+
+                  // Locked with no open_at -> show locked badge (small)
+                  if (status === "Locked") {
+                    return <div style={{ fontSize: 13, color: "#6b7280", padding: "6px 10px", borderRadius: 12 }}>Locked</div>;
+                  }
+
+                  // Closed -> show how long until it reopens if open_at exists
+                  if (status === "Closed") {
+                    if (t.open_at && serverTimeUtc) {
+                      return (
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#6b7280", background: "rgba(107,114,128,0.06)", padding: "6px 10px", borderRadius: 12 }}>
+                          Reopens in <span style={{ marginLeft: 6 }}><Countdown targetUtcIso={t.open_at} serverTimeUtcIso={serverTimeUtc} compact /></span>
+                        </div>
+                      );
+                    }
+                    return <div style={{ fontSize: 13, color: "#6b7280" }}>Closed</div>;
+                  }
+
+                  // If topic has a close_at in the future and it's currently open, show closes countdown (useful)
+                  if (t.close_at && serverTimeUtc) {
+                    // ensure current canonical time is before close_at
+                    const canonicalNow = Date.now() + (Number.isFinite(serverOffsetMs) ? serverOffsetMs : 0);
+                    const closeMs = new Date(t.close_at).getTime();
+                    if (!isNaN(closeMs) && closeMs > canonicalNow) {
+                      return (
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#7f1d1d", background: "rgba(124,58,237,0.04)", padding: "6px 10px", borderRadius: 12 }}>
+                          Closes in <span style={{ marginLeft: 6 }}><Countdown targetUtcIso={t.close_at} serverTimeUtcIso={serverTimeUtc} compact /></span>
+                        </div>
+                      );
+                    }
+                  }
+
+                  return null;
+                })()}
+              </div>
+
               <h3 style={{ marginBottom: 8 }}>{t.name}</h3>
               <p style={{ fontSize: 14, color: "#374151" }}>{t.description}</p>
-              
+
               {timePanel}
               {countdownEl}
             </div>
