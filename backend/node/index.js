@@ -1445,28 +1445,43 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
       try {
         if (q.type === "multiple_choice") {
           // accept either q.correct (string) or q.correct_choice
-          const correct = (q.correct_answer ?? q.correct_choice ?? q.correct ?? "").toString().trim();
+          const correct = (q.correct_answer ?? q.correct_choice ?? q.correct ?? q.answer ?? "")
+            .toString()
+            .trim();
           isCorrect = (studentAnswer !== undefined && studentAnswer !== null) && (studentAnswer.toString().trim() === correct);
         } else if (q.type === "numeric") {
           const tolerance = Number(q.tolerance ?? 0);
-          const saNum = studentAnswer !== undefined && studentAnswer !== null ? Number(studentAnswer) : NaN;
-          const correctNum = Number(q.correct_answer ?? q.correct ?? NaN);
+          const saNum = 
+            studentAnswer !== undefined && studentAnswer !== null
+              ? Number(studentAnswer)
+              : NaN;
+          const correctNum = Number(q.correct_answer ?? q.correct ?? q.answer ?? NaN);
           if (!Number.isNaN(saNum) && !Number.isNaN(correctNum)) {
             isCorrect = Math.abs(saNum - correctNum) <= Math.abs(tolerance);
           }
         } else if (q.type === "short_answer") {
-          const correctText = (q.correct_answer ?? q.correct ?? "").toString().trim().toLowerCase();
+          const correctText = (q.correct_answer ?? q.correct ?? q.answer ?? "")
+            .toString()
+            .trim()
+            .toLowerCase();
           const studentText = (studentAnswer ?? "").toString().trim().toLowerCase();
           isCorrect = !!(correctText && studentText && studentText === correctText);
         } else if (q.type === "ordering") {
           // expect arrays — normalize to JSON string compare
-          const correctOrder = Array.isArray(q.correct_order) ? q.correct_order : (q.correct_answer && Array.isArray(q.correct_answer) ? q.correct_answer : null);
+          const correctOrder = Array.isArray(q.correct_order)
+            ? q.correct_order
+            : (q.correct_answer && Array.isArray(q.correct_answer))
+            ? q.correct_answer
+            : (Array.isArray(q.answer) ? q.answer : null);
           if (Array.isArray(correctOrder) && Array.isArray(studentAnswer)) {
             isCorrect = JSON.stringify(correctOrder.map(s=>String(s).trim())) === JSON.stringify(studentAnswer.map(s=>String(s).trim()));
           }
         } else {
           // fallback: if question has correct_answer do text compare
-          const correct = (q.correct_answer ?? q.correct ?? "").toString().trim().toLowerCase();
+          const correct = (q.correct_answer ?? q.correct ?? q.answer ?? "")
+            .toString()
+            .trim()
+            .toLowerCase();
           const studentText = (studentAnswer ?? "").toString().trim().toLowerCase();
           isCorrect = !!(correct && studentText && studentText === correct);
         }

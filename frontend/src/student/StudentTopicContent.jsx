@@ -89,15 +89,27 @@ export default function StudentTopicContent() {
 
         const json = await res.json();
 
-        // Shuffle questions and choices for presentation
+                // Shuffle questions and choices for presentation
         let qlist = Array.isArray(json.questions) ? [...json.questions] : [];
-        qlist = shuffle(qlist);
-        qlist = qlist.map((q) => {
-          if (q.type === "multiple_choice" && Array.isArray(q.choices)) {
-            return { ...q, choices: shuffle(q.choices) };
+
+        qlist = qlist.map((q, idx) => {
+          // 🔑 If Firestore already has question_id, KEEP it.
+          // Only fall back to a generated one if missing.
+          const qid = q.question_id || q.id || `${json.assessment_id}_${idx}`;
+          const base = { ...q, question_id: qid };
+
+          // shuffle choices only if MCQ
+          if (base.choices && Array.isArray(base.choices)) {
+            return { ...base, choices: shuffle(base.choices) };
           }
-          return q;
+
+          return base;
         });
+
+        // randomize question order AFTER preserving ids
+        qlist = shuffle(qlist);
+
+        setAssessment({ ...json, questions: qlist });
 
         if (!mounted) return;
         setAssessment({ ...json, questions: qlist });
