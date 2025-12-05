@@ -1411,6 +1411,22 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
       if (a && a.question_id) ansMap[a.question_id] = a.student_answer;
     });
 
+    const topicDoc = await db.collection("topics").doc(topicId).get();
+    const topicData = topicDoc.exists ? topicDoc.data() : null;
+
+    if (topicData) {
+      const nowMs = Date.now();
+      const openMs = topicData.open_at ? new Date(topicData.open_at).getTime() : null;
+      const closeMs = topicData.close_at ? new Date(topicData.close_at).getTime() : null;
+
+      if (openMs && nowMs < openMs) {
+        return res.status(403).json({ error: "Topic not yet open" });
+      }
+      if (closeMs && nowMs > closeMs) {
+        return res.status(403).json({ error: "Topic closed" });
+      }
+    }
+
     // Grade each question (best-effort). Default points_per_question = q.points || 1
     const items = [];
     let earnedPoints = 0;

@@ -97,17 +97,9 @@ export default function StudentDashboard() {
       const tp = sJson.topic_progress && typeof sJson.topic_progress === "object" ? sJson.topic_progress : {};
       setTopicProgress(tp);
 
-      // store server time (ISO) and compute offset server - client so we can compute canonical server "now"
-      const serverIso = oJson.server_time_utc || new Date().toISOString();
-      setServerTimeUtc(serverIso);
-
-      try {
-        const serverMs = new Date(serverIso).getTime();
-        // offset = serverMs - clientNow
-        setServerOffsetMs(Number.isFinite(serverMs) ? serverMs - Date.now() : 0);
-      } catch (e) {
-        setServerOffsetMs(0);
-      }
+      // ignore server time for UI locking; keep server_time only for diagnostics if needed
+      setServerTimeUtc(oJson.server_time_utc || new Date().toISOString());
+      setServerOffsetMs(0); // use client local time for UI comparisons
 
       // build overrides map keyed by topicId (accepting different field names)
       const ovMap = {};
@@ -206,7 +198,6 @@ export default function StudentDashboard() {
   // build a lookup so we can inspect topic metadata (prerequisites)
   const topicsMap = Object.fromEntries((topics || []).map((t) => [t.id, t]));
 
-  // CHANGED: helper to check if a topic is currently temporarily open for this student
   function isTempOpen(topicId, canonicalNowMs = null) {
     const o = overrides[topicId];
     if (!o || !o.temp_open_until) return false;
@@ -214,26 +205,20 @@ export default function StudentDashboard() {
     const tempUtcMs = new Date(o.temp_open_until).getTime();
     if (!Number.isFinite(tempUtcMs)) return false;
 
-    const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
+    // Use client local time by default
+    const nowUtcMs = Number.isFinite(canonicalNowMs) ? canonicalNowMs : Date.now();
 
-    let nowUtcMs;
-    if (Number.isFinite(canonicalNowMs)) {
-      nowUtcMs = canonicalNowMs;
-    } else {
-      const serverMs = serverTimeUtc ? new Date(serverTimeUtc).getTime() : NaN;
-      nowUtcMs = Number.isFinite(serverMs) ? serverMs : Date.now();
-    }
-
-    const tempManilaMs = tempUtcMs + MANILA_OFFSET_MS;
-    const nowManilaMs = nowUtcMs + MANILA_OFFSET_MS;
-
-    return tempManilaMs > nowManilaMs;
+    // Compare in UTC milliseconds directly (no timezone offsets)
+    return tempUtcMs > nowUtcMs;
   }
 
   function getStatus(topicId) {
     if (extraAttemptSet.has(topicId)) return "ExtraAttempt";
 
-    const canonicalNowUtcMs = Date.now() + (Number.isFinite(serverOffsetMs) ? serverOffsetMs : 0);
+    // Use client-local "now" (you may pass server-based canonical time if you want)
+    const canonicalNowUtcMs = Number.isFinite(serverOffsetMs)
+      ? Date.now() + serverOffsetMs // if you still want server alignment, else set serverOffsetMs = 0
+      : Date.now();
 
     if (isTempOpen(topicId, canonicalNowUtcMs)) return "TemporaryOpen";
 
@@ -245,20 +230,17 @@ export default function StudentDashboard() {
     const prereqs = topic?.prerequisites || [];
     if (prereqs.length === 0 && !masteredSet.has(topicId)) return "Recommended";
 
-    const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
-    const nowManilaMs = canonicalNowUtcMs + MANILA_OFFSET_MS;
-
     if (topic) {
       if (topic.manual_lock) return "Locked";
 
       const openUtcMs = topic.open_at ? new Date(topic.open_at).getTime() : NaN;
       const closeUtcMs = topic.close_at ? new Date(topic.close_at).getTime() : NaN;
 
-      const openMs = Number.isFinite(openUtcMs) ? openUtcMs + MANILA_OFFSET_MS : NaN;
-      const closeMs = Number.isFinite(closeUtcMs) ? closeUtcMs + MANILA_OFFSET_MS : NaN;
+      // If open time exists and is in future => Locked
+      if (Number.isFinite(openUtcMs) && openUtcMs > canonicalNowUtcMs) return "Locked";
 
-      if (Number.isFinite(openMs) && openMs > nowManilaMs) return "Locked";
-      if (Number.isFinite(closeMs) && closeMs <= nowManilaMs) return "Closed";
+      // If close time exists and is in the past or now => Closed
+      if (Number.isFinite(closeUtcMs) && closeUtcMs <= canonicalNowUtcMs) return "Closed";
     }
 
     return "Upcoming";
