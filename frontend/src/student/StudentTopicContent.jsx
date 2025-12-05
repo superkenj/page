@@ -35,7 +35,15 @@ export default function StudentTopicContent() {
   const [timeLeftSec, setTimeLeftSec] = useState(null); // null = no timer
   const [timeExpired, setTimeExpired] = useState(false);
 
-  // ---------------- helper ----------------
+  // NEW: pretty confirmation modal for starting assessment
+  const [showAssessmentConfirm, setShowAssessmentConfirm] = useState(false);
+  const [confirmInfo, setConfirmInfo] = useState({
+    attemptsUsed: 0,
+    attemptsLeft: 0,
+    allowed: 3,
+    isRemedial: false,
+  });
+
   function shuffle(arr) {
     const a = Array.isArray(arr) ? [...arr] : [];
     for (let i = a.length - 1; i > 0; i--) {
@@ -249,6 +257,13 @@ export default function StudentTopicContent() {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
 
+  function handleStartAssessment() {
+    setShowAssessmentConfirm(false);
+    setTab("assessment");
+    setAssessmentInProgress(true);
+    setTimeExpired(false);
+    // timer (if configured on the assessment) will start via the useEffect
+  }
 
   // Answer handlers
   function setAnswer(questionId, value) {
@@ -472,23 +487,20 @@ export default function StudentTopicContent() {
           onClick={() => {
             if (locked) return;
 
-            const attemptsLeft = Math.max(0, (allowedAttempts || 3) - (attempts || 0));
-            const isRemedial = (attempts || 0) >= 3 || (extraAttempts || 0) > 0;
+            const attemptsLeft = Math.max(
+              0,
+              (allowedAttempts || 3) - (attempts || 0)
+            );
+            const isRemedial =
+              (attempts || 0) >= 3 || (extraAttempts || 0) > 0;
 
-            let msg = `You have used ${attempts || 0} out of ${allowedAttempts || 3} attempts for this topic.\n`;
-            msg += `Attempts left: ${attemptsLeft}.\n\n`;
-            if (isRemedial) {
-              msg += "This attempt is part of your remediation for this topic.\n\n";
-            }
-            msg += "Do you want to start the assessment now? Once started, you won't be able to return to the Content tab until you submit.";
-
-            const ok = window.confirm(msg);
-            if (!ok) return;
-
-            setTab("assessment");
-            setAssessmentInProgress(true);
-            setTimeExpired(false);
-            // Timer (if any) will start automatically once the assessment metadata is loaded.
+            setConfirmInfo({
+              attemptsUsed: attempts || 0,
+              attemptsLeft,
+              allowed: allowedAttempts || 3,
+              isRemedial,
+            });
+            setShowAssessmentConfirm(true);
           }}
           disabled={locked}
           style={{
@@ -691,6 +703,117 @@ export default function StudentTopicContent() {
       <button onClick={() => navigate(-1)} style={{ display: "block", width: "100%", background: "#4db6ac", border: "none", color: "white", fontWeight: "bold", padding: "12px", borderRadius: 10, cursor: "pointer", marginTop: 24 }}>
         ← Back to Dashboard
       </button>
+
+      {/* Pretty confirmation modal for starting assessment */}
+      {showAssessmentConfirm && (
+        <div
+          onClick={() => setShowAssessmentConfirm(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15,23,42,0.65)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1300,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "white",
+              borderRadius: 16,
+              padding: "20px 24px",
+              maxWidth: 420,
+              width: "90%",
+              boxShadow: "0 10px 30px rgba(15,23,42,0.35)",
+              border: "1px solid #dbeafe",
+            }}
+          >
+            <h3
+              style={{
+                marginTop: 0,
+                marginBottom: 8,
+                fontSize: 20,
+                color: "#1d4ed8",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              ⚠️ Start Assessment?
+            </h3>
+
+            <p style={{ margin: "4px 0", color: "#111827" }}>
+              You have used <strong>{confirmInfo.attemptsUsed}</strong> out of{" "}
+              <strong>{confirmInfo.allowed}</strong> attempts.
+            </p>
+
+            <p style={{ margin: "4px 0 8px", color: "#111827" }}>
+              Attempts left: <strong>{confirmInfo.attemptsLeft}</strong>.
+            </p>
+
+            {confirmInfo.isRemedial && (
+              <div
+                style={{
+                  marginBottom: 10,
+                  padding: "8px 10px",
+                  borderRadius: 10,
+                  background: "#ecfeff",
+                  color: "#0f766e",
+                  fontSize: 13,
+                }}
+              >
+                This attempt is part of your <strong>remediation</strong>.
+              </div>
+            )}
+
+            <p style={{ margin: "4px 0 14px", color: "#4b5563", fontSize: 14 }}>
+              Once you start, you <strong>cannot return to the Content tab</strong>{" "}
+              until you submit this attempt.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 8,
+                marginTop: 8,
+              }}
+            >
+              <button
+                onClick={() => setShowAssessmentConfirm(false)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 999,
+                  border: "1px solid #e5e7eb",
+                  background: "#f9fafb",
+                  cursor: "pointer",
+                  fontSize: 14,
+                }}
+              >
+                Not now
+              </button>
+
+              <button
+                onClick={handleStartAssessment}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: 999,
+                  border: "none",
+                  background: "linear-gradient(90deg,#2563eb,#0ea5e9)",
+                  color: "white",
+                  cursor: "pointer",
+                  fontSize: 14,
+                  fontWeight: 600,
+                }}
+              >
+                Start Assessment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal pop-out for video */}
       {activeVideo && (
