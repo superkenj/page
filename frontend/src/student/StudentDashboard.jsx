@@ -213,34 +213,51 @@ export default function StudentDashboard() {
   }
 
   function getStatus(topicId) {
-    if (extraAttemptSet.has(topicId)) return "ExtraAttempt";
+    const topic = topicsMap[topicId];
+    const nowLocalMs = Date.now(); // ✅ student's local time
 
-    // Use client-local "now" (you may pass server-based canonical time if you want)
-    const canonicalNowUtcMs = Number.isFinite(serverOffsetMs)
-      ? Date.now() + serverOffsetMs // if you still want server alignment, else set serverOffsetMs = 0
-      : Date.now();
+    // ── 1. Schedule + manual lock take absolute priority ──
+    if (topic) {
+      const openMs = topic.open_at ? new Date(topic.open_at).getTime() : NaN;
+      const closeMs = topic.close_at ? new Date(topic.close_at).getTime() : NaN;
 
-    if (isTempOpen(topicId, canonicalNowUtcMs)) return "TemporaryOpen";
+      // Manual lock always wins
+      if (topic.manual_lock) {
+        return "Locked";
+      }
 
+      // If there is a close_at and we've reached/passed it → CLOSED
+      if (Number.isFinite(closeMs) && closeMs <= nowLocalMs) {
+        return "Closed";
+      }
+
+      // If there is an open_at in the future → LOCKED (not yet open)
+      if (Number.isFinite(openMs) && openMs > nowLocalMs) {
+        return "Locked";
+      }
+    }
+
+    // ── 2. We are inside open window (or unscheduled) → learning state logic ──
+
+    // Extra attempt / remediation
+    if (extraAttemptSet.has(topicId)) {
+      return "ExtraAttempt";
+    }
+
+    // Temporary open override (only matters before close_at)
+    if (isTempOpen(topicId, nowLocalMs)) {
+      return "TemporaryOpen";
+    }
+
+    // Progress / mastery
     if (inProgressSet.has(topicId)) return "In Progress";
     if (masteredSet.has(topicId)) return "Mastered";
     if (recommendedSet.has(topicId)) return "Recommended";
 
-    const topic = topicsMap[topicId];
+    // If no prereqs and not mastered, treat as Recommended
     const prereqs = topic?.prerequisites || [];
-    if (prereqs.length === 0 && !masteredSet.has(topicId)) return "Recommended";
-
-    if (topic) {
-      if (topic.manual_lock) return "Locked";
-
-      const openUtcMs = topic.open_at ? new Date(topic.open_at).getTime() : NaN;
-      const closeUtcMs = topic.close_at ? new Date(topic.close_at).getTime() : NaN;
-
-      // If open time exists and is in future => Locked
-      if (Number.isFinite(openUtcMs) && openUtcMs > canonicalNowUtcMs) return "Locked";
-
-      // If close time exists and is in the past or now => Closed
-      if (Number.isFinite(closeUtcMs) && closeUtcMs <= canonicalNowUtcMs) return "Closed";
+    if (topic && prereqs.length === 0 && !masteredSet.has(topicId)) {
+      return "Recommended";
     }
 
     return "Upcoming";
@@ -359,10 +376,34 @@ export default function StudentDashboard() {
               key={t.id}
               onClick={() => {
                 const st = getStatus(t.id);
-                if (st === "Locked" || st === "Closed") {
-                  window.alert("This topic is currently locked. It will open at the scheduled time or if your teacher grants access.");
+
+                if (st === "Locked") {
+                  const openLabel = t.open_at
+                    ? new Date(t.open_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })
+                    : null;
+
+                  window.alert(
+                    openLabel
+                      ? `This topic is not open yet.\nIt will open on: ${openLabel} (your local time).`
+                      : "This topic is currently locked by your teacher."
+                  );
                   return;
                 }
+
+                if (st === "Closed") {
+                  const closeLabel = t.close_at
+                    ? new Date(t.close_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })
+                    : null;
+
+                  window.alert(
+                    closeLabel
+                      ? `This topic is already closed as of:\n${closeLabel} (your local time).`
+                      : "This topic is already closed."
+                  );
+                  return;
+                }
+
+                // ✅ Only reachable if topic is within [open_at, close_at) or unscheduled
                 navigate(`/student-dashboard/${id}/topic/${t.id}`);
               }}
               style={{
@@ -373,10 +414,10 @@ export default function StudentDashboard() {
                 cursor: "pointer",
                 position: "relative",
                 transition: "transform 0.15s",
-                display: "flex",           // <-- make card a column flex container
+                display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
-                minHeight: 180,            // adjust as needed so cards have consistent height
+                minHeight: 180,
               }}
             >
               {/* badge area (top-right) */}
