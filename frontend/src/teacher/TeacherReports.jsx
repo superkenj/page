@@ -1,4 +1,3 @@
-// frontend/src/teacher/TeacherReports.jsx
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import {
   BarChart,
@@ -31,6 +30,8 @@ export default function TeacherReports() {
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("name"); // name | progress | masteredCount
   const [selectedAssessment, setSelectedAssessment] = useState("all"); // "all" or assessmentId
+  const [selectedTopic, setSelectedTopic] = useState("all"); // "all" or topicId
+  const [countMode, setCountMode] = useState("unique-students"); // "topic-level" | "unique-students"
   const [studentDetail, setStudentDetail] = useState(null); // { student, attempts: [...] }
   const [itemAnalysis, setItemAnalysis] = useState(null); // normalized analysis { loading, items, error }
   const [modalOpen, setModalOpen] = useState(false);
@@ -39,6 +40,15 @@ export default function TeacherReports() {
   useEffect(() => {
     fetchReport();
   }, []);
+
+  // when topics load, default selectedTopic to first topic (per-topic view default)
+  useEffect(() => {
+    if (data.topics && data.topics.length && selectedTopic === "all") {
+      // set default to the first topic id (but keep "all" available)
+      setSelectedTopic(data.topics[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.topics]);
 
   async function fetchReport() {
     setLoading(true);
@@ -94,11 +104,21 @@ export default function TeacherReports() {
   const studentsVisible = useMemo(() => {
     let arr = (data.students || []).slice();
 
+    // if an assessment is selected, restrict to students who have that assessment/topic in their topic_progress
     if (selectedAssessment !== "all") {
       arr = arr.filter(s => {
         if (!s.topic_progress && !s.attempts) return false;
         if (s.topic_progress && Object.keys(s.topic_progress).some(k => k === selectedAssessment || k === (selectedAssessment.replace('_assessment','')) )) return true;
         return false;
+      });
+    }
+
+    // if a specific topic is selected, restrict to students who have any activity or presence of that topic OR include all and show those without attempts depending on filter
+    if (selectedTopic !== "all") {
+      arr = arr.filter(s => {
+        if (!s.topic_progress) return false;
+        // topic ids in student data may be direct keys
+        return Object.keys(s.topic_progress).some(k => k === selectedTopic || k === (selectedTopic.replace('_assessment','')));
       });
     }
 
@@ -124,7 +144,7 @@ export default function TeacherReports() {
     });
 
     return arr;
-  }, [data.students, query, filter, sortBy, selectedAssessment, data.topics]);
+  }, [data.students, query, filter, sortBy, selectedAssessment, selectedTopic, data.topics]);
 
   // SUMMARY & METRICS (refined)
   const totalTopics = (data.topics || []).length || 0;
@@ -315,6 +335,96 @@ export default function TeacherReports() {
   const cardStyle = { background: "#fff", padding: 12, borderRadius: 10, boxShadow: "0 6px 20px rgba(15,23,42,0.04)", border: "1px solid #eef2ff" };
   const smallText = { fontSize: 13, color: "#444" };
 
+  // -------------------------
+  // Attempts distribution compute (supports per-topic, topic-level, unique-students)
+  // -------------------------
+  function computeAttemptsDistribution() {
+    // buckets: 0, 1-2, 3+
+    const buckets = { "0": 0, "1-2": 0, "3+": 0 };
+
+    // If a specific topic selected -> compute per-topic (number of students who have 0/1-2/3+ attempts on that topic)
+    if (selectedTopic !== "all") {
+      (data.students || []).forEach(s => {
+        const tp = (s.topic_progress && s.topic_progress[selectedTopic]) || (s.topic_progress && s.topic_progress[selectedTopic.replace('_assessment','')]) || null;
+        const a = tp ? Number(tp.attempts || 0) : 0;
+        if (a <= 0) buckets["0"]++;
+        else if (a <= 2) buckets["1-2"]++;
+        else buckets["3+"]++;
+      });
+      return [
+        { name: "0", value: buckets["0"] },
+        { name: "1-2", value: buckets["1-2"] },
+        { name: "3+", value: buckets["3+"] },
+      ];
+    }
+
+    // Otherwise (all topics): two modes
+    if (countMode === "topic-level") {
+      // count each topic-instance separately (topic-level). For each student-topic entry increment appropriate bucket.
+      (data.students || []).forEach(s => {
+        const tpObj = s.topic_progress || {};
+        Object.keys(tpObj).forEach(tid => {
+          const a = Number((tpObj[tid] && tpObj[tid].attempts) || 0);
+          if (a <= 0) buckets["0"]++;
+          else if (a <= 2) buckets["1-2"]++;
+          else buckets["3+"]++;
+        });
+      });
+      return [
+        { name: "0", value: buckets["0"] },
+        { name: "1-2", value: buckets["1-2"] },
+        { name: "3+", value: buckets["3+"] },
+      ];
+    } else {
+      // unique-students mode: for each student compute their WORST attempts across topics (max attempts) and bucket them once
+      (data.students || []).forEach(s => {
+        const tpObj = s.topic_progress || {};
+        let maxAttempts = 0;
+        Object.keys(tpObj).forEach(tid => {
+          const a = Number((tpObj[tid] && tpObj[tid].attempts) || 0);
+          if (a > maxAttempts) maxAttempts = a;
+        });
+        // If student has no topic_progress entries treat as 0
+        if (maxAttempts <= 0) buckets["0"]++;
+        else if (maxAttempts <= 2) buckets["1-2"]++;
+        else buckets["3+"]++;
+      });
+      return [
+        { name: "0", value: buckets["0"] },
+        { name: "1-2", value: buckets["1-2"] },
+        { name: "3+", value: buckets["3+"] },
+      ];
+    }
+  }
+
+  // -------------------------
+  // Needs attention list (adapts to selectedTopic). Show clearer attempt breakdown.
+  // -------------------------
+  function buildAttentionList() {
+    // If a topic is selected, only consider attentionReasons for that topic
+    const list = (data.students || []).map(s => {
+      return {
+        ...s,
+        attentionReasonsFiltered: (s.attentionReasons || []).filter(r => selectedTopic === "all" ? true : (r.topicId === selectedTopic || r.topicId === selectedTopic.replace('_assessment',''))),
+      };
+    }).filter(s => (s.attentionReasonsFiltered && s.attentionReasonsFiltered.length > 0));
+
+    // sort by number of attention reasons (desc) and attempts sum
+    list.sort((a,b) => {
+      const aCount = a.attentionReasonsFiltered.length;
+      const bCount = b.attentionReasonsFiltered.length;
+      if (bCount !== aCount) return bCount - aCount;
+      const aAttempts = (a.attentionReasonsFiltered || []).reduce((acc, r) => acc + (r.attempts || 0), 0);
+      const bAttempts = (b.attentionReasonsFiltered || []).reduce((acc, r) => acc + (r.attempts || 0), 0);
+      return bAttempts - aAttempts;
+    });
+
+    return list.slice(0, 5);
+  }
+
+  const attemptsDistributionData = computeAttemptsDistribution();
+  const attentionList = buildAttentionList();
+
   return (
     <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto", fontFamily: "Georgia, 'Times New Roman', serif" }}>
       <h1 style={{ marginBottom: 10 }}>🧾 Performance Reports</h1>
@@ -327,6 +437,21 @@ export default function TeacherReports() {
           onChange={e => setQuery(e.target.value)}
           style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", width: 260, boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)" }}
         />
+
+        <select value={selectedTopic} onChange={e => setSelectedTopic(e.target.value)} style={{ padding: 8, borderRadius: 8 }}>
+          <option value="all">All topics (roll-up)</option>
+          {(data.topics || []).map(t => (
+            <option key={t.id} value={t.id}>
+              {t.name || t.title || t.id}
+            </option>
+          ))}
+        </select>
+
+        {/* count mode only relevant when All topics is selected */}
+        <select value={countMode} onChange={e => setCountMode(e.target.value)} style={{ padding: 8, borderRadius: 8, display: selectedTopic === "all" ? "inline-block" : "none" }}>
+          <option value="unique-students">Unique students (each student counted once)</option>
+          <option value="topic-level">Topic-level (counts each problematic topic instance)</option>
+        </select>
 
         <select value={selectedAssessment} onChange={e => setSelectedAssessment(e.target.value)} style={{ padding: 8, borderRadius: 8 }}>
           <option value="all">All assessments</option>
@@ -458,23 +583,23 @@ export default function TeacherReports() {
                         <div style={{ display: "flex", flexDirection: "column" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <span style={{ fontWeight: 700, color: "#0f172a" }}>{s.name}</span>
-                            {s.attentionCount > 0 && (
+                            { ( (selectedTopic === "all" && s.attentionCount > 0) || (selectedTopic !== "all" && s.attentionReasons && s.attentionReasons.some(r=> r.topicId === selectedTopic)) ) && (
                               <span
-                                title={ (s.attentionReasons || []).map(r=> `${r.topicLabel}: ${r.attempts} attempts (${r.lastScore != null ? r.lastScore + '%' : 'no score'})`).join('\n') }
+                                title={ ( (s.attentionReasons || []).map(r=> `${r.topicLabel}: ${r.attempts} attempts (${r.lastScore != null ? r.lastScore + '%' : 'no score'})`).join('\n') ) }
                                 style={{
                                   display: "inline-flex",
                                   alignItems: "center",
                                   gap: 6,
                                   padding: "4px 8px",
                                   borderRadius: 999,
-                                  background: s.attentionCount > 0 ? "#fff7ed" : "transparent",
+                                  background: "#fff7ed",
                                   color: "#92400e",
                                   fontWeight: 700,
                                   fontSize: 12,
                                   border: "1px solid rgba(245,158,11,0.12)"
                                 }}
                               >
-                                ⚠ {s.attentionCount}
+                                ⚠ { selectedTopic === "all" ? (s.attentionCount || 0) : (s.attentionReasons || []).filter(r => r.topicId === selectedTopic).length }
                               </span>
                             )}
                           </div>
@@ -598,15 +723,10 @@ export default function TeacherReports() {
           <div style={{ flex: 1, minWidth: 320, padding: 12, borderRadius: 10, background: "#fff", border: "1px solid #eef2ff" }}>
             <h4 style={{ margin: "0 0 8px 0" }}>Needs attention (top students)</h4>
             <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>
-              Students flagged because they have ≥3 attempts on a topic but still below the passing threshold. Act inline from the table.
+              Students flagged because they have ≥3 attempts on a topic but still below the passing threshold. {selectedTopic !== "all" ? `Showing results for topic: ${ (data.topics.find(t=>t.id===selectedTopic)?.name) || selectedTopic }.` : `Mode: ${ countMode === "topic-level" ? "Topic-level (counts each problematic topic instance)" : "Unique students (each student counted once)" }.`}
             </div>
 
             {(() => {
-              const attentionList = (data.students || [])
-                .filter(s => s.needsAttention)
-                .sort((a,b) => (b.attentionCount || 0) - (a.attentionCount || 0))
-                .slice(0, 5);
-
               if (!attentionList.length) return <div style={{ color: "#94a3b8" }}>No students currently flagged.</div>;
 
               return (
@@ -615,7 +735,10 @@ export default function TeacherReports() {
                     <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 6px", borderRadius: 8, background: "#fbfdff", border: "1px solid rgba(37,99,235,0.04)" }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name || s.id}</div>
-                        <div style={{ fontSize: 12, color: "#64748b" }}>{`${s.attentionCount || 0} topic(s) • ${s.attempts || 0} attempt(s)`}</div>
+                        <div style={{ fontSize: 12, color: "#64748b" }}>
+                          {`${s.attentionReasonsFiltered.length} topic(s) • `}
+                          { (s.attentionReasonsFiltered || []).map((r, idx) => `${r.attempts} on ${r.topicLabel}${idx < s.attentionReasonsFiltered.length - 1 ? ", " : ""}`) }
+                        </div>
                       </div>
 
                       <div style={{ display: "flex", gap: 8 }}>
@@ -625,6 +748,7 @@ export default function TeacherReports() {
                             try {
                               const body = { studentId: s.id };
                               if (selectedAssessment && selectedAssessment !== "all") body.assessmentId = selectedAssessment;
+                              if (selectedTopic && selectedTopic !== "all") body.assessmentId = `${selectedTopic}_assessment`;
                               const resp = await fetch(`${API_BASE}/teachers/assign-remediation`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
                               if (!resp.ok) throw new Error(`server ${resp.status}`);
                               const json = await resp.json().catch(()=>({}));
@@ -656,37 +780,26 @@ export default function TeacherReports() {
 
           {/* Attempts distribution chart */}
           <div style={{ flex: "0 0 420px", padding: 12, borderRadius: 10, background: "#fff", border: "1px solid #eef2ff" }}>
-            <h4 style={{ margin: "0 0 8px 0" }}>Attempts distribution</h4>
+            <h4 style={{ margin: "0 0 8px 0" }}>
+              Attempts distribution
+            </h4>
             <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>
-              How many attempts students made (based on aggregated `attempts` from report).
+              { selectedTopic === "all"
+                ? (countMode === "topic-level"
+                    ? "Counts each topic-instance across all students (students may be counted multiple times)."
+                    : "Counts unique students once, using their highest attempts across topics.")
+                : `Showing attempts for topic: ${(data.topics.find(t=>t.id===selectedTopic)?.name) || selectedTopic}.`
+              }
             </div>
             <div style={{ height: 160 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={
-                    (() => {
-                      // compute distribution
-                      const dist = { "0": 0, "1": 0, "2": 0, "3+": 0 };
-                      (data.students || []).forEach(s => {
-                        const a = Number(s.attempts || 0);
-                        if (a <= 0) dist["0"]++;
-                        else if (a === 1) dist["1"]++;
-                        else if (a === 2) dist["2"]++;
-                        else dist["3+"]++;
-                      });
-                      return [
-                        { name: "0", value: dist["0"] },
-                        { name: "1", value: dist["1"] },
-                        { name: "2", value: dist["2"] },
-                        { name: "3+", value: dist["3+"] },
-                      ];
-                    })()
-                  }
+                  data={attemptsDistributionData}
                   margin={{ top: 6, right: 8, left: 0, bottom: 6 }}
                 >
                   <XAxis dataKey="name" />
                   <YAxis allowDecimals={false} />
-                  <Tooltip formatter={(v) => [`${v}`, "Students"]} />
+                  <Tooltip formatter={(v) => [`${v}`, "Count"]} />
                   <Bar dataKey="value" fill="#2563eb" />
                 </BarChart>
               </ResponsiveContainer>
