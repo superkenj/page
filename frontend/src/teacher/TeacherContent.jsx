@@ -106,11 +106,29 @@ export default function TeacherContent() {
     await loadAll();
   }
 
-    // Open the schedule modal for a topic (prefill using topic data)
+  // Helper: convert an ISO string like "2025-12-02T06:00:00.000Z"
+  // into a "YYYY-MM-DDTHH:MM" string suitable for <input type="datetime-local"> (local time)
+  function isoUtcToLocalDatetimeInput(iso) {
+    if (!iso) return "";
+    try {
+      const d = new Date(iso); // parsed as UTC
+      const pad = (n) => String(n).padStart(2, "0");
+      const year = d.getFullYear();
+      const month = pad(d.getMonth() + 1);
+      const day = pad(d.getDate());
+      const hour = pad(d.getHours());
+      const minute = pad(d.getMinutes());
+      return `${year}-${month}-${day}T${hour}:${minute}`;
+    } catch (e) {
+      return "";
+    }
+  }
+
+  // Open the schedule modal for a topic (prefill using topic data)
   function openScheduleModal(topic) {
     setScheduleTopicId(topic.id);
-    setScheduleOpenAt(topic.open_at ? topic.open_at.substring(0,16) : "");
-    setScheduleCloseAt(topic.close_at ? topic.close_at.substring(0,16) : "");
+    setScheduleOpenAt(topic.open_at ? isoUtcToLocalDatetimeInput(topic.open_at) : "");
+    setScheduleCloseAt(topic.close_at ? isoUtcToLocalDatetimeInput(topic.close_at) : "");
     setScheduleManualLock(!!topic.manual_lock);
     setScheduleModalOpen(true);
   }
