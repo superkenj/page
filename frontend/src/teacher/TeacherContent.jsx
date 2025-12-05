@@ -471,36 +471,36 @@ export default function TeacherContent() {
                 )}
 
                 {/* action row under materials */}
-                <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
                   <button
                     onClick={(e) => { e.stopPropagation(); setModalTopic(topic.id); setShowAddModal(true); }}
-                    style={{ background: "#2563eb", color: "white", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer" }}
+                    style={{ background: "#2563eb", color: "white", border: "none", padding: "10px", borderRadius: 8, cursor: "pointer", width: "100%" }}
                   >
                     ➕ Add Resource
                   </button>
 
                   <button
                     onClick={(e) => { e.stopPropagation(); deleteTopic(topic.id); }}
-                    style={{ background: "#ef4444", color: "white", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer" }}
+                    style={{ background: "#ef4444", color: "white", border: "none", padding: "10px", borderRadius: 8, cursor: "pointer", width: "100%" }}
                   >
                     🗑️ Delete Topic
                   </button>
 
                   <button
                     onClick={(e) => { e.stopPropagation(); openScheduleModal(topic); }}
-                    style={{ background: "#06b6d4", color: "white", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer" }}
+                    style={{ background: "#06b6d4", color: "white", border: "none", padding: "10px", borderRadius: 8, cursor: "pointer", width: "100%" }}
                   >
                     🗓 Manage Schedule
                   </button>
 
                   <button
                     onClick={(e) => { e.stopPropagation(); setModalTopic(topic.id); openAssessmentModal(topic.id); }}
-                    style={{ background: "#f97316", color: "white", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer" }}
+                    style={{ background: "#f97316", color: "white", border: "none", padding: "10px", borderRadius: 8, cursor: "pointer", width: "100%" }}
                   >
                     📝 Manage Assessment
                   </button>
 
-                  <div style={{ marginLeft: "auto", fontSize: 13, color: "#666" }}>
+                  <div style={{ gridColumn: "1 / -1", justifySelf: "end", fontSize: 13, color: "#666", marginTop: 4 }}>
                     {topic.materials.length} resource{topic.materials.length !== 1 ? "s" : ""}
                   </div>
                 </div>
@@ -531,10 +531,11 @@ export default function TeacherContent() {
 
 const cardsWrapper = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+  gridTemplateColumns: "repeat(2, minmax(320px, 1fr))",
   gap: 24,
   paddingTop: 12,
   paddingBottom: 40,
+  alignItems: "start",
 };
 
 const topicCard = {
@@ -547,6 +548,9 @@ const topicCard = {
   display: "flex",
   flexDirection: "column",
   cursor: "default",
+  alignSelf: "start",
+  minHeight: 220,
+  boxSizing: "border-box",
 };
 
 const miniCard = {
