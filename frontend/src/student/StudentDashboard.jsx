@@ -294,6 +294,14 @@ export default function StudentDashboard() {
         {sorted.map((t) => {
           const status = getStatus(t.id);
           const color = getColorForStatus(status);
+          const humanOpen = t.open_at ? new Date(t.open_at).toLocaleString() : null;
+          const humanClose = t.close_at ? new Date(t.close_at).toLocaleString() : null;
+          const timePanel = ( 
+            <div style={{ marginTop: 10, fontSize: 12, color: "#374151", lineHeight: "1.3" }}>
+              {humanOpen && <div><strong>Opens:</strong> {humanOpen}</div>}
+              {humanClose && <div><strong>Closes:</strong> {humanClose}</div>}
+            </div>
+          );
 
           // background variants — subtle & soft
           const background =
@@ -377,7 +385,8 @@ export default function StudentDashboard() {
 
               <h3 style={{ marginBottom: 8 }}>{t.name}</h3>
               <p style={{ fontSize: 14, color: "#374151" }}>{t.description}</p>
-
+              
+              {timePanel}
               {countdownEl}
             </div>
           );
