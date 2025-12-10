@@ -226,7 +226,15 @@ app.get("/reports/topics", async (req, res) => {
         if (s.scores && s.scores[t.id] != null) attempted++;
         if (Array.isArray(s.mastered) && s.mastered.includes(t.id)) mastered++;
       });
-      return { id: t.id, name: t.name || t.title || t.id, attempted, mastered, difficulty: attempted ? (1 - mastered / attempted) : 1 };
+      return {
+        id: t.id,
+        name: t.name || t.title || t.id,
+        term: t.term || t.grading_period || null,
+        attempted,
+        mastered,
+        difficulty: attempted ? (1 - mastered / attempted) : 1
+      };
+
     });
     res.json(report);
   } catch (err) {
@@ -405,13 +413,16 @@ app.get("/reports/performance", async (req, res) => {
     // Provide assessments list for the frontend
     const assessments = assessmentsSnap.docs.map(doc => {
       const d = doc.data();
+      const topicId = d.topic_id || null;
+      const topicForAssessment = topicId ? topicsMap[topicId] : null;
       return {
         id: doc.id,
-        title: d.title || d.assessment_id || `${d.topic_id}_assessment`,
-        topic_id: d.topic_id || null,
+        title: d.title || d.assessment_id || `${topicId}_assessment`,
+        topic_id: topicId,
         dueDate: d.due_date || d.dueDate || null,
         // include passing_score if available
         passing_score: d.passing_score ?? d.passingScore ?? null,
+        term: topicForAssessment ? (topicForAssessment.term || topicForAssessment.grading_period || null) : null,
       };
     });
 
@@ -421,6 +432,7 @@ app.get("/reports/performance", async (req, res) => {
       return {
         id: t.id,
         name: t.name || t.title || t.id,
+        term: t.term || t.grading_period || null,
         totalMaterials,
         avgScore: null,
         masteryRate: null
@@ -849,6 +861,9 @@ app.get("/topics/list", async (req, res) => {
         open_at: toIsoMaybe(d.open_at),
         close_at: toIsoMaybe(d.close_at),
         manual_lock: !!d.manual_lock,
+
+        // term / grading period metadata
+        term: d.term || d.grading_period || null,
 
         // preserve other custom fields safely:
         cluster: d.cluster || null,
@@ -1341,6 +1356,266 @@ app.delete("/content/:id", async (req, res) => {
   }
 });
 
+// ========== PRACTICE (Remedial mini-exercises) ==========
+
+/**
+ * returns practice config for topic (if exists)
+ * used by teacher UI (manage bank) and student UI (fetch questions)
+ */
+app.get("/practice/:topicId", async (req, res) => {
+  try {
+    const topicId = req.params.topicId;
+    const docId = `${topicId}_practice`;
+    const doc = await db.collection("practice").doc(docId).get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Practice not found" });
+    }
+    return res.json({ id: doc.id, ...doc.data() });
+  } catch (err) {
+    console.error("GET /practice/:topicId", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+/**
+ * Creates or updates practice config with deterministic id `${topic_id}_practice`
+ * Questions have same minimal shape as assessments: { question_id, type, question, choices?, answer?, points? }
+ */
+app.post("/practice", async (req, res) => {
+  try {
+    const payload = req.body;
+    if (!payload.topic_id || !Array.isArray(payload.questions)) {
+      return res.status(400).json({ error: "topic_id and questions[] required" });
+    }
+    const now = new Date().toISOString();
+    const docId = `${payload.topic_id}_practice`;
+
+    const docData = {
+      topic_id: payload.topic_id,
+      title: payload.title || "Practice",
+      instructions: payload.instructions || "",
+      passing_score: Number(payload.passing_score ?? 70),
+      questions: payload.questions.map((q, idx) => ({
+        question_id: q.question_id || q.id || `${docId}_q${idx}`,
+        type: q.type || "multiple_choice",
+        question: q.question || "",
+        choices: Array.isArray(q.choices) ? q.choices : [],
+        answer: q.answer ?? q.correct_answer ?? q.correct ?? "",
+        points: Number(q.points ?? 1) || 1,
+      })),
+      updated_at: now,
+      created_at: payload.created_at || now,
+    };
+
+    await db.collection("practice").doc(docId).set(docData, { merge: true });
+    return res.json({ success: true, id: docId });
+  } catch (err) {
+    console.error("POST /practice", err);
+    return res.status(500).json({ error: "Failed to save practice config" });
+  }
+});
+
+/**
+ * Grades a single practice session (3–5 items), updates practiceState under student.topic_progress[topicId].
+ * Rule:
+ *  - Each cycle allows up to 3 sessions.
+ *  - When cycleSessionsDone reaches 3:
+ *      - If cycleSessionsPassed >= 2 => clearedForRetake = true (student may now retake assessment)
+ *      - Else => cycleSessionsDone = 0, cycleSessionsPassed = 0 (must repeat practice cycle)
+ */
+app.post("/practice/:topicId/submit", async (req, res) => {
+  try {
+    const { topicId } = req.params;
+    const { student_id, answers } = req.body;
+
+    if (!student_id || !Array.isArray(answers)) {
+      return res.status(400).json({ error: "student_id and answers[] required" });
+    }
+
+    // fetch practice config
+    const docId = `${topicId}_practice`;
+    const practiceDoc = await db.collection("practice").doc(docId).get();
+    if (!practiceDoc.exists) {
+      return res.status(404).json({ error: "Practice config not found for this topic" });
+    }
+
+    const practice = practiceDoc.data() || {};
+    const questions = Array.isArray(practice.questions) ? practice.questions : [];
+
+    if (!questions.length) {
+      return res.status(400).json({ error: "No practice questions configured for this topic" });
+    }
+
+    // normalize answers into a map
+    const ansMap = {};
+    answers.forEach(a => {
+      if (a && a.question_id) ansMap[a.question_id] = a.student_answer;
+    });
+
+    // grade session
+    let earnedPoints = 0;
+    let totalPoints = 0;
+
+    for (const q of questions) {
+      const qid = q.question_id || q.id;
+      if (!qid) continue;
+
+      const studentAnswer = ansMap[qid];
+      const pointsPossible = Number(q.points ?? 1) || 1;
+      totalPoints += pointsPossible;
+
+      let isCorrect = false;
+      try {
+        if (q.type === "multiple_choice") {
+          const correct = (q.correct_answer ?? q.answer ?? q.correct ?? "")
+            .toString()
+            .trim();
+          isCorrect =
+            studentAnswer !== undefined &&
+            studentAnswer !== null &&
+            studentAnswer.toString().trim() === correct;
+        } else if (q.type === "numeric") {
+          const tolerance = Number(q.tolerance ?? 0);
+          const saNum =
+            studentAnswer !== undefined && studentAnswer !== null
+              ? Number(studentAnswer)
+              : NaN;
+          const correctNum = Number(q.correct_answer ?? q.answer ?? q.correct ?? NaN);
+          if (!Number.isNaN(saNum) && !Number.isNaN(correctNum)) {
+            isCorrect = Math.abs(saNum - correctNum) <= Math.abs(tolerance);
+          }
+        } else if (q.type === "short_answer") {
+          const correctText = (q.correct_answer ?? q.answer ?? q.correct ?? "")
+            .toString()
+            .trim()
+            .toLowerCase();
+          const studentText = (studentAnswer ?? "")
+            .toString()
+            .trim()
+            .toLowerCase();
+          isCorrect = !!(correctText && studentText && studentText === correctText);
+        } else if (q.type === "ordering") {
+          const correctOrder = Array.isArray(q.correct_order)
+            ? q.correct_order
+            : (Array.isArray(q.correct_answer) ? q.correct_answer : null);
+          if (Array.isArray(correctOrder) && Array.isArray(studentAnswer)) {
+            isCorrect =
+              JSON.stringify(correctOrder.map(s => String(s).trim())) ===
+              JSON.stringify(studentAnswer.map(s => String(s).trim()));
+          }
+        } else {
+          const correct = (q.correct_answer ?? q.answer ?? q.correct ?? "")
+            .toString()
+            .trim()
+            .toLowerCase();
+          const studentText = (studentAnswer ?? "")
+            .toString()
+            .trim()
+            .toLowerCase();
+          isCorrect = !!(correct && studentText && studentText === correct);
+        }
+      } catch (e) {
+        isCorrect = false;
+      }
+
+      if (isCorrect) earnedPoints += pointsPossible;
+    }
+
+    const scorePercent = totalPoints ? Math.round((earnedPoints / totalPoints) * 100) : null;
+    const passingScore = Number(practice.passing_score ?? 70);
+    const passedPractice = scorePercent !== null ? scorePercent >= passingScore : false;
+
+    // save practice submission for audit/analytics
+    const submission = {
+      practice_id: docId,
+      topic_id: topicId,
+      student_id,
+      earnedPoints,
+      totalPoints,
+      score: scorePercent,
+      passed: passedPractice,
+      attempted_at: new Date().toISOString(),
+    };
+    await db.collection("practice_submissions").add(submission);
+
+    // update student's practiceState in topic_progress via transaction
+    const studentRef = db.collection("students").doc(student_id);
+    let txResult = null;
+
+    await db.runTransaction(async (tx) => {
+      const studDoc = await tx.get(studentRef);
+      const sd = studDoc.exists ? (studDoc.data() || {}) : {};
+      const tp = sd.topic_progress || {};
+      const currentTopic = tp[topicId] || {};
+
+      const practiceState = currentTopic.practiceState || {
+        cycleSessionsDone: 0,
+        cycleSessionsPassed: 0,
+        clearedForRetake: false,
+      };
+
+      let cycleSessionsDone = Number(practiceState.cycleSessionsDone || 0) + 1;
+      let cycleSessionsPassed = Number(practiceState.cycleSessionsPassed || 0);
+      if (passedPractice) cycleSessionsPassed += 1;
+
+      let clearedForRetake = !!practiceState.clearedForRetake;
+      let cycleReset = false;
+
+      // when a cycle of 3 sessions is completed, evaluate
+      if (cycleSessionsDone >= 3) {
+        if (cycleSessionsPassed >= 2) {
+          // success: student cleared to retake the assessment
+          clearedForRetake = true;
+        } else {
+          // failed cycle: must repeat practice
+          clearedForRetake = false;
+        }
+
+        // After evaluation, reset counters for the next cycle
+        cycleReset = true;
+        cycleSessionsDone = 0;
+        cycleSessionsPassed = 0;
+      }
+
+      const newPracticeState = {
+        cycleSessionsDone,
+        cycleSessionsPassed,
+        clearedForRetake,
+        lastPracticeScore: scorePercent,
+        lastPracticePassed: passedPractice,
+        lastPracticeAt: new Date().toISOString(),
+      };
+
+      const newTopicProgress = {
+        ...tp,
+        [topicId]: {
+          ...currentTopic,
+          practiceState: newPracticeState,
+        },
+      };
+
+      tx.set(studentRef, { topic_progress: newTopicProgress }, { merge: true });
+
+      txResult = {
+        cycleSessionsDone,
+        cycleSessionsPassed,
+        clearedForRetake,
+        cycleReset,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      score: scorePercent,
+      passedPractice,
+      practiceState: txResult,
+    });
+  } catch (err) {
+    console.error("POST /practice/:topicId/submit error:", err);
+    return res.status(500).json({ error: "Failed to submit practice session" });
+  }
+});
+
 // ========== ASSESSMENTS (Teacher create/update + Student submit) ==========
 /**
  * GET /assessments/:topicId
@@ -1425,6 +1700,27 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
       if (closeMs && nowMs > closeMs) {
         return res.status(403).json({ error: "Topic closed" });
       }
+    }
+
+    // ---------- remedial gating: if extraAttempts (remediation) are active, require cleared practice before retake ----------
+    const studentRef = db.collection("students").doc(student_id);
+    const studentDoc = await studentRef.get();
+    const studentData = studentDoc.exists ? (studentDoc.data() || {}) : {};
+    const topicProgress = studentData.topic_progress || {};
+    const currTopicProgress = topicProgress[topicId] || {};
+
+    const baseAttemptsSoFar = Number(currTopicProgress.attempts || 0);
+    const extraAttemptsAvailable = Number(currTopicProgress.extraAttempts || 0);
+    const practiceState = currTopicProgress.practiceState || {};
+
+    const inRemedialWindow = extraAttemptsAvailable > 0 && baseAttemptsSoFar >= 3;
+
+    if (inRemedialWindow && !practiceState.clearedForRetake) {
+      // Student has been granted remediation (extraAttempts) but has not cleared practice sessions yet
+      return res.status(403).json({
+        error: "PracticeRequired",
+        message: "Please complete your assigned practice sessions before retaking this assessment.",
+      });
     }
 
     // Grade each question (best-effort). Default points_per_question = q.points || 1
@@ -1534,9 +1830,6 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
 
     // Save submission
     await db.collection("assessment_submissions").add(submission);
-
-    // ---------- update student topic_progress and mastered/lock atomically using a transaction ----------
-    const studentRef = db.collection("students").doc(student_id);
 
     const txResult = await db.runTransaction(async (tx) => {
       const studentDoc = await tx.get(studentRef);

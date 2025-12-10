@@ -20,6 +20,11 @@ export default function TeacherTopicContents() {
   const [assessment, setAssessment] = useState(null); // null = not loaded, {} = empty
   const [savingAssessment, setSavingAssessment] = useState(false);
 
+  // practice bank state
+  const [practiceLoading, setPracticeLoading] = useState(false);
+  const [practice, setPractice] = useState(null); // null = not loaded
+  const [savingPractice, setSavingPractice] = useState(false);
+
   // load topic & contents (existing)
   useEffect(() => {
     async function loadData() {
@@ -81,6 +86,51 @@ export default function TeacherTopicContents() {
     return () => { mounted = false; };
   }, [tab, topicId, topic]);
 
+  // load practice config when tab switches to practice
+  useEffect(() => {
+    if (tab !== "practice") return;
+    let mounted = true;
+
+    async function loadPractice() {
+      setPracticeLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/practice/${topicId}`);
+        if (res.ok) {
+          const j = await res.json();
+          if (!mounted) return;
+          setPractice(j);
+        } else {
+          // No practice yet — create skeleton
+          if (!mounted) return;
+          setPractice({
+            topic_id: topicId,
+            title: `${topic?.name || topicId} Practice`,
+            instructions: "",
+            passing_score: 70,
+            questions: [],
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load practice config:", err);
+        if (!mounted) return;
+        setPractice({
+          topic_id: topicId,
+          title: `${topic?.name || topicId} Practice`,
+          instructions: "",
+          passing_score: 70,
+          questions: [],
+        });
+      } finally {
+        if (mounted) setPracticeLoading(false);
+      }
+    }
+
+    loadPractice();
+    return () => {
+      mounted = false;
+    };
+  }, [tab, topicId, topic]);
+
   // ---------------- Existing content edit functions ----------------
   function startEdit(item) {
     setEditingId(item.id);
@@ -127,7 +177,6 @@ export default function TeacherTopicContents() {
   }
 
   // ---------------- Assessment helpers ----------------
-
   function addQuestion() {
     const qid = `q${Date.now()}`;
     setAssessment((a) => ({
@@ -206,12 +255,111 @@ export default function TeacherTopicContents() {
         // reload assessment from server to pick up any normalization
         const fresh = await fetch(`${API_BASE}/assessments/${topicId}`);
         if (fresh.ok) setAssessment(await fresh.json());
+
+        // notify student dashboards in case assessment visibility changed
+        window.dispatchEvent(new Event("studentDataUpdated"));
+        window.dispatchEvent(new Event("studentPathUpdated"));
       }
     } catch (err) {
       console.error("saveAssessment error", err);
       alert("Failed to save assessment.");
     } finally {
       setSavingAssessment(false);
+    }
+  }
+
+    // ---------------- Practice helpers ----------------
+
+  function addPracticeQuestion() {
+    const qid = `p_${Date.now()}`;
+    setPractice((p) => ({
+      ...p,
+      questions: [
+        ...(p?.questions || []),
+        {
+          question_id: qid,
+          type: "multiple_choice",
+          question: "",
+          choices: ["", ""],
+          answer: "",
+          points: 1,
+        },
+      ],
+    }));
+  }
+
+  function updatePracticeQuestion(idx, patch) {
+    setPractice((p) => {
+      if (!p) return p;
+      const q = [...(p.questions || [])];
+      q[idx] = { ...q[idx], ...patch };
+      return { ...p, questions: q };
+    });
+  }
+
+  function removePracticeQuestion(idx) {
+    setPractice((p) => {
+      if (!p) return p;
+      const q = [...(p.questions || [])];
+      q.splice(idx, 1);
+      return { ...p, questions: q };
+    });
+  }
+
+  async function savePractice() {
+    if (!practice) return;
+    if (
+      !practice.title ||
+      !Array.isArray(practice.questions) ||
+      practice.questions.length === 0
+    ) {
+      alert("Please add a title and at least one practice question.");
+      return;
+    }
+
+    setSavingPractice(true);
+    try {
+      const payload = {
+        topic_id: practice.topic_id || topicId,
+        title: practice.title,
+        instructions: practice.instructions || "",
+        passing_score: Number(practice.passing_score || 70),
+        questions: (practice.questions || []).map((q, idx) => ({
+          question_id: q.question_id || `p_${idx}`,
+          type: q.type || "multiple_choice",
+          question: q.question || "",
+          choices: q.choices || [],
+          answer: q.answer,
+          points: q.points ?? 1,
+          correct_order: q.correct_order || null,
+        })),
+      };
+
+      const res = await fetch(`${API_BASE}/practice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.text().catch(() => "");
+        console.error("savePractice error", err);
+        alert("Failed to save practice.");
+      } else {
+        alert("Practice saved.");
+        // reload from server (to pick up normalization)
+        const fresh = await fetch(`${API_BASE}/practice/${topicId}`);
+        if (fresh.ok) setPractice(await fresh.json());
+
+        // notify dashboards if needed later
+        window.dispatchEvent(new Event("studentDataUpdated"));
+        window.dispatchEvent(new Event("studentPathUpdated"));
+      }
+    } catch (err) {
+      console.error("savePractice error", err);
+      alert("Failed to save practice.");
+    } finally {
+      setSavingPractice(false);
     }
   }
 
@@ -262,6 +410,18 @@ export default function TeacherTopicContents() {
             }}
           >
             Assessment
+          </button>
+          <button
+            onClick={() => setTab("practice")}
+            style={{
+              padding: "6px 10px",
+              borderRadius: 6,
+              border: tab === "practice" ? "2px solid #0f766e" : "1px solid #e5e7eb",
+              background: tab === "practice" ? "#ecfeff" : "#fff",
+              cursor: "pointer"
+            }}
+          >
+            Practice
           </button>
         </div>
       </div>
@@ -610,6 +770,436 @@ export default function TeacherTopicContents() {
                 <button onClick={() => setTab("content")} style={{ background: "#ddd", padding: "8px 12px", borderRadius: 6 }}>Back to Content</button>
                 <button onClick={saveAssessment} disabled={savingAssessment} style={{ background: "#2563eb", color: "#fff", padding: "8px 12px", borderRadius: 6 }}>
                   {savingAssessment ? "Saving..." : "Save Assessment"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* PRACTICE TAB */}
+      {tab === "practice" && (
+        <div style={{ maxWidth: 900 }}>
+          {practiceLoading ? (
+            <div>Loading practice...</div>
+          ) : !practice ? (
+            <div>No practice configuration loaded.</div>
+          ) : (
+            <>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: "block", fontWeight: 600 }}>Title</label>
+                <input
+                  value={practice.title || ""}
+                  onChange={(e) =>
+                    setPractice((p) => ({ ...(p || {}), title: e.target.value }))
+                  }
+                  style={{
+                    width: "100%",
+                    padding: 8,
+                    borderRadius: 6,
+                    border: "1px solid #ccc",
+                    marginBottom: 8,
+                  }}
+                />
+
+                <label style={{ display: "block", fontWeight: 600 }}>
+                  Instructions (shown before practice)
+                </label>
+                <textarea
+                  value={practice.instructions || ""}
+                  onChange={(e) =>
+                    setPractice((p) => ({
+                      ...(p || {}),
+                      instructions: e.target.value,
+                    }))
+                  }
+                  style={{
+                    width: "100%",
+                    padding: 8,
+                    borderRadius: 6,
+                    border: "1px solid #ccc",
+                    marginBottom: 8,
+                    minHeight: 80,
+                  }}
+                />
+
+                <label style={{ display: "block", fontWeight: 600 }}>
+                  Passing score (%) for a practice session
+                </label>
+                <input
+                  type="number"
+                  value={practice.passing_score ?? 70}
+                  onChange={(e) =>
+                    setPractice((p) => ({
+                      ...(p || {}),
+                      passing_score: Number(e.target.value),
+                    }))
+                  }
+                  style={{
+                    width: 160,
+                    padding: 8,
+                    borderRadius: 6,
+                    border: "1px solid #ccc",
+                    marginBottom: 8,
+                  }}
+                />
+              </div>
+
+              <hr />
+
+              <div>
+                <h3>Practice Questions (bank)</h3>
+                {(practice.questions || []).length === 0 && (
+                  <div style={{ color: "#6b7280", marginBottom: 10 }}>
+                    No practice questions yet. Click “Add practice question”.
+                  </div>
+                )}
+
+                {(practice.questions || []).map((q, idx) => (
+                  <div
+                    key={q.question_id || `p_${idx}`}
+                    style={{
+                      border: "1px solid #ecfeff",
+                      padding: 10,
+                      borderRadius: 8,
+                      marginBottom: 10,
+                      background: "#f9fafb",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "center",
+                        marginBottom: 8,
+                      }}
+                    >
+                      <strong style={{ minWidth: 160 }}>{`P${idx + 1} — ${
+                        q.type || "multiple_choice"
+                      }`}</strong>
+                      <select
+                        value={q.type}
+                        onChange={(e) =>
+                          updatePracticeQuestion(idx, { type: e.target.value })
+                        }
+                        style={{ padding: 6, borderRadius: 6 }}
+                      >
+                        <option value="multiple_choice">Multiple Choice</option>
+                        <option value="short_answer">Short Answer</option>
+                        <option value="numeric">Numeric</option>
+                        <option value="ordering">Ordering</option>
+                      </select>
+                      <input
+                        type="number"
+                        value={q.points ?? 1}
+                        onChange={(e) =>
+                          updatePracticeQuestion(idx, {
+                            points: Number(e.target.value || 1),
+                          })
+                        }
+                        style={{
+                          width: 80,
+                          padding: 6,
+                          borderRadius: 6,
+                          marginLeft: "auto",
+                        }}
+                        title="Points"
+                      />
+                    </div>
+
+                    <input
+                      placeholder="Question text"
+                      value={q.question || ""}
+                      onChange={(e) =>
+                        updatePracticeQuestion(idx, { question: e.target.value })
+                      }
+                      style={{
+                        width: "100%",
+                        padding: 8,
+                        borderRadius: 6,
+                        border: "1px solid #ccc",
+                        marginBottom: 8,
+                      }}
+                    />
+
+                    {/* MCQ */}
+                    {q.type === "multiple_choice" && (
+                      <>
+                        {(q.choices || []).map((c, ci) => (
+                          <div
+                            key={ci}
+                            style={{
+                              display: "flex",
+                              gap: 8,
+                              marginBottom: 6,
+                            }}
+                          >
+                            <input
+                              value={c}
+                              onChange={(e) => {
+                                const nc = [...(q.choices || [])];
+                                nc[ci] = e.target.value;
+                                updatePracticeQuestion(idx, { choices: nc });
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: 8,
+                                borderRadius: 6,
+                                border: "1px solid #ccc",
+                              }}
+                            />
+                            <button
+                              onClick={() => {
+                                const nc = [...(q.choices || [])];
+                                nc.splice(ci, 1);
+                                updatePracticeQuestion(idx, { choices: nc });
+                              }}
+                              style={{
+                                background: "#ef4444",
+                                color: "#fff",
+                                borderRadius: 6,
+                                border: "none",
+                                padding: "6px 8px",
+                              }}
+                            >
+                              ✖
+                            </button>
+                          </div>
+                        ))}
+                        <div style={{ marginBottom: 8 }}>
+                          <button
+                            onClick={() =>
+                              updatePracticeQuestion(idx, {
+                                choices: [...(q.choices || []), ""],
+                              })
+                            }
+                            style={{
+                              background: "#2563eb",
+                              color: "#fff",
+                              padding: "6px 8px",
+                              border: "none",
+                              borderRadius: 6,
+                            }}
+                          >
+                            + Add choice
+                          </button>
+                        </div>
+
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              fontWeight: 600,
+                            }}
+                          >
+                            Correct answer (exact match)
+                          </label>
+                          <input
+                            value={q.answer || ""}
+                            onChange={(e) =>
+                              updatePracticeQuestion(idx, {
+                                answer: e.target.value,
+                              })
+                            }
+                            style={{
+                              width: "100%",
+                              padding: 8,
+                              borderRadius: 6,
+                              border: "1px solid #ccc",
+                            }}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Ordering */}
+                    {q.type === "ordering" && (
+                      <>
+                        <p
+                          style={{
+                            color: "#6b7280",
+                            marginTop: 8,
+                            fontSize: 13,
+                          }}
+                        >
+                          Provide items as choices, then set the correct order
+                          as a JSON array.
+                        </p>
+                        {(q.choices || []).map((c, ci) => (
+                          <input
+                            key={ci}
+                            value={c}
+                            onChange={(e) => {
+                              const nc = [...(q.choices || [])];
+                              nc[ci] = e.target.value;
+                              updatePracticeQuestion(idx, { choices: nc });
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: 8,
+                              borderRadius: 6,
+                              border: "1px solid #ccc",
+                              marginBottom: 6,
+                            }}
+                          />
+                        ))}
+                        <div style={{ marginBottom: 8 }}>
+                          <button
+                            onClick={() =>
+                              updatePracticeQuestion(idx, {
+                                choices: [...(q.choices || []), ""],
+                              })
+                            }
+                            style={{
+                              background: "#2563eb",
+                              color: "#fff",
+                              padding: "6px 8px",
+                              border: "none",
+                              borderRadius: 6,
+                            }}
+                          >
+                            + Add item
+                          </button>
+                        </div>
+                        <label>Correct order (JSON array)</label>
+                        <input
+                          value={JSON.stringify(
+                            q.correct_order || q.answer || []
+                          )}
+                          onChange={(e) => {
+                            try {
+                              const parsed = JSON.parse(e.target.value);
+                              updatePracticeQuestion(idx, {
+                                correct_order: parsed,
+                              });
+                            } catch (err) {
+                              // ignore invalid JSON while typing
+                            }
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: 8,
+                            borderRadius: 6,
+                            border: "1px solid #ccc",
+                          }}
+                        />
+                      </>
+                    )}
+
+                    {/* Short answer */}
+                    {q.type === "short_answer" && (
+                      <>
+                        <label
+                          style={{
+                            display: "block",
+                            fontWeight: 600,
+                            marginTop: 6,
+                          }}
+                        >
+                          Answer (exact)
+                        </label>
+                        <input
+                          value={q.answer || ""}
+                          onChange={(e) =>
+                            updatePracticeQuestion(idx, {
+                              answer: e.target.value,
+                            })
+                          }
+                          style={{
+                            width: "100%",
+                            padding: 8,
+                            borderRadius: 6,
+                            border: "1px solid #ccc",
+                          }}
+                        />
+                      </>
+                    )}
+
+                    {/* Numeric */}
+                    {q.type === "numeric" && (
+                      <>
+                        <label
+                          style={{
+                            display: "block",
+                            fontWeight: 600,
+                            marginTop: 6,
+                          }}
+                        >
+                          Numeric answer
+                        </label>
+                        <input
+                          type="number"
+                          value={q.answer || ""}
+                          onChange={(e) =>
+                            updatePracticeQuestion(idx, {
+                              answer: e.target.value,
+                            })
+                          }
+                          style={{
+                            width: "200px",
+                            padding: 8,
+                            borderRadius: 6,
+                            border: "1px solid #ccc",
+                          }}
+                        />
+                      </>
+                    )}
+
+                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                      <button
+                        onClick={() => removePracticeQuestion(idx)}
+                        style={{
+                          background: "#ef4444",
+                          color: "#fff",
+                          border: "none",
+                          padding: "6px 8px",
+                          borderRadius: 6,
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                <div style={{ marginTop: 10 }}>
+                  <button
+                    onClick={addPracticeQuestion}
+                    style={{
+                      background: "#0f766e",
+                      color: "#fff",
+                      border: "none",
+                      padding: "8px 12px",
+                      borderRadius: 6,
+                    }}
+                  >
+                    + Add practice question
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => setTab("content")}
+                  style={{
+                    background: "#ddd",
+                    padding: "8px 12px",
+                    borderRadius: 6,
+                  }}
+                >
+                  Back to Content
+                </button>
+                <button
+                  onClick={savePractice}
+                  disabled={savingPractice}
+                  style={{
+                    background: "#0f766e",
+                    color: "#fff",
+                    padding: "8px 12px",
+                    borderRadius: 6,
+                  }}
+                >
+                  {savingPractice ? "Saving..." : "Save Practice"}
                 </button>
               </div>
             </>
