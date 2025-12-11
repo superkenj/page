@@ -2010,11 +2010,15 @@ app.post("/send-feedback", async (req, res) => {
   try {
     const { type, message } = req.body;
 
+    if (!message || !message.trim()) {
+      return res.status(400).json({ success: false, error: "Message is required" });
+    }
+
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: process.env.FEEDBACK_RECEIVER,
-      subject: `PaGe Teacher Feedback (${new Date().toISOString()})`,
-      text: message,
+      subject: `PaGe Teacher Feedback - ${type || "General"} (${new Date().toISOString()})`,
+      text: `Type: ${type || "N/A"}\n\n${message}`,
     };
 
     await transporter.sendMail(mailOptions);

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import { API_BASE } from "../config";
 
 export default function StudentFeedbackModal() {
+  const { id } = useParams();
   const [open, setOpen] = useState(false);
   const [type, setType] = useState("Bug");
   const [message, setMessage] = useState("");
@@ -15,9 +17,18 @@ export default function StudentFeedbackModal() {
 
   if (!open) return null;
 
-  const studentId = localStorage.getItem("studentId");
-
   async function handleSubmit() {
+    const studentId =
+      id ||
+      localStorage.getItem("studentId") ||
+      localStorage.getItem("id") ||
+      localStorage.getItem("userId");
+
+    if (!studentId) {
+      alert("Cannot identify student. Please re-login and try again.");
+      return;
+    }
+
     if (!message.trim()) {
       alert("Please enter your feedback.");
       return;
@@ -43,7 +54,6 @@ export default function StudentFeedbackModal() {
       console.error("FEEDBACK ERROR:", err);
       if (err?.message) alert("Error: " + err.message);
       else alert("Unknown error");
-      alert("FULL ERROR: " + JSON.stringify(err));
     }
   }
 
