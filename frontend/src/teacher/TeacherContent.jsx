@@ -299,35 +299,29 @@ export default function TeacherContent() {
     <div style={{ padding: 20, maxWidth: 1400, margin: "0 auto" }}>
       <h1 style={{ marginBottom: 10 }}>📚 Manage Learning Materials</h1>
     
+      {/* FILTER ROW */}
       <div
         style={{
           display: "flex",
-          gap: 16,
           alignItems: "flex-end",
-          marginBottom: 18,
+          gap: 16,
+          marginBottom: 20,
         }}
       >
+
         {/* TERM DROPDOWN */}
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <label
-            style={{
-              fontSize: 14,
-              fontWeight: "bold",
-              marginBottom: 4,
-            }}
-          >
-            Grading period
-          </label>
+          <label style={{ fontWeight: 600, marginBottom: 4 }}>Grading period</label>
 
           <select
             value={selectedTerm}
             onChange={(e) => setSelectedTerm(e.target.value)}
             style={{
-              padding: 10,
+              padding: "8px 12px",
               borderRadius: 8,
               border: "1px solid #ccc",
-              minWidth: 180,
-              fontSize: 15,
+              minWidth: 150,   // DOES NOT stretch too wide
+              fontSize: 14,
             }}
           >
             <option value="">Select term...</option>
@@ -338,29 +332,20 @@ export default function TeacherContent() {
           </select>
         </div>
 
-        {/* SEARCH */}
-        <div style={{ flex: 1 }}>
-          <label
-            style={{
-              fontSize: 14,
-              fontWeight: "bold",
-              marginBottom: 4,
-              display: "block",
-            }}
-          >
-            Search
-          </label>
-
+        {/* SEARCH BAR */}
+        <div style={{ flexGrow: 1 }}>
+          <label style={{ fontWeight: 600, marginBottom: 4, display: "block" }}>Search</label>
           <input
-            placeholder="Search topics..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search topics..."
             style={{
               width: "100%",
-              padding: 10,
+              maxWidth: 400,     // stops the search bar from being too wide
+              padding: "8px 12px",
               borderRadius: 8,
               border: "1px solid #ccc",
-              fontSize: 15,
+              fontSize: 14,
             }}
           />
         </div>

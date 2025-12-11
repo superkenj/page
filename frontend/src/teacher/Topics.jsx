@@ -63,6 +63,10 @@ export default function Topics() {
     await load();
   }
 
+  function handleAddTopic() {
+    setShowAddTopicModal(true);
+  }
+
   function editTopic(t) {
     setEditing(true);
     setForm({
@@ -117,35 +121,29 @@ export default function Topics() {
     <div style={{ padding: 20, maxWidth: "1400px", margin: "0 auto", width: "100%" }}>
       <h1>Topics</h1>
 
+      {/* FILTER ROW */}
       <div
         style={{
           display: "flex",
-          gap: 16,
           alignItems: "flex-end",
-          marginBottom: 18,
+          gap: 16,
+          marginBottom: 20,
         }}
       >
+
         {/* TERM DROPDOWN */}
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <label
-            style={{
-              fontSize: 14,
-              fontWeight: "bold",
-              marginBottom: 4,
-            }}
-          >
-            Grading Period
-          </label>
+          <label style={{ fontWeight: 600, marginBottom: 4 }}>Grading period</label>
 
           <select
             value={selectedTerm}
             onChange={(e) => setSelectedTerm(e.target.value)}
             style={{
-              padding: 10,
+              padding: "8px 12px",
               borderRadius: 8,
               border: "1px solid #ccc",
-              minWidth: 180,
-              fontSize: 15,
+              minWidth: 150,   // DOES NOT stretch too wide
+              fontSize: 14,
             }}
           >
             <option value="">Select term...</option>
@@ -156,32 +154,41 @@ export default function Topics() {
           </select>
         </div>
 
-        {/* SEARCH */}
-        <div style={{ flex: 1 }}>
-          <label
-            style={{
-              fontSize: 14,
-              fontWeight: "bold",
-              marginBottom: 4,
-              display: "block",
-            }}
-          >
-            Search
-          </label>
-
+        {/* SEARCH BAR */}
+        <div style={{ flexGrow: 1 }}>
+          <label style={{ fontWeight: 600, marginBottom: 4, display: "block" }}>Search</label>
           <input
-            placeholder="Search topics..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search topics..."
             style={{
               width: "100%",
-              padding: 10,
+              maxWidth: 400,     // stops the search bar from being too wide
+              padding: "8px 12px",
               borderRadius: 8,
               border: "1px solid #ccc",
-              fontSize: 15,
+              fontSize: 14,
             }}
           />
         </div>
+
+        {/* ADD BUTTON — ALWAYS VISIBLE */}
+        <button
+          onClick={handleAddTopic}  // CHANGE THIS NAME IF NEEDED
+          style={{
+            background: "#2563eb",
+            color: "white",
+            padding: "10px 14px",
+            borderRadius: 8,
+            border: "none",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+            height: "fit-content",
+          }}
+        >
+          + Add
+        </button>
+
       </div>
 
       {/* MODAL */}
