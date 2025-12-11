@@ -12,10 +12,12 @@ admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false, // use TLS (STARTTLS) on 587
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,   // App password
+    pass: process.env.EMAIL_PASS, // Gmail app password
   },
 });
 
@@ -2011,7 +2013,9 @@ app.post("/send-feedback", async (req, res) => {
     const { type, message } = req.body;
 
     if (!message || !message.trim()) {
-      return res.status(400).json({ success: false, error: "Message is required" });
+      return res
+        .status(400)
+        .json({ success: false, error: "Message is required" });
     }
 
     const mailOptions = {
@@ -2026,7 +2030,10 @@ app.post("/send-feedback", async (req, res) => {
     res.status(200).json({ success: true, message: "Feedback sent!" });
   } catch (err) {
     console.error("Email error:", err);
-    res.status(500).json({ success: false, error: "Failed to send email" });
+    res.status(500).json({
+      success: false,
+      error: err && err.message ? err.message : "Failed to send email",
+    });
   }
 });
 

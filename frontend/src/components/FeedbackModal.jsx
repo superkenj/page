@@ -97,14 +97,16 @@ export default function FeedbackModal() {
                         body: JSON.stringify({ type, message }),
                     });
 
-                    if (!res.ok) throw new Error("Failed to send");
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                      const msg = data.error || data.message || "Failed to send email";
+                      throw new Error(msg);
+                    }
 
                     alert("Feedback sent!");
-                    setOpen(false);
-                    setMessage("");
-                }   catch (err) {
-                    console.error(err);
-                    alert("Failed to send email");
+                } catch (err) {
+                    console.error("Teacher feedback error:", err);
+                    alert(err.message || "Failed to send email");
                 }
             }}
             style={{ background: "#3b82f6", color: "white", padding: "8px 12px", borderRadius: 6 }}
