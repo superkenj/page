@@ -299,59 +299,90 @@ export default function TeacherContent() {
     <div style={{ padding: 20, maxWidth: 1400, margin: "0 auto" }}>
       <h1 style={{ marginBottom: 10 }}>📚 Manage Learning Materials</h1>
     
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 18 }}>
-        {/* ⬅️ TERM DROPDOWN */}
-        <div>
-          <label style={{ fontSize: 14, fontWeight: "bold", display: "block", marginBottom: 4 }}>
-            Term / Grading period
+      <div
+        style={{
+          display: "flex",
+          gap: 16,
+          alignItems: "flex-end",
+          marginBottom: 18,
+        }}
+      >
+        {/* TERM DROPDOWN */}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <label
+            style={{
+              fontSize: 14,
+              fontWeight: "bold",
+              marginBottom: 4,
+            }}
+          >
+            Grading period
           </label>
+
           <select
             value={selectedTerm}
             onChange={(e) => setSelectedTerm(e.target.value)}
-            style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", minWidth: 180 }}
+            style={{
+              padding: 10,
+              borderRadius: 8,
+              border: "1px solid #ccc",
+              minWidth: 180,
+              fontSize: 15,
+            }}
           >
-            <option value="">-- Select term --</option>
+            <option value="">Select term...</option>
             <option value="1st">1st Grading</option>
             <option value="2nd">2nd Grading</option>
             <option value="3rd">3rd Grading</option>
             <option value="4th">4th Grading</option>
           </select>
-          <p style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
-            Only topics in the selected term are shown. Topics follow their order within that term.
-          </p>
         </div>
 
         {/* SEARCH */}
-        <input
-          placeholder="Search topics..."
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          style={{ padding: 10, borderRadius: 8, border: "1px solid #ccc", width: 320, marginLeft: 12 }}
-        />
-
-        <div style={{ marginLeft: "auto" }}>
-          <button
-            onClick={() => {
-              if (!selectedTerm) {
-                alert("Please select a grading period first.");
-                return;
-              }
-              setModalTopic("");
-              setModalLinks([{ link: "", type: "video", description: "" }]);
-              setShowAddModal(true);
+        <div style={{ flex: 1 }}>
+          <label
+            style={{
+              fontSize: 14,
+              fontWeight: "bold",
+              marginBottom: 4,
+              display: "block",
             }}
+          >
+            Search
+          </label>
+
+          <input
+            placeholder="Search topics..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            style={{
+              width: "100%",
+              padding: 10,
+              borderRadius: 8,
+              border: "1px solid #ccc",
+              fontSize: 15,
+            }}
+          />
+        </div>
+
+        {/* BUTTONS ON THE FAR RIGHT (optional) */}
+        {showAddBtn && (
+          <button
+            onClick={handleAdd}
             style={{
               background: "#2563eb",
               color: "white",
-              padding: "8px 12px",
+              padding: "10px 14px",
               border: "none",
               borderRadius: 8,
-              cursor: "pointer"
+              cursor: "pointer",
+              height: "fit-content",
+              marginLeft: "auto",
             }}
           >
-            + Add Content
+            + Add
           </button>
-        </div>
+        )}
       </div>
 
       {/* Add Content Modal (reused for adding any topic; preselect by clicking card button) */}

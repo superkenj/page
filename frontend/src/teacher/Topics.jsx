@@ -117,72 +117,91 @@ export default function Topics() {
     <div style={{ padding: 20, maxWidth: "1400px", margin: "0 auto", width: "100%" }}>
       <h1>Topics</h1>
 
-      {/* TERM FILTER */}
-      <div style={{ marginBottom: 12, display: "flex", gap: 12, alignItems: "center" }}>
-        <div>
-          <label style={{ fontSize: 14, fontWeight: "bold", display: "block", marginBottom: 4 }}>
-            Term / Grading period
+      <div
+        style={{
+          display: "flex",
+          gap: 16,
+          alignItems: "flex-end",
+          marginBottom: 18,
+        }}
+      >
+        {/* TERM DROPDOWN */}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <label
+            style={{
+              fontSize: 14,
+              fontWeight: "bold",
+              marginBottom: 4,
+            }}
+          >
+            Grading Period
           </label>
+
           <select
             value={selectedTerm}
             onChange={(e) => setSelectedTerm(e.target.value)}
             style={{
-              padding: 8,
+              padding: 10,
               borderRadius: 8,
               border: "1px solid #ccc",
-              minWidth: 200,
+              minWidth: 180,
+              fontSize: 15,
             }}
           >
-            <option value="">-- Select term --</option>
+            <option value="">Select term...</option>
             <option value="1st">1st Grading</option>
             <option value="2nd">2nd Grading</option>
             <option value="3rd">3rd Grading</option>
             <option value="4th">4th Grading</option>
           </select>
-          <p style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
-            Topics appear in the order they will be tackled consecutively within the selected term.
-          </p>
         </div>
+
+        {/* SEARCH */}
+        <div style={{ flex: 1 }}>
+          <label
+            style={{
+              fontSize: 14,
+              fontWeight: "bold",
+              marginBottom: 4,
+              display: "block",
+            }}
+          >
+            Search
+          </label>
+
+          <input
+            placeholder="Search topics..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            style={{
+              width: "100%",
+              padding: 10,
+              borderRadius: 8,
+              border: "1px solid #ccc",
+              fontSize: 15,
+            }}
+          />
+        </div>
+
+        {/* BUTTONS ON THE FAR RIGHT (optional) */}
+        {showAddBtn && (
+          <button
+            onClick={handleAdd}
+            style={{
+              background: "#2563eb",
+              color: "white",
+              padding: "10px 14px",
+              border: "none",
+              borderRadius: 8,
+              cursor: "pointer",
+              height: "fit-content",
+              marginLeft: "auto",
+            }}
+          >
+            + Add
+          </button>
+        )}
       </div>
-
-      {/* SEARCH */}
-      <input
-        placeholder="Search topic..."
-        value={query}
-        onChange={e => setQuery(e.target.value)}
-        style={{
-          width: 300,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ccc",
-          marginBottom: 18
-        }}
-      />
-
-      <button
-        onClick={() => {
-          setEditing(false);
-          setForm({
-            id: "",
-            name: "",
-            description: "",
-            prerequisites: [],
-            term: selectedTerm || "",
-          });
-          setShowModal(true);
-        }}
-        style={{
-          background: "#2563eb",
-          color: "white",
-          padding: "10px 16px",
-          border: "none",
-          borderRadius: 8,
-          marginLeft: 10,
-          cursor: "pointer"
-        }}
-      >
-        + Add Topic
-      </button>
 
       {/* MODAL */}
       {showModal && (
@@ -216,7 +235,7 @@ export default function Topics() {
               />
 
               {/* TERM */}
-              <label style={labelStyle}>Term / Grading period</label>
+              <label style={labelStyle}>Grading period</label>
               <select
                 style={inputStyle}
                 value={form.term}
