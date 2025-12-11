@@ -364,25 +364,6 @@ export default function TeacherContent() {
             }}
           />
         </div>
-
-        {/* BUTTONS ON THE FAR RIGHT (optional) */}
-        {showAddBtn && (
-          <button
-            onClick={handleAdd}
-            style={{
-              background: "#2563eb",
-              color: "white",
-              padding: "10px 14px",
-              border: "none",
-              borderRadius: 8,
-              cursor: "pointer",
-              height: "fit-content",
-              marginLeft: "auto",
-            }}
-          >
-            + Add
-          </button>
-        )}
       </div>
 
       {/* Add Content Modal (reused for adding any topic; preselect by clicking card button) */}
