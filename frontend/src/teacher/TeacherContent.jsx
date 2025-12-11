@@ -306,48 +306,67 @@ export default function TeacherContent() {
           alignItems: "flex-end",
           gap: 16,
           marginBottom: 20,
+          width: "100%",
         }}
       >
+        {/* LEFT GROUP: term + search share the row */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            gap: 16,
+            flexGrow: 1,
+          }}
+        >
+          {/* TERM DROPDOWN */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <label style={{ fontWeight: 600, marginBottom: 4 }}>
+              Grading period
+            </label>
 
-        {/* TERM DROPDOWN */}
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <label style={{ fontWeight: 600, marginBottom: 4 }}>Grading period</label>
+            <select
+              value={selectedTerm}
+              onChange={(e) => setSelectedTerm(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "1px solid #ccc",
+                minWidth: 150,
+                fontSize: 14,
+              }}
+            >
+              <option value="">Select term...</option>
+              <option value="1st">1st Grading</option>
+              <option value="2nd">2nd Grading</option>
+              <option value="3rd">3rd Grading</option>
+              <option value="4th">4th Grading</option>
+            </select>
+          </div>
 
-          <select
-            value={selectedTerm}
-            onChange={(e) => setSelectedTerm(e.target.value)}
-            style={{
-              padding: "8px 12px",
-              borderRadius: 8,
-              border: "1px solid #ccc",
-              minWidth: 150,   // DOES NOT stretch too wide
-              fontSize: 14,
-            }}
-          >
-            <option value="">Select term...</option>
-            <option value="1st">1st Grading</option>
-            <option value="2nd">2nd Grading</option>
-            <option value="3rd">3rd Grading</option>
-            <option value="4th">4th Grading</option>
-          </select>
-        </div>
-
-        {/* SEARCH BAR */}
-        <div style={{ flexGrow: 1 }}>
-          <label style={{ fontWeight: 600, marginBottom: 4, display: "block" }}>Search</label>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search topics..."
-            style={{
-              width: "100%",
-              maxWidth: 400,     // stops the search bar from being too wide
-              padding: "8px 12px",
-              borderRadius: 8,
-              border: "1px solid #ccc",
-              fontSize: 14,
-            }}
-          />
+          {/* SEARCH BAR */}
+          <div style={{ flexGrow: 1 }}>
+            <label
+              style={{
+                fontWeight: 600,
+                marginBottom: 4,
+                display: "block",
+              }}
+            >
+              Search
+            </label>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search topics..."
+              style={{
+                width: "100%",          // fill remaining space
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "1px solid #ccc",
+                fontSize: 14,
+              }}
+            />
+          </div>
         </div>
       </div>
 
