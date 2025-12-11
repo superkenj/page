@@ -6,7 +6,7 @@ const API_BASE = "https://page-jirk.onrender.com";
 export default function TeacherContent() {
   const [topics, setTopics] = useState([]);
   const [contents, setContents] = useState([]);
-  const [expanded, setExpanded] = useState({}); // { topicId: bool }
+  const [expanded, setExpanded] = useState({});
   const [loading, setLoading] = useState(true);
 
   // Add Content Modal
@@ -31,6 +31,9 @@ export default function TeacherContent() {
   // Search
   const [query, setQuery] = useState("");
 
+  // Global term filter
+  const [selectedTerm, setSelectedTerm] = useState("");
+
   useEffect(() => {
     loadAll();
   }, []);
@@ -54,12 +57,22 @@ export default function TeacherContent() {
     }
   }
 
+  function termRank(term) {
+    if (!term) return 999;
+    const map = { "1st": 1, "2nd": 2, "3rd": 3, "4th": 4 };
+    return map[term] ?? 999;
+  }
+
   // Group contents by topic (keep topics order sorted by prerequisites like Topics.jsx)
   const sortedTopics = useMemo(() => {
     return [...topics].sort((a, b) => {
-      const ap = a.prerequisites?.length || 0;
-      const bp = b.prerequisites?.length || 0;
-      return ap - bp;
+      const ta = termRank(a.term);
+      const tb = termRank(b.term);
+      if (ta !== tb) return ta - tb;
+
+      const oa = typeof a.order === "number" ? a.order : 999;
+      const ob = typeof b.order === "number" ? b.order : 999;
+      return oa - ob;
     });
   }, [topics]);
 
@@ -71,9 +84,11 @@ export default function TeacherContent() {
   }, [sortedTopics, contents]);
 
   // Visible topics by search
-  const visible = grouped.filter(t =>
-    t.name.toLowerCase().includes(query.toLowerCase()) ||
-    t.id.toLowerCase().includes(query.toLowerCase())
+  const visible = grouped.filter((t) =>
+    selectedTerm && t.term === selectedTerm && (
+      t.name.toLowerCase().includes(query.toLowerCase()) ||
+      t.id.toLowerCase().includes(query.toLowerCase())
+    )
   );
 
   // Modal helpers
@@ -283,17 +298,44 @@ export default function TeacherContent() {
   return (
     <div style={{ padding: 20, maxWidth: 1400, margin: "0 auto" }}>
       <h1 style={{ marginBottom: 10 }}>📚 Manage Learning Materials</h1>
-
+    
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 18 }}>
+        {/* ⬅️ TERM DROPDOWN */}
+        <div>
+          <label style={{ fontSize: 14, fontWeight: "bold", display: "block", marginBottom: 4 }}>
+            Term / Grading period
+          </label>
+          <select
+            value={selectedTerm}
+            onChange={(e) => setSelectedTerm(e.target.value)}
+            style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", minWidth: 180 }}
+          >
+            <option value="">-- Select term --</option>
+            <option value="1st">1st Grading</option>
+            <option value="2nd">2nd Grading</option>
+            <option value="3rd">3rd Grading</option>
+            <option value="4th">4th Grading</option>
+          </select>
+          <p style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+            Only topics in the selected term are shown. Topics follow their order within that term.
+          </p>
+        </div>
+
+        {/* SEARCH */}
         <input
           placeholder="Search topics..."
           value={query}
           onChange={e => setQuery(e.target.value)}
-          style={{ padding: 10, borderRadius: 8, border: "1px solid #ccc", width: 320 }}
+          style={{ padding: 10, borderRadius: 8, border: "1px solid #ccc", width: 320, marginLeft: 12 }}
         />
+
         <div style={{ marginLeft: "auto" }}>
           <button
             onClick={() => {
+              if (!selectedTerm) {
+                alert("Please select a grading period first.");
+                return;
+              }
               setModalTopic("");
               setModalLinks([{ link: "", type: "video", description: "" }]);
               setShowAddModal(true);
@@ -325,8 +367,18 @@ export default function TeacherContent() {
               style={inputStyle}
             >
               <option value="">-- Select Topic --</option>
-              {topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              {topics
+                .filter((t) => !selectedTerm || t.term === selectedTerm) // ⬅️ only current term’s topics
+                .map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
             </select>
+
+            <p style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+              Topics follow the order set in the selected term. This resource will be shown under the chosen topic.
+            </p>
 
             {modalLinks.map((it, i) => (
               <div key={i} style={{ marginTop: 12, background: "#fff", padding: 10, borderRadius: 8, border: "1px solid #e6eefc" }}>

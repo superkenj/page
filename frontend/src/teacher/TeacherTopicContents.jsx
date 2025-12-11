@@ -385,6 +385,21 @@ export default function TeacherTopicContents() {
       <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 12 }}>
         <h1 style={{ margin: 0 }}>{topic.name}</h1>
 
+        {topic.term && (
+          <span
+            style={{
+              padding: "4px 10px",
+              borderRadius: 999,
+              background: "#eff6ff",
+              color: "#1d4ed8",
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            {topic.term} Grading
+          </span>
+        )}
+
         {/* Tab switcher */}
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           <button

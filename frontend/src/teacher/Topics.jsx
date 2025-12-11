@@ -3,10 +3,18 @@ const API_BASE = "https://page-jirk.onrender.com";
 
 export default function Topics() {
   const [topics, setTopics] = useState([]);
-  const [form, setForm] = useState({ id: "", name: "", description: "", prerequisites: [] });
+  const [form, setForm] = useState({
+    id: "",
+    name: "",
+    description: "",
+    prerequisites: [],
+    term: "",              // ⬅️ NEW
+  });
   const [editing, setEditing] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [query, setQuery] = useState("");
+
+  const [selectedTerm, setSelectedTerm] = useState("");
 
   useEffect(() => { load(); }, []);
 
@@ -34,11 +42,13 @@ export default function Topics() {
   async function save(e) {
     e.preventDefault();
     if (!form.name) return alert("Topic name required.");
+    if (!form.term) return alert("Please select a grading period.");
 
     const payload = {
       name: form.name,
       description: form.description,
       prerequisites: form.prerequisites,
+      term: form.term,
     };
 
     await fetch(`${API_BASE}/topics/${form.id}`, {
@@ -49,7 +59,7 @@ export default function Topics() {
 
     setShowModal(false);
     setEditing(false);
-    setForm({ id: "", name: "", description: "", prerequisites: [] });
+    setForm({ id: "", name: "", description: "", prerequisites: [], term: "" });
     await load();
   }
 
@@ -60,6 +70,7 @@ export default function Topics() {
       name: t.name,
       description: t.description || "",
       prerequisites: t.prerequisites || [],
+      term: t.term || "",
     });
     setShowModal(true);
   }
@@ -70,18 +81,30 @@ export default function Topics() {
     await load();
   }
 
+  function termRank(term) {
+    if (!term) return 999;
+    const map = { "1st": 1, "2nd": 2, "3rd": 3, "4th": 4 };
+    return map[term] ?? 999;
+  }
+
   const sortedTopics = useMemo(() => {
     return [...topics].sort((a, b) => {
-      const ap = a.prerequisites?.length || 0;
-      const bp = b.prerequisites?.length || 0;
-      return ap - bp;
+      const ta = termRank(a.term);
+      const tb = termRank(b.term);
+      if (ta !== tb) return ta - tb;
+
+      const oa = typeof a.order === "number" ? a.order : 999;
+      const ob = typeof b.order === "number" ? b.order : 999;
+      return oa - ob;
     });
   }, [topics]);
 
-  const visibleTopics = sortedTopics.filter(t =>
-    t.name.toLowerCase().includes(query.toLowerCase()) ||
-    t.id.toLowerCase().includes(query.toLowerCase())
-  );
+  const visibleTopics = sortedTopics
+    .filter(t => selectedTerm && t.term === selectedTerm) // ⬅️ only topics in the term
+    .filter(t =>
+      t.name.toLowerCase().includes(query.toLowerCase()) ||
+      t.id.toLowerCase().includes(query.toLowerCase())
+    );
 
   /* ✅ MAP OF ID → NAME FOR PREREQUISITE DISPLAY */
   const topicNameMap = useMemo(() => {
@@ -93,6 +116,34 @@ export default function Topics() {
   return (
     <div style={{ padding: 20, maxWidth: "1400px", margin: "0 auto", width: "100%" }}>
       <h1>Topics</h1>
+
+      {/* TERM FILTER */}
+      <div style={{ marginBottom: 12, display: "flex", gap: 12, alignItems: "center" }}>
+        <div>
+          <label style={{ fontSize: 14, fontWeight: "bold", display: "block", marginBottom: 4 }}>
+            Term / Grading period
+          </label>
+          <select
+            value={selectedTerm}
+            onChange={(e) => setSelectedTerm(e.target.value)}
+            style={{
+              padding: 8,
+              borderRadius: 8,
+              border: "1px solid #ccc",
+              minWidth: 200,
+            }}
+          >
+            <option value="">-- Select term --</option>
+            <option value="1st">1st Grading</option>
+            <option value="2nd">2nd Grading</option>
+            <option value="3rd">3rd Grading</option>
+            <option value="4th">4th Grading</option>
+          </select>
+          <p style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+            Topics appear in the order they will be tackled consecutively within the selected term.
+          </p>
+        </div>
+      </div>
 
       {/* SEARCH */}
       <input
@@ -111,7 +162,13 @@ export default function Topics() {
       <button
         onClick={() => {
           setEditing(false);
-          setForm({ id: "", name: "", description: "", prerequisites: [] });
+          setForm({
+            id: "",
+            name: "",
+            description: "",
+            prerequisites: [],
+            term: selectedTerm || "",
+          });
           setShowModal(true);
         }}
         style={{
@@ -158,6 +215,23 @@ export default function Topics() {
                 onChange={e => setField("id", e.target.value)}
               />
 
+              {/* TERM */}
+              <label style={labelStyle}>Term / Grading period</label>
+              <select
+                style={inputStyle}
+                value={form.term}
+                onChange={(e) => setField("term", e.target.value)}
+              >
+                <option value="">-- Select term --</option>
+                <option value="1st">1st Grading</option>
+                <option value="2nd">2nd Grading</option>
+                <option value="3rd">3rd Grading</option>
+                <option value="4th">4th Grading</option>
+              </select>
+              <p style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+                The order within this term decides how topics will be tackled consecutively.
+              </p>
+
               {/* DESCRIPTION */}
               <label style={labelStyle}>Description</label>
               <textarea
@@ -199,6 +273,12 @@ export default function Topics() {
             </form>
           </div>
         </div>
+      )}
+
+      {!selectedTerm && (
+        <p style={{ marginTop: 16, color: "#6b7280" }}>
+          Select a grading period to view topics.
+        </p>
       )}
 
       {/* TOPIC CARDS */}
