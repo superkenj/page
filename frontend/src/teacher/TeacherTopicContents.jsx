@@ -572,6 +572,118 @@ export default function TeacherTopicContents() {
     }
   }
 
+  const pageWrap = {
+    minHeight: "100vh",
+    background: "#f6f8fc",
+    padding: "24px 12px",
+  };
+
+  const shell = {
+    maxWidth: 1100,
+    margin: "0 auto",
+  };
+
+  const headerCard = {
+    background: "#fff",
+    border: "1px solid #e5e7eb",
+    borderRadius: 18,
+    padding: 18,
+    boxShadow: "0 12px 30px rgba(15, 23, 42, 0.06)",
+  };
+
+  const topBar = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    marginBottom: 14,
+  };
+
+  const titleRow = {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 16,
+    flexWrap: "wrap",
+  };
+
+  const leftTitle = { minWidth: 260 };
+
+  const actionsRow = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    marginTop: 16,
+  };
+
+  const actionGroup = {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
+  };
+
+  const pillTabs = {
+    display: "flex",
+    gap: 8,
+    padding: 6,
+    borderRadius: 999,
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+  };
+
+  const tabBtn = (active, tone = "blue") => ({
+    padding: "10px 14px",
+    borderRadius: 999,
+    border: active ? "1px solid transparent" : "1px solid transparent",
+    background: active
+      ? (tone === "teal" ? "#0f766e" : "#2563eb")
+      : "transparent",
+    color: active ? "#fff" : "#0f172a",
+    fontWeight: 700,
+    cursor: "pointer",
+    boxShadow: active ? "0 10px 18px rgba(2, 6, 23, 0.18)" : "none",
+  });
+
+  const backBtn = {
+    background: "linear-gradient(180deg, #0f172a 0%, #111827 100%)",
+    color: "#fff",
+    border: "none",
+    padding: "10px 14px",
+    borderRadius: 999,
+    cursor: "pointer",
+    fontWeight: 700,
+    boxShadow: "0 10px 18px rgba(2, 6, 23, 0.20)",
+  };
+
+  const contentArea = {
+    maxWidth: 980,
+    margin: "18px auto 0",
+  };
+
+  const sectionCard = {
+    background: "#fff",
+    border: "1px solid #e5e7eb",
+    borderRadius: 16,
+    padding: 16,
+    boxShadow: "0 10px 22px rgba(15, 23, 42, 0.05)",
+    marginBottom: 14,
+  };
+
+  const textareaStyle = {
+    width: "100%",
+    boxSizing: "border-box",
+    resize: "vertical",          // ✅ prevents sideways overflow
+    maxWidth: "100%",            // ✅ never exceed container
+    border: "1px solid #cbd5e1",
+    borderRadius: 12,
+    padding: 12,
+    outline: "none",
+  };
+
   // ---------------- Render ----------------
   if (!topic) return <div style={{ padding: 20 }}>Loading...</div>;
 
@@ -669,51 +781,54 @@ export default function TeacherTopicContents() {
           </div>
 
           {/* Header action row */}
-          <div style={actionRow}>
-            <button onClick={openScheduleModal} style={{ ...actionBtn, background: "#06b6d4" }}>
-              🗓 Schedule
-            </button>
+          <div style={{ ...actionRow, justifyContent: "space-between" }}>
+            {/* LEFT actions: Add Resource first, then Schedule */}
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              {tab === "content" && (
+                <button onClick={() => setShowAddModal(true)} style={{ ...actionBtn, background: "#2563eb" }}>
+                  ➕ Add Resource
+                </button>
+              )}
+
+              <button onClick={openScheduleModal} style={{ ...actionBtn, background: "#06b6d4" }}>
+                🗓 Manage Schedule
+              </button>
+
+              {tab === "assessment" && (
+                <>
+                  <button onClick={addQuestion} style={{ ...actionBtn, background: "#16a34a" }}>
+                    + Add question
+                  </button>
+                  <button
+                    onClick={saveAssessment}
+                    disabled={savingAssessment}
+                    style={{ ...actionBtn, background: "#2563eb" }}
+                  >
+                    Save Assessment
+                  </button>
+                </>
+              )}
+
+              {tab === "practice" && (
+                <>
+                  <button onClick={addPracticeQuestion} style={{ ...actionBtn, background: "#0f766e" }}>
+                    + Add practice question
+                  </button>
+                  <button
+                    onClick={savePractice}
+                    disabled={savingPractice}
+                    style={{ ...actionBtn, background: "#0f766e" }}
+                  >
+                    Save Practice
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* RIGHT action: Delete Topic replaces the old Add Resource position */}
             <button onClick={deleteTopic} style={{ ...actionBtn, background: "#ef4444" }}>
               🗑 Delete Topic
             </button>
-
-            <div style={{ flex: 1 }} />
-            
-            {tab === "content" && (
-              <button onClick={() => setShowAddModal(true)} style={{ ...actionBtn, background: "#2563eb" }}>
-                ➕ Add Resource
-              </button>
-            )}
-
-            {tab === "assessment" && (
-              <>
-                <button onClick={addQuestion} style={{ ...actionBtn, background: "#16a34a" }}>
-                  + Add question
-                </button>
-                <button
-                  onClick={saveAssessment}
-                  disabled={savingAssessment}
-                  style={{ ...actionBtn, background: "#2563eb" }}
-                >
-                  Save Assessment
-                </button>
-              </>
-            )}
-
-            {tab === "practice" && (
-              <>
-                <button onClick={addPracticeQuestion} style={{ ...actionBtn, background: "#0f766e" }}>
-                  + Add practice question
-                </button>
-                <button
-                  onClick={savePractice}
-                  disabled={savingPractice}
-                  style={{ ...actionBtn, background: "#0f766e" }}
-                >
-                  Save Practice
-                </button>
-              </>
-            )}
           </div>
         </div>
 
@@ -825,562 +940,660 @@ export default function TeacherTopicContents() {
           </div>
         )}
 
-        {/* CONTENT TAB (unchanged) */}
-        {tab === "content" && (
-          <>
-            <div
-              style={{
-                background: "#ffffff",
-                borderRadius: 18,
-                padding: 18,
-                boxShadow: "0 10px 24px rgba(15, 23, 42, 0.06)",
-                border: "1px solid #e2e8f0",
-                marginBottom: 16,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: 18 }}>Teacher Discussion</h3>
-                  <div style={{ color: "#64748b", fontSize: 13, marginTop: 4 }}>
-                    Notes you want to discuss while teaching this topic (visible to teachers only).
+        {/* Centered main content area (tabs content) */}
+        <div style={{ maxWidth: 980, margin: "0 auto" }}>
+
+          {/* CONTENT TAB (unchanged) */}
+          {tab === "content" && (
+            <>
+              <div
+                style={{
+                  background: "#ffffff",
+                  borderRadius: 18,
+                  padding: 18,
+                  boxShadow: "0 10px 24px rgba(15, 23, 42, 0.06)",
+                  border: "1px solid #e2e8f0",
+                  marginBottom: 16,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 18 }}>Teacher Discussion</h3>
+                    <div style={{ color: "#64748b", fontSize: 13, marginTop: 4 }}>
+                      Notes you want to discuss while teaching this topic (visible to teachers only).
+                    </div>
                   </div>
+
+                  <button
+                    onClick={saveDiscussion}
+                    disabled={savingDiscussion}
+                    style={{
+                      background: "#2563eb",
+                      color: "#fff",
+                      border: "none",
+                      padding: "10px 14px",
+                      borderRadius: 12,
+                      cursor: "pointer",
+                      fontWeight: 800,
+                      opacity: savingDiscussion ? 0.7 : 1,
+                    }}
+                  >
+                    {savingDiscussion ? "Saving..." : "Save Discussion"}
+                  </button>
                 </div>
 
-                <button
-                  onClick={saveDiscussion}
-                  disabled={savingDiscussion}
+                <textarea
+                  value={discussion}
+                  onChange={(e) => setDiscussion(e.target.value)}
+                  placeholder="Write your discussion points here..."
                   style={{
-                    background: "#2563eb",
-                    color: "#fff",
-                    border: "none",
-                    padding: "10px 14px",
+                    width: "100%",
+                    maxWidth: "100%",
+                    boxSizing: "border-box",
+                    marginTop: 12,
+                    padding: 12,
                     borderRadius: 12,
-                    cursor: "pointer",
-                    fontWeight: 800,
-                    opacity: savingDiscussion ? 0.7 : 1,
+                    border: "1px solid #cbd5e1",
+                    minHeight: 120,
+                    resize: "vertical",
+                    outline: "none",
+                    lineHeight: 1.6,
                   }}
-                >
-                  {savingDiscussion ? "Saving..." : "Save Discussion"}
-                </button>
+                />
               </div>
 
-              <textarea
-                value={discussion}
-                onChange={(e) => setDiscussion(e.target.value)}
-                placeholder="Write your discussion points here..."
-                style={{
-                  width: "100%",
-                  marginTop: 12,
-                  padding: 12,
-                  borderRadius: 12,
-                  border: "1px solid #cbd5e1",
-                  minHeight: 120,
-                  resize: "vertical",
-                  outline: "none",
-                  lineHeight: 1.6,
-                }}
-              />
-            </div>
-
-            {contents.length === 0 ? (
-              <p>No materials yet.</p>
-            ) : (
-              contents.map((m) => (
-                <div
-                  key={m.id}
-                  style={{
-                    background: "#f9fafb",
-                    borderRadius: 10,
-                    padding: 16,
-                    marginBottom: 12,
-                    boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-                    width: "100%",
-                    maxWidth: 980,
-                    margin: "0 auto 16px auto",
-                  }}
-                >
-                  {/* EDIT MODE */}
-                  {editingId === m.id ? (
-                    <div>
-                      <h3 style={{ marginBottom: 10 }}>Editing Resource</h3>
-                      <label style={{ display: "block", fontWeight: 600 }}>Type</label>
-                      <select
-                        value={editData.type}
-                        onChange={(e) => setEditData({ ...editData, type: e.target.value })}
-                        style={{
-                          marginBottom: 8,
-                          padding: 6,
-                          borderRadius: 4,
-                          width: "100%",
-                        }}
-                      >
-                        <option value="video">Video</option>
-                        <option value="presentation">Presentation</option>
-                        <option value="pdf">PDF</option>
-                        <option value="link">Link</option>
-                      </select>
-
-                      <label style={{ display: "block", fontWeight: 600 }}>Link</label>
-                      <input
-                        type="text"
-                        value={editData.link}
-                        onChange={(e) => setEditData({ ...editData, link: e.target.value })}
-                        style={{
-                          width: "100%",
-                          marginBottom: 8,
-                          padding: 6,
-                          borderRadius: 4,
-                          border: "1px solid #ccc",
-                        }}
-                      />
-
-                      <label style={{ display: "block", fontWeight: 600 }}>Description</label>
-                      <textarea
-                        rows={2}
-                        value={editData.description}
-                        onChange={(e) =>
-                          setEditData({ ...editData, description: e.target.value })
-                        }
-                        style={{
-                          width: "100%",
-                          padding: 6,
-                          borderRadius: 4,
-                          border: "1px solid #ccc",
-                          marginBottom: 10,
-                        }}
-                      />
-
-                      <button
-                        onClick={() => saveEdit(m.id)}
-                        style={{
-                          background: "#16a34a",
-                          color: "white",
-                          border: "none",
-                          padding: "6px 12px",
-                          borderRadius: 6,
-                          marginRight: 8,
-                        }}
-                      >
-                        💾 Save
-                      </button>
-                      <button
-                        onClick={cancelEdit}
-                        style={{
-                          background: "#9ca3af",
-                          color: "white",
-                          border: "none",
-                          padding: "6px 12px",
-                          borderRadius: 6,
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <h3 style={{ marginBottom: 8 }}>{m.type.toUpperCase()}</h3>
-                      <p style={{ marginBottom: 8 }}>{m.description}</p>
-
-                      {/* PREVIEW AREA */}
-                      {m.type === "video" && (
-                        <div
+              {contents.length === 0 ? (
+                <p>No materials yet.</p>
+              ) : (
+                contents.map((m) => (
+                  <div
+                    key={m.id}
+                    style={{
+                      background: "#ffffff",
+                      borderRadius: 18,
+                      padding: 18,
+                      margin: "0 auto 16px auto",
+                      border: "1px solid #e2e8f0",
+                      boxShadow: "0 10px 24px rgba(15, 23, 42, 0.06)",
+                      width: "100%",
+                      maxWidth: 980,
+                    }}
+                  >
+                    {/* EDIT MODE */}
+                    {editingId === m.id ? (
+                      <div>
+                        <h3 style={{ marginBottom: 10 }}>Editing Resource</h3>
+                        <label style={{ display: "block", fontWeight: 600 }}>Type</label>
+                        <select
+                          value={editData.type}
+                          onChange={(e) => setEditData({ ...editData, type: e.target.value })}
                           style={{
-                            position: "relative",
-                            paddingBottom: "56.25%", // 16:9 aspect ratio
-                            height: 0,
-                            overflow: "hidden",
-                            borderRadius: 6,
                             marginBottom: 8,
+                            padding: 6,
+                            borderRadius: 4,
+                            width: "100%",
                           }}
                         >
-                          <iframe
-                            src={m.link.replace("watch?v=", "embed/")}
-                            title="Video"
-                            frameBorder="0"
-                            allowFullScreen
-                            style={{
-                              position: "absolute",
-                              top: 0,
-                              left: 0,
-                              width: "100%",
-                              height: "100%",
-                              borderRadius: 6,
-                            }}
-                          />
-                        </div>
-                      )}
+                          <option value="video">Video</option>
+                          <option value="presentation">Presentation</option>
+                          <option value="pdf">PDF</option>
+                          <option value="link">Link</option>
+                        </select>
 
-                      {m.type === "presentation" && (
-                        <iframe
-                          src={m.link}
-                          width="100%"
-                          height="400"
+                        <label style={{ display: "block", fontWeight: 600 }}>Link</label>
+                        <input
+                          type="text"
+                          value={editData.link}
+                          onChange={(e) => setEditData({ ...editData, link: e.target.value })}
                           style={{
-                            border: "none",
-                            borderRadius: 6,
+                            width: "100%",
                             marginBottom: 8,
-                            maxWidth: 720,
+                            padding: 6,
+                            borderRadius: 4,
+                            border: "1px solid #ccc",
                           }}
                         />
-                      )}
-                      {m.type === "pdf" && (
-                        <iframe
-                          src={m.link}
-                          width="100%"
-                          height="500"
+
+                        <label style={{ display: "block", fontWeight: 600 }}>Description</label>
+                        <textarea
+                          rows={2}
+                          value={editData.description}
+                          onChange={(e) =>
+                            setEditData({ ...editData, description: e.target.value })
+                          }
                           style={{
-                            border: "none",
-                            borderRadius: 6,
-                            marginBottom: 8,
-                            maxWidth: 720,
+                            width: "100%",
+                            padding: 6,
+                            borderRadius: 4,
+                            border: "1px solid #ccc",
+                            marginBottom: 10,
                           }}
                         />
-                      )}
-                      {m.type === "link" && (
-                        <a href={m.link} target="_blank" rel="noreferrer">
-                          Open Resource ↗
-                        </a>
-                      )}
 
-                      <div style={{ marginTop: 10 }}>
                         <button
-                          onClick={() => startEdit(m)}
+                          onClick={() => saveEdit(m.id)}
                           style={{
-                            background: "#3b82f6",
+                            background: "#16a34a",
                             color: "white",
                             border: "none",
-                            padding: "6px 10px",
+                            padding: "6px 12px",
                             borderRadius: 6,
                             marginRight: 8,
                           }}
                         >
-                          ✏️ Edit
+                          💾 Save
                         </button>
                         <button
-                          onClick={() => deleteContent(m.id)}
+                          onClick={cancelEdit}
                           style={{
-                            background: "#dc2626",
+                            background: "#9ca3af",
                             color: "white",
                             border: "none",
-                            padding: "6px 10px",
+                            padding: "6px 12px",
                             borderRadius: 6,
                           }}
                         >
-                          🗑️ Delete
+                          Cancel
                         </button>
                       </div>
-                    </>
-                  )}
-                </div>
-              ))
-            )}
-          </>
-        )}
+                    ) : (
+                      <>
+                        <h3 style={{ marginBottom: 8 }}>{m.type.toUpperCase()}</h3>
+                        <p style={{ marginBottom: 8 }}>{m.description}</p>
 
-        {/* ASSESSMENT TAB */}
-        {tab === "assessment" && (
-          <div style={{ maxWidth: 900 }}>
-            {assessmentLoading ? (
-              <div>Loading assessment...</div>
-            ) : (
-              <>
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ display: "block", fontWeight: 600 }}>Title</label>
-                  <input
-                    value={assessment?.title || ""}
-                    onChange={(e) => setAssessment((a) => ({ ...a, title: e.target.value }))}
-                    style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc", marginBottom: 8 }}
-                  />
-
-                  <label style={{ display: "block", fontWeight: 600 }}>Instructions</label>
-                  <textarea
-                    value={assessment?.instructions || ""}
-                    onChange={(e) => setAssessment((a) => ({ ...a, instructions: e.target.value }))}
-                    style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc", marginBottom: 8, minHeight: 80 }}
-                  />
-
-                  <label style={{ display: "block", fontWeight: 600 }}>Passing score (%)</label>
-                  <input
-                    type="number"
-                    value={assessment?.passing_score ?? 70}
-                    onChange={(e) => setAssessment((a) => ({ ...a, passing_score: Number(e.target.value) }))}
-                    style={{ width: 140, padding: 8, borderRadius: 6, border: "1px solid #ccc", marginBottom: 8 }}
-                  />
-                </div>
-
-                <hr />
-
-                <div>
-                  <h3>Questions</h3>
-                  {(assessment?.questions || []).length === 0 && (
-                    <div style={{ color: "#6b7280", marginBottom: 10 }}>No questions yet. Click “Add question”.</div>
-                  )}
-
-                  {(assessment?.questions || []).map((q, idx) => (
-                    <div key={q.question_id} style={{ border: "1px solid #eef2ff", padding: 10, borderRadius: 8, marginBottom: 10 }}>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-                        <strong style={{ minWidth: 140 }}>{`Q${idx + 1} — ${q.type}`}</strong>
-                        <select value={q.type} onChange={(e) => updateQuestion(idx, { type: e.target.value })} style={{ padding: 6, borderRadius: 6 }}>
-                          <option value="multiple_choice">Multiple Choice</option>
-                          <option value="numeric">Numeric</option>
-                          <option value="short_answer">Short Answer</option>
-                          <option value="ordering">Ordering</option>
-                        </select>
-                        <input
-                          type="number"
-                          value={q.points ?? 1}
-                          onChange={(e) => updateQuestion(idx, { points: Number(e.target.value || 1) })}
-                          style={{ width: 80, padding: 6, borderRadius: 6, marginLeft: "auto" }}
-                          title="Points"
-                        />
-                      </div>
-
-                      <input
-                        placeholder="Question text"
-                        value={q.question}
-                        onChange={(e) => updateQuestion(idx, { question: e.target.value })}
-                        style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc", marginBottom: 8 }}
-                      />
-
-                      {/* choices for multiple choice */}
-                      {q.type === "multiple_choice" && (
-                        <>
-                          {(q.choices || []).map((c, ci) => (
-                            <div key={ci} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-                              <input value={c} onChange={(e) => {
-                                const nc = [...q.choices]; nc[ci] = e.target.value; updateQuestion(idx, { choices: nc });
-                              }} style={{ flex: 1, padding: 8, borderRadius: 6, border: "1px solid #ccc" }} />
-                              <button onClick={() => {
-                                const nc = (q.choices || []).filter((_, i) => i !== ci);
-                                updateQuestion(idx, { choices: nc });
-                              }} style={{ background: "#ef4444", color: "#fff", borderRadius: 6, border: "none", padding: "6px 8px" }}>✖</button>
-                            </div>
-                          ))}
-                          <div style={{ marginBottom: 8 }}>
-                            <button onClick={() => updateQuestion(idx, { choices: [...(q.choices || []), ""] })} style={{ background: "#2563eb", color: "#fff", padding: "6px 8px", border: "none", borderRadius: 6 }}>+ Add choice</button>
+                        {/* PREVIEW AREA */}
+                        {m.type === "video" && (
+                          <div
+                            style={{
+                              position: "relative",
+                              paddingBottom: "56.25%", // 16:9 aspect ratio
+                              height: 0,
+                              overflow: "hidden",
+                              borderRadius: 6,
+                              marginBottom: 8,
+                            }}
+                          >
+                            <iframe
+                              src={m.link.replace("watch?v=", "embed/")}
+                              title="Video"
+                              frameBorder="0"
+                              allowFullScreen
+                              style={{
+                                position: "absolute",
+                                top: 0,
+                                left: 0,
+                                width: "100%",
+                                height: "100%",
+                                borderRadius: 6,
+                              }}
+                            />
                           </div>
+                        )}
 
-                          <div>
-                            <label style={{ display: "block", fontWeight: 600 }}>Correct answer (exact match)</label>
-                            <input value={q.answer || ""} onChange={(e) => updateQuestion(idx, { answer: e.target.value })} style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc" }} />
-                          </div>
-                        </>
-                      )}
+                        {m.type === "presentation" && (
+                          <iframe
+                            src={m.link}
+                            width="100%"
+                            height="400"
+                            style={{
+                              border: "none",
+                              borderRadius: 6,
+                              marginBottom: 8,
+                              maxWidth: 720,
+                            }}
+                          />
+                        )}
+                        {m.type === "pdf" && (
+                          <iframe
+                            src={m.link}
+                            width="100%"
+                            height="500"
+                            style={{
+                              border: "none",
+                              borderRadius: 6,
+                              marginBottom: 8,
+                              maxWidth: 720,
+                            }}
+                          />
+                        )}
+                        {m.type === "link" && (
+                          <a href={m.link} target="_blank" rel="noreferrer">
+                            Open Resource ↗
+                          </a>
+                        )}
 
-                      {/* ordering hint */}
-                      {q.type === "ordering" && (
-                        <>
-                          <p style={{ color: "#6b7280", marginTop: 8 }}>For ordering questions, provide `correct_order` as a JSON array in the teacher UI (use choices to define items, then set correct_order to the correct array order).</p>
-                          <label>Choices (items)</label>
-                          {(q.choices || []).map((c, ci) => (
-                            <input key={ci} value={c} onChange={(e) => {
-                              const nc = [...q.choices]; nc[ci] = e.target.value; updateQuestion(idx, { choices: nc });
-                            }} style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc", marginBottom: 6 }} />
-                          ))}
-                          <div style={{ marginBottom: 8 }}>
-                            <button onClick={() => updateQuestion(idx, { choices: [...(q.choices || []), ""] })} style={{ background: "#2563eb", color: "#fff", padding: "6px 8px", border: "none", borderRadius: 6 }}>+ Add item</button>
-                          </div>
-
-                          <label>Correct order (JSON array)</label>
-                          <input value={JSON.stringify(q.correct_order || q.answer || [])} onChange={(e) => {
-                            // allow typing JSON
-                            try {
-                              const parsed = JSON.parse(e.target.value);
-                              updateQuestion(idx, { correct_order: parsed });
-                            } catch (err) {
-                              // keep as string until valid json - do nothing
-                            }
-                          }} style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc" }} />
-                        </>
-                      )}
-
-                      {q.type === "short_answer" && (
-                        <>
-                          <label style={{ display: "block", fontWeight: 600 }}>Answer (exact)</label>
-                          <input value={q.answer || ""} onChange={(e) => updateQuestion(idx, { answer: e.target.value })} style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc" }} />
-                        </>
-                      )}
-
-                      {q.type === "numeric" && (
-                        <>
-                          <label style={{ display: "block", fontWeight: 600 }}>Numeric answer</label>
-                          <input type="number" value={q.answer || ""} onChange={(e) => updateQuestion(idx, { answer: e.target.value })} style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc" }} />
-                        </>
-                      )}
-
-                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                        <button onClick={() => removeQuestion(idx)} style={{ background: "#ef4444", color: "#fff", border: "none", padding: "6px 8px", borderRadius: 6 }}>Remove</button>
-                      </div>
-                    </div>
-                  ))}
-
-                  <div style={{ marginTop: 10 }}>
-                    <button onClick={addQuestion} style={{ background: "#16a34a", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 6 }}>+ Add question</button>
+                        <div style={{ marginTop: 10 }}>
+                          <button
+                            onClick={() => startEdit(m)}
+                            style={{
+                              background: "#3b82f6",
+                              color: "white",
+                              border: "none",
+                              padding: "6px 10px",
+                              borderRadius: 6,
+                              marginRight: 8,
+                            }}
+                          >
+                            ✏️ Edit
+                          </button>
+                          <button
+                            onClick={() => deleteContent(m.id)}
+                            style={{
+                              background: "#dc2626",
+                              color: "white",
+                              border: "none",
+                              padding: "6px 10px",
+                              borderRadius: 6,
+                            }}
+                          >
+                            🗑️ Delete
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
+                ))
+              )}
+            </>
+          )}
 
-        {/* PRACTICE TAB */}
-        {tab === "practice" && (
-          <div style={{ maxWidth: 900 }}>
-            {practiceLoading ? (
-              <div>Loading practice...</div>
-            ) : !practice ? (
-              <div>No practice configuration loaded.</div>
-            ) : (
-              <>
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ display: "block", fontWeight: 600 }}>Title</label>
-                  <input
-                    value={practice.title || ""}
-                    onChange={(e) =>
-                      setPractice((p) => ({ ...(p || {}), title: e.target.value }))
-                    }
-                    style={{
-                      width: "100%",
-                      padding: 8,
-                      borderRadius: 6,
-                      border: "1px solid #ccc",
-                      marginBottom: 8,
-                    }}
-                  />
+          {/* ASSESSMENT TAB */}
+          {tab === "assessment" && (
+            <div style={{ maxWidth: 900 }}>
+              {assessmentLoading ? (
+                <div>Loading assessment...</div>
+              ) : (
+                <>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: "block", fontWeight: 600 }}>Title</label>
+                    <input
+                      value={assessment?.title || ""}
+                      onChange={(e) => setAssessment((a) => ({ ...a, title: e.target.value }))}
+                      style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc", marginBottom: 8 }}
+                    />
 
-                  <label style={{ display: "block", fontWeight: 600 }}>
-                    Instructions (shown before practice)
-                  </label>
-                  <textarea
-                    value={practice.instructions || ""}
-                    onChange={(e) =>
-                      setPractice((p) => ({
-                        ...(p || {}),
-                        instructions: e.target.value,
-                      }))
-                    }
-                    style={{
-                      width: "100%",
-                      padding: 8,
-                      borderRadius: 6,
-                      border: "1px solid #ccc",
-                      marginBottom: 8,
-                      minHeight: 80,
-                    }}
-                  />
+                    <label style={{ display: "block", fontWeight: 600 }}>Instructions</label>
+                    <textarea
+                      value={assessment?.instructions || ""}
+                      onChange={(e) => setAssessment((a) => ({ ...a, instructions: e.target.value }))}
+                      style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc", marginBottom: 8, minHeight: 80 }}
+                    />
 
-                  <label style={{ display: "block", fontWeight: 600 }}>
-                    Passing score (%) for a practice session
-                  </label>
-                  <input
-                    type="number"
-                    value={practice.passing_score ?? 70}
-                    onChange={(e) =>
-                      setPractice((p) => ({
-                        ...(p || {}),
-                        passing_score: Number(e.target.value),
-                      }))
-                    }
-                    style={{
-                      width: 160,
-                      padding: 8,
-                      borderRadius: 6,
-                      border: "1px solid #ccc",
-                      marginBottom: 8,
-                    }}
-                  />
-                </div>
+                    <label style={{ display: "block", fontWeight: 600 }}>Passing score (%)</label>
+                    <input
+                      type="number"
+                      value={assessment?.passing_score ?? 70}
+                      onChange={(e) => setAssessment((a) => ({ ...a, passing_score: Number(e.target.value) }))}
+                      style={{ width: 140, padding: 8, borderRadius: 6, border: "1px solid #ccc", marginBottom: 8 }}
+                    />
+                  </div>
 
-                <hr />
+                  <hr />
 
-                <div>
-                  <h3>Practice Questions (bank)</h3>
-                  {(practice.questions || []).length === 0 && (
-                    <div style={{ color: "#6b7280", marginBottom: 10 }}>
-                      No practice questions yet. Click “Add practice question”.
+                  <div>
+                    <h3>Questions</h3>
+                    {(assessment?.questions || []).length === 0 && (
+                      <div style={{ color: "#6b7280", marginBottom: 10 }}>No questions yet. Click “Add question”.</div>
+                    )}
+
+                    {(assessment?.questions || []).map((q, idx) => (
+                      <div key={q.question_id} style={{ border: "1px solid #eef2ff", padding: 10, borderRadius: 8, marginBottom: 10 }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                          <strong style={{ minWidth: 140 }}>{`Q${idx + 1} — ${q.type}`}</strong>
+                          <select value={q.type} onChange={(e) => updateQuestion(idx, { type: e.target.value })} style={{ padding: 6, borderRadius: 6 }}>
+                            <option value="multiple_choice">Multiple Choice</option>
+                            <option value="numeric">Numeric</option>
+                            <option value="short_answer">Short Answer</option>
+                            <option value="ordering">Ordering</option>
+                          </select>
+                          <input
+                            type="number"
+                            value={q.points ?? 1}
+                            onChange={(e) => updateQuestion(idx, { points: Number(e.target.value || 1) })}
+                            style={{ width: 80, padding: 6, borderRadius: 6, marginLeft: "auto" }}
+                            title="Points"
+                          />
+                        </div>
+
+                        <input
+                          placeholder="Question text"
+                          value={q.question}
+                          onChange={(e) => updateQuestion(idx, { question: e.target.value })}
+                          style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc", marginBottom: 8 }}
+                        />
+
+                        {/* choices for multiple choice */}
+                        {q.type === "multiple_choice" && (
+                          <>
+                            {(q.choices || []).map((c, ci) => (
+                              <div key={ci} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                                <input value={c} onChange={(e) => {
+                                  const nc = [...q.choices]; nc[ci] = e.target.value; updateQuestion(idx, { choices: nc });
+                                }} style={{ flex: 1, padding: 8, borderRadius: 6, border: "1px solid #ccc" }} />
+                                <button onClick={() => {
+                                  const nc = (q.choices || []).filter((_, i) => i !== ci);
+                                  updateQuestion(idx, { choices: nc });
+                                }} style={{ background: "#ef4444", color: "#fff", borderRadius: 6, border: "none", padding: "6px 8px" }}>✖</button>
+                              </div>
+                            ))}
+                            <div style={{ marginBottom: 8 }}>
+                              <button onClick={() => updateQuestion(idx, { choices: [...(q.choices || []), ""] })} style={{ background: "#2563eb", color: "#fff", padding: "6px 8px", border: "none", borderRadius: 6 }}>+ Add choice</button>
+                            </div>
+
+                            <div>
+                              <label style={{ display: "block", fontWeight: 600 }}>Correct answer (exact match)</label>
+                              <input value={q.answer || ""} onChange={(e) => updateQuestion(idx, { answer: e.target.value })} style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc" }} />
+                            </div>
+                          </>
+                        )}
+
+                        {/* ordering hint */}
+                        {q.type === "ordering" && (
+                          <>
+                            <p style={{ color: "#6b7280", marginTop: 8 }}>For ordering questions, provide `correct_order` as a JSON array in the teacher UI (use choices to define items, then set correct_order to the correct array order).</p>
+                            <label>Choices (items)</label>
+                            {(q.choices || []).map((c, ci) => (
+                              <input key={ci} value={c} onChange={(e) => {
+                                const nc = [...q.choices]; nc[ci] = e.target.value; updateQuestion(idx, { choices: nc });
+                              }} style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc", marginBottom: 6 }} />
+                            ))}
+                            <div style={{ marginBottom: 8 }}>
+                              <button onClick={() => updateQuestion(idx, { choices: [...(q.choices || []), ""] })} style={{ background: "#2563eb", color: "#fff", padding: "6px 8px", border: "none", borderRadius: 6 }}>+ Add item</button>
+                            </div>
+
+                            <label>Correct order (JSON array)</label>
+                            <input value={JSON.stringify(q.correct_order || q.answer || [])} onChange={(e) => {
+                              // allow typing JSON
+                              try {
+                                const parsed = JSON.parse(e.target.value);
+                                updateQuestion(idx, { correct_order: parsed });
+                              } catch (err) {
+                                // keep as string until valid json - do nothing
+                              }
+                            }} style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc" }} />
+                          </>
+                        )}
+
+                        {q.type === "short_answer" && (
+                          <>
+                            <label style={{ display: "block", fontWeight: 600 }}>Answer (exact)</label>
+                            <input value={q.answer || ""} onChange={(e) => updateQuestion(idx, { answer: e.target.value })} style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc" }} />
+                          </>
+                        )}
+
+                        {q.type === "numeric" && (
+                          <>
+                            <label style={{ display: "block", fontWeight: 600 }}>Numeric answer</label>
+                            <input type="number" value={q.answer || ""} onChange={(e) => updateQuestion(idx, { answer: e.target.value })} style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc" }} />
+                          </>
+                        )}
+
+                        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                          <button onClick={() => removeQuestion(idx)} style={{ background: "#ef4444", color: "#fff", border: "none", padding: "6px 8px", borderRadius: 6 }}>Remove</button>
+                        </div>
+                      </div>
+                    ))}
+
+                    <div style={{ marginTop: 10 }}>
+                      <button onClick={addQuestion} style={{ background: "#16a34a", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 6 }}>+ Add question</button>
                     </div>
-                  )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
-                  {(practice.questions || []).map((q, idx) => (
-                    <div
-                      key={q.question_id || `p_${idx}`}
+          {/* PRACTICE TAB */}
+          {tab === "practice" && (
+            <div style={{ maxWidth: 900 }}>
+              {practiceLoading ? (
+                <div>Loading practice...</div>
+              ) : !practice ? (
+                <div>No practice configuration loaded.</div>
+              ) : (
+                <>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: "block", fontWeight: 600 }}>Title</label>
+                    <input
+                      value={practice.title || ""}
+                      onChange={(e) =>
+                        setPractice((p) => ({ ...(p || {}), title: e.target.value }))
+                      }
                       style={{
-                        border: "1px solid #ecfeff",
-                        padding: 10,
-                        borderRadius: 8,
-                        marginBottom: 10,
-                        background: "#f9fafb",
+                        width: "100%",
+                        padding: 8,
+                        borderRadius: 6,
+                        border: "1px solid #ccc",
+                        marginBottom: 8,
                       }}
-                    >
+                    />
+
+                    <label style={{ display: "block", fontWeight: 600 }}>
+                      Instructions (shown before practice)
+                    </label>
+                    <textarea
+                      value={practice.instructions || ""}
+                      onChange={(e) =>
+                        setPractice((p) => ({
+                          ...(p || {}),
+                          instructions: e.target.value,
+                        }))
+                      }
+                      style={{
+                        width: "100%",
+                        padding: 8,
+                        borderRadius: 6,
+                        border: "1px solid #ccc",
+                        marginBottom: 8,
+                        minHeight: 80,
+                      }}
+                    />
+
+                    <label style={{ display: "block", fontWeight: 600 }}>
+                      Passing score (%) for a practice session
+                    </label>
+                    <input
+                      type="number"
+                      value={practice.passing_score ?? 70}
+                      onChange={(e) =>
+                        setPractice((p) => ({
+                          ...(p || {}),
+                          passing_score: Number(e.target.value),
+                        }))
+                      }
+                      style={{
+                        width: 160,
+                        padding: 8,
+                        borderRadius: 6,
+                        border: "1px solid #ccc",
+                        marginBottom: 8,
+                      }}
+                    />
+                  </div>
+
+                  <hr />
+
+                  <div>
+                    <h3>Practice Questions (bank)</h3>
+                    {(practice.questions || []).length === 0 && (
+                      <div style={{ color: "#6b7280", marginBottom: 10 }}>
+                        No practice questions yet. Click “Add practice question”.
+                      </div>
+                    )}
+
+                    {(practice.questions || []).map((q, idx) => (
                       <div
+                        key={q.question_id || `p_${idx}`}
                         style={{
-                          display: "flex",
-                          gap: 8,
-                          alignItems: "center",
-                          marginBottom: 8,
+                          border: "1px solid #ecfeff",
+                          padding: 10,
+                          borderRadius: 8,
+                          marginBottom: 10,
+                          background: "#f9fafb",
                         }}
                       >
-                        <strong style={{ minWidth: 160 }}>{`P${idx + 1} — ${
-                          q.type || "multiple_choice"
-                        }`}</strong>
-                        <select
-                          value={q.type}
-                          onChange={(e) =>
-                            updatePracticeQuestion(idx, { type: e.target.value })
-                          }
-                          style={{ padding: 6, borderRadius: 6 }}
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 8,
+                            alignItems: "center",
+                            marginBottom: 8,
+                          }}
                         >
-                          <option value="multiple_choice">Multiple Choice</option>
-                          <option value="short_answer">Short Answer</option>
-                          <option value="numeric">Numeric</option>
-                          <option value="ordering">Ordering</option>
-                        </select>
+                          <strong style={{ minWidth: 160 }}>{`P${idx + 1} — ${
+                            q.type || "multiple_choice"
+                          }`}</strong>
+                          <select
+                            value={q.type}
+                            onChange={(e) =>
+                              updatePracticeQuestion(idx, { type: e.target.value })
+                            }
+                            style={{ padding: 6, borderRadius: 6 }}
+                          >
+                            <option value="multiple_choice">Multiple Choice</option>
+                            <option value="short_answer">Short Answer</option>
+                            <option value="numeric">Numeric</option>
+                            <option value="ordering">Ordering</option>
+                          </select>
+                          <input
+                            type="number"
+                            value={q.points ?? 1}
+                            onChange={(e) =>
+                              updatePracticeQuestion(idx, {
+                                points: Number(e.target.value || 1),
+                              })
+                            }
+                            style={{
+                              width: 80,
+                              padding: 6,
+                              borderRadius: 6,
+                              marginLeft: "auto",
+                            }}
+                            title="Points"
+                          />
+                        </div>
+
                         <input
-                          type="number"
-                          value={q.points ?? 1}
+                          placeholder="Question text"
+                          value={q.question || ""}
                           onChange={(e) =>
-                            updatePracticeQuestion(idx, {
-                              points: Number(e.target.value || 1),
-                            })
+                            updatePracticeQuestion(idx, { question: e.target.value })
                           }
                           style={{
-                            width: 80,
-                            padding: 6,
+                            width: "100%",
+                            padding: 8,
                             borderRadius: 6,
-                            marginLeft: "auto",
+                            border: "1px solid #ccc",
+                            marginBottom: 8,
                           }}
-                          title="Points"
                         />
-                      </div>
 
-                      <input
-                        placeholder="Question text"
-                        value={q.question || ""}
-                        onChange={(e) =>
-                          updatePracticeQuestion(idx, { question: e.target.value })
-                        }
-                        style={{
-                          width: "100%",
-                          padding: 8,
-                          borderRadius: 6,
-                          border: "1px solid #ccc",
-                          marginBottom: 8,
-                        }}
-                      />
+                        {/* MCQ */}
+                        {q.type === "multiple_choice" && (
+                          <>
+                            {(q.choices || []).map((c, ci) => (
+                              <div
+                                key={ci}
+                                style={{
+                                  display: "flex",
+                                  gap: 8,
+                                  marginBottom: 6,
+                                }}
+                              >
+                                <input
+                                  value={c}
+                                  onChange={(e) => {
+                                    const nc = [...(q.choices || [])];
+                                    nc[ci] = e.target.value;
+                                    updatePracticeQuestion(idx, { choices: nc });
+                                  }}
+                                  style={{
+                                    flex: 1,
+                                    padding: 8,
+                                    borderRadius: 6,
+                                    border: "1px solid #ccc",
+                                  }}
+                                />
+                                <button
+                                  onClick={() => {
+                                    const nc = [...(q.choices || [])];
+                                    nc.splice(ci, 1);
+                                    updatePracticeQuestion(idx, { choices: nc });
+                                  }}
+                                  style={{
+                                    background: "#ef4444",
+                                    color: "#fff",
+                                    borderRadius: 6,
+                                    border: "none",
+                                    padding: "6px 8px",
+                                  }}
+                                >
+                                  ✖
+                                </button>
+                              </div>
+                            ))}
+                            <div style={{ marginBottom: 8 }}>
+                              <button
+                                onClick={() =>
+                                  updatePracticeQuestion(idx, {
+                                    choices: [...(q.choices || []), ""],
+                                  })
+                                }
+                                style={{
+                                  background: "#2563eb",
+                                  color: "#fff",
+                                  padding: "6px 8px",
+                                  border: "none",
+                                  borderRadius: 6,
+                                }}
+                              >
+                                + Add choice
+                              </button>
+                            </div>
 
-                      {/* MCQ */}
-                      {q.type === "multiple_choice" && (
-                        <>
-                          {(q.choices || []).map((c, ci) => (
-                            <div
-                              key={ci}
+                            <div>
+                              <label
+                                style={{
+                                  display: "block",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                Correct answer (exact match)
+                              </label>
+                              <input
+                                value={q.answer || ""}
+                                onChange={(e) =>
+                                  updatePracticeQuestion(idx, {
+                                    answer: e.target.value,
+                                  })
+                                }
+                                style={{
+                                  width: "100%",
+                                  padding: 8,
+                                  borderRadius: 6,
+                                  border: "1px solid #ccc",
+                                }}
+                              />
+                            </div>
+                          </>
+                        )}
+
+                        {/* Ordering */}
+                        {q.type === "ordering" && (
+                          <>
+                            <p
                               style={{
-                                display: "flex",
-                                gap: 8,
-                                marginBottom: 6,
+                                color: "#6b7280",
+                                marginTop: 8,
+                                fontSize: 13,
                               }}
                             >
+                              Provide items as choices, then set the correct order
+                              as a JSON array.
+                            </p>
+                            {(q.choices || []).map((c, ci) => (
                               <input
+                                key={ci}
                                 value={c}
                                 onChange={(e) => {
                                   const nc = [...(q.choices || [])];
@@ -1388,57 +1601,68 @@ export default function TeacherTopicContents() {
                                   updatePracticeQuestion(idx, { choices: nc });
                                 }}
                                 style={{
-                                  flex: 1,
+                                  width: "100%",
                                   padding: 8,
                                   borderRadius: 6,
                                   border: "1px solid #ccc",
+                                  marginBottom: 6,
                                 }}
                               />
+                            ))}
+                            <div style={{ marginBottom: 8 }}>
                               <button
-                                onClick={() => {
-                                  const nc = [...(q.choices || [])];
-                                  nc.splice(ci, 1);
-                                  updatePracticeQuestion(idx, { choices: nc });
-                                }}
+                                onClick={() =>
+                                  updatePracticeQuestion(idx, {
+                                    choices: [...(q.choices || []), ""],
+                                  })
+                                }
                                 style={{
-                                  background: "#ef4444",
+                                  background: "#2563eb",
                                   color: "#fff",
-                                  borderRadius: 6,
-                                  border: "none",
                                   padding: "6px 8px",
+                                  border: "none",
+                                  borderRadius: 6,
                                 }}
                               >
-                                ✖
+                                + Add item
                               </button>
                             </div>
-                          ))}
-                          <div style={{ marginBottom: 8 }}>
-                            <button
-                              onClick={() =>
-                                updatePracticeQuestion(idx, {
-                                  choices: [...(q.choices || []), ""],
-                                })
-                              }
-                              style={{
-                                background: "#2563eb",
-                                color: "#fff",
-                                padding: "6px 8px",
-                                border: "none",
-                                borderRadius: 6,
+                            <label>Correct order (JSON array)</label>
+                            <input
+                              value={JSON.stringify(
+                                q.correct_order || q.answer || []
+                              )}
+                              onChange={(e) => {
+                                try {
+                                  const parsed = JSON.parse(e.target.value);
+                                  updatePracticeQuestion(idx, {
+                                    correct_order: parsed,
+                                  });
+                                } catch (err) {
+                                  // ignore invalid JSON while typing
+                                }
                               }}
-                            >
-                              + Add choice
-                            </button>
-                          </div>
+                              style={{
+                                width: "100%",
+                                padding: 8,
+                                borderRadius: 6,
+                                border: "1px solid #ccc",
+                              }}
+                            />
+                          </>
+                        )}
 
-                          <div>
+                        {/* Short answer */}
+                        {q.type === "short_answer" && (
+                          <>
                             <label
                               style={{
                                 display: "block",
                                 fontWeight: 600,
+                                marginTop: 6,
                               }}
                             >
-                              Correct answer (exact match)
+                              Answer (exact)
                             </label>
                             <input
                               value={q.answer || ""}
@@ -1454,179 +1678,77 @@ export default function TeacherTopicContents() {
                                 border: "1px solid #ccc",
                               }}
                             />
-                          </div>
-                        </>
-                      )}
+                          </>
+                        )}
 
-                      {/* Ordering */}
-                      {q.type === "ordering" && (
-                        <>
-                          <p
-                            style={{
-                              color: "#6b7280",
-                              marginTop: 8,
-                              fontSize: 13,
-                            }}
-                          >
-                            Provide items as choices, then set the correct order
-                            as a JSON array.
-                          </p>
-                          {(q.choices || []).map((c, ci) => (
-                            <input
-                              key={ci}
-                              value={c}
-                              onChange={(e) => {
-                                const nc = [...(q.choices || [])];
-                                nc[ci] = e.target.value;
-                                updatePracticeQuestion(idx, { choices: nc });
-                              }}
+                        {/* Numeric */}
+                        {q.type === "numeric" && (
+                          <>
+                            <label
                               style={{
-                                width: "100%",
-                                padding: 8,
-                                borderRadius: 6,
-                                border: "1px solid #ccc",
-                                marginBottom: 6,
+                                display: "block",
+                                fontWeight: 600,
+                                marginTop: 6,
                               }}
-                            />
-                          ))}
-                          <div style={{ marginBottom: 8 }}>
-                            <button
-                              onClick={() =>
+                            >
+                              Numeric answer
+                            </label>
+                            <input
+                              type="number"
+                              value={q.answer || ""}
+                              onChange={(e) =>
                                 updatePracticeQuestion(idx, {
-                                  choices: [...(q.choices || []), ""],
+                                  answer: e.target.value,
                                 })
                               }
                               style={{
-                                background: "#2563eb",
-                                color: "#fff",
-                                padding: "6px 8px",
-                                border: "none",
+                                width: "200px",
+                                padding: 8,
                                 borderRadius: 6,
+                                border: "1px solid #ccc",
                               }}
-                            >
-                              + Add item
-                            </button>
-                          </div>
-                          <label>Correct order (JSON array)</label>
-                          <input
-                            value={JSON.stringify(
-                              q.correct_order || q.answer || []
-                            )}
-                            onChange={(e) => {
-                              try {
-                                const parsed = JSON.parse(e.target.value);
-                                updatePracticeQuestion(idx, {
-                                  correct_order: parsed,
-                                });
-                              } catch (err) {
-                                // ignore invalid JSON while typing
-                              }
-                            }}
-                            style={{
-                              width: "100%",
-                              padding: 8,
-                              borderRadius: 6,
-                              border: "1px solid #ccc",
-                            }}
-                          />
-                        </>
-                      )}
+                            />
+                          </>
+                        )}
 
-                      {/* Short answer */}
-                      {q.type === "short_answer" && (
-                        <>
-                          <label
+                        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                          <button
+                            onClick={() => removePracticeQuestion(idx)}
                             style={{
-                              display: "block",
-                              fontWeight: 600,
-                              marginTop: 6,
+                              background: "#ef4444",
+                              color: "#fff",
+                              border: "none",
+                              padding: "6px 8px",
+                              borderRadius: 6,
                             }}
                           >
-                            Answer (exact)
-                          </label>
-                          <input
-                            value={q.answer || ""}
-                            onChange={(e) =>
-                              updatePracticeQuestion(idx, {
-                                answer: e.target.value,
-                              })
-                            }
-                            style={{
-                              width: "100%",
-                              padding: 8,
-                              borderRadius: 6,
-                              border: "1px solid #ccc",
-                            }}
-                          />
-                        </>
-                      )}
-
-                      {/* Numeric */}
-                      {q.type === "numeric" && (
-                        <>
-                          <label
-                            style={{
-                              display: "block",
-                              fontWeight: 600,
-                              marginTop: 6,
-                            }}
-                          >
-                            Numeric answer
-                          </label>
-                          <input
-                            type="number"
-                            value={q.answer || ""}
-                            onChange={(e) =>
-                              updatePracticeQuestion(idx, {
-                                answer: e.target.value,
-                              })
-                            }
-                            style={{
-                              width: "200px",
-                              padding: 8,
-                              borderRadius: 6,
-                              border: "1px solid #ccc",
-                            }}
-                          />
-                        </>
-                      )}
-
-                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                        <button
-                          onClick={() => removePracticeQuestion(idx)}
-                          style={{
-                            background: "#ef4444",
-                            color: "#fff",
-                            border: "none",
-                            padding: "6px 8px",
-                            borderRadius: 6,
-                          }}
-                        >
-                          Remove
-                        </button>
+                            Remove
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
 
-                  <div style={{ marginTop: 10 }}>
-                    <button
-                      onClick={addPracticeQuestion}
-                      style={{
-                        background: "#0f766e",
-                        color: "#fff",
-                        border: "none",
-                        padding: "8px 12px",
-                        borderRadius: 6,
-                      }}
-                    >
-                      + Add practice question
-                    </button>
+                    <div style={{ marginTop: 10 }}>
+                      <button
+                        onClick={addPracticeQuestion}
+                        style={{
+                          background: "#0f766e",
+                          color: "#fff",
+                          border: "none",
+                          padding: "8px 12px",
+                          borderRadius: 6,
+                        }}
+                      >
+                        + Add practice question
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
+                </>
+              )}
+            </div>
+          )}
+
+        </div>
       </div>
     </div>
   );
