@@ -1396,7 +1396,7 @@ app.post("/practice", async (req, res) => {
       topic_id: payload.topic_id,
       title: payload.title || "Practice",
       instructions: payload.instructions || "",
-      passing_score: Number(payload.passing_score ?? 70),
+      passing_score: Number(payload.passing_score ?? 60),
       questions: payload.questions.map((q, idx) => ({
         question_id: q.question_id || q.id || `${docId}_q${idx}`,
         type: q.type || "multiple_choice",
@@ -1524,7 +1524,7 @@ app.post("/practice/:topicId/submit", async (req, res) => {
     }
 
     const scorePercent = totalPoints ? Math.round((earnedPoints / totalPoints) * 100) : null;
-    const passingScore = Number(practice.passing_score ?? 70);
+    const passingScore = Number(practice.passing_score ?? 60);
     const passedPractice = scorePercent !== null ? scorePercent >= passingScore : false;
 
     // save practice submission for audit/analytics
@@ -1805,8 +1805,8 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
     // compute score % (rounded) or null if no points
     const scorePercent = totalPoints ? Math.round((earnedPoints / totalPoints) * 100) : null;
 
-    // passed? use assessment.passing_score or fallback to 70
-    const passingScore = Number(assessment.passing_score ?? assessment.passingScore ?? 70);
+    // passed? use assessment.passing_score or fallback to 60
+    const passingScore = Number(assessment.passing_score ?? assessment.passingScore ?? 60);
     const passed = (scorePercent !== null) ? (scorePercent >= passingScore) : false;
 
     // determine attempt number by counting previous submissions for this student+topic
