@@ -158,7 +158,7 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
       ...a,
       questions: [
         ...a.questions,
-        { question_id: `q_${Date.now()}`, type: "multiple_choice", question: "", choices: ["Option A", "Option B"], answer: "", points: 1 }
+        { question_id: `q_${Date.now()}`, type: "multiple_choice", question: "", choices: ["", ""], answer: "", points: 1 }
       ]
     }));
   }
@@ -233,7 +233,7 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
           question_id: `pr_${Date.now()}`,
           type: "multiple_choice",
           question: "",
-          choices: ["Option A", "Option B"],
+          choices: ["", ""],
           answer: ""
         }
       ]
@@ -455,6 +455,7 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
                         <div key={ci} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
                           <input
                             value={c}
+                            placeholder={`Option ${ci + 1}`}
                             onChange={e => {
                               const nc = [...(q.choices || [])];
                               nc[ci] = e.target.value;
@@ -624,6 +625,7 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
                           <div key={ci} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
                             <input
                               value={c}
+                              placeholder={`Option ${ci + 1}`}
                               onChange={e => {
                                 const nc = [...(q.choices || [])];
                                 nc[ci] = e.target.value;
