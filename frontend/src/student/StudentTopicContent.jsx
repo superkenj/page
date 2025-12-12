@@ -752,33 +752,37 @@ export default function StudentTopicContent() {
       {tab === "content" && (
         <>
           {/* Student Notes / Discussion (from teacher) */}
-          {topic?.discussion?.trim() ? (
-            <div
-              style={{
-                background: "#fff",
-                border: "1px solid #dbeafe",
-                borderRadius: 12,
-                padding: 18,
-                marginBottom: 16,
-                boxShadow: "0 3px 6px rgba(0,0,0,0.06)",
-              }}
-            >
-              <h2 style={{ marginTop: 0, marginBottom: 10, color: "#2563eb" }}>
-                🧾 Notes
-              </h2>
+          <div
+            style={{
+              background: "#fff",
+              border: "1px solid #dbeafe",
+              borderRadius: 12,
+              padding: 18,
+              marginBottom: 16,
+              boxShadow: "0 3px 6px rgba(0,0,0,0.06)",
+            }}
+          >
+            <h2 style={{ marginTop: 0, marginBottom: 10, color: "#2563eb" }}>
+              🧾 Notes
+            </h2>
 
+            {topic?.discussion?.trim() ? (
               <div
                 style={{
                   color: "#334155",
                   lineHeight: 1.7,
-                  whiteSpace: "pre-wrap", // keeps line breaks
+                  whiteSpace: "pre-wrap",
                   fontSize: 15,
                 }}
               >
                 {topic.discussion}
               </div>
-            </div>
-          ) : null}
+            ) : (
+              <div style={{ color: "#94a3b8", fontStyle: "italic", fontSize: 14 }}>
+                No notes yet.
+              </div>
+            )}
+          </div>
           
           <h2 style={{ marginBottom: 16, color: "#2563eb" }}>🎨 Learning Materials</h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 20 }}>
