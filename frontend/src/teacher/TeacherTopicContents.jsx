@@ -1,12 +1,14 @@
 // frontend/src/teacher/TeacherTopicContents.jsx
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 const API_BASE = "https://page-jirk.onrender.com";
 
 export default function TeacherTopicContents() {
   const { topicId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // --- existing state
   const [topic, setTopic] = useState(null);
@@ -130,6 +132,11 @@ export default function TeacherTopicContents() {
       mounted = false;
     };
   }, [tab, topicId, topic]);
+
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t === "content" || t === "assessment" || t === "practice") setTab(t);
+  }, [searchParams]);
 
   // ---------------- Existing content edit functions ----------------
   function startEdit(item) {
