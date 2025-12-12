@@ -26,6 +26,30 @@ const cardStyle = {
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc", boxSizing: "border-box" };
 
+const stickyHeaderStyle = {
+  position: "sticky",
+  top: 0,
+  zIndex: 50,
+  background: "#fff",
+  paddingBottom: 10,
+  marginBottom: 12,
+  borderBottom: "1px solid #e5e7eb",
+};
+
+const headerActionsColStyle = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+  alignItems: "stretch",
+};
+
+const headerBtnStyle = {
+  border: "none",
+  padding: "6px 10px",
+  borderRadius: 8,
+  cursor: "pointer",
+};
+
 export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
   const [loading, setLoading] = useState(true);
   const [assessment, setAssessment] = useState({
@@ -36,6 +60,7 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
     questions: []
   });
   const [saving, setSaving] = useState(false);
+  const [topicName, setTopicName] = useState(topicId);
 
   // NEW: which editor is visible
   const [tab, setTab] = useState("assessment"); // "assessment" | "practice"
@@ -95,6 +120,22 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
         console.error("load practice bank", err);
       } finally {
         if (mounted) setPracticeLoading(false);
+      }
+
+            // --- NEW: topic name for header display ---
+      try {
+        const tRes = await fetch(`${API_BASE}/topics/list`);
+        if (tRes.ok) {
+          const topics = await tRes.json();
+          if (!mounted) return;
+          const found = Array.isArray(topics) ? topics.find(t => t.id === topicId) : null;
+          setTopicName(found?.name || topicId);
+        } else if (mounted) {
+          setTopicName(topicId);
+        }
+      } catch (err) {
+        console.error("load topic name", err);
+        if (mounted) setTopicName(topicId);
       }
     }
 
@@ -247,46 +288,72 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
   return (
     <div style={overlayStyle}>
       <div style={cardStyle}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 8 }}>
-          <h3 style={{ margin: 0, flex: 1 }}>Manage Assessment — {topicId}</h3>
-          <button
-            onClick={onClose}
-            style={{ background: "#ef4444", color: "#fff", border: "none", padding: "6px 10px", borderRadius: 8 }}
-          >
-            ✖
-          </button>
-        </div>
+        {/* STICKY HEADER (title + actions + tabs) */}
+        <div style={stickyHeaderStyle}>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 8 }}>
+            <h3 style={{ margin: 0, flex: 1 }}>Manage Assessment — {topicName}</h3>
 
-        {/* NEW: tab switcher */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <button
-            onClick={() => setTab("assessment")}
-            style={{
-              flex: 1,
-              padding: "8px 10px",
-              borderRadius: 999,
-              border: tab === "assessment" ? "2px solid #2563eb" : "1px solid #e5e7eb",
-              background: tab === "assessment" ? "#eff6ff" : "#f9fafb",
-              cursor: "pointer",
-              fontWeight: tab === "assessment" ? 700 : 500,
-            }}
-          >
-            Assessment
-          </button>
-          <button
-            onClick={() => setTab("practice")}
-            style={{
-              flex: 1,
-              padding: "8px 10px",
-              borderRadius: 999,
-              border: tab === "practice" ? "2px solid #0ea5e9" : "1px solid #e5e7eb",
-              background: tab === "practice" ? "#ecfeff" : "#f9fafb",
-              cursor: "pointer",
-              fontWeight: tab === "practice" ? 700 : 500,
-            }}
-          >
-            Practice items
-          </button>
+            {/* REPLACED: close button -> Save + Cancel */}
+            <div style={headerActionsColStyle}>
+              <button
+                onClick={() => (tab === "assessment" ? save() : savePracticeBank())}
+                disabled={tab === "assessment" ? saving : practiceSaving}
+                style={{
+                  ...headerBtnStyle,
+                  background: tab === "assessment" ? "#16a34a" : "#0ea5e9",
+                  color: "#fff",
+                  opacity: (tab === "assessment" ? saving : practiceSaving) ? 0.7 : 1,
+                }}
+              >
+                {tab === "assessment"
+                  ? saving
+                    ? "Saving..."
+                    : "Save Assessment"
+                  : practiceSaving
+                  ? "Saving..."
+                  : "Save Practice Items"}
+              </button>
+
+              <button
+                onClick={onClose}
+                style={{ ...headerBtnStyle, background: "#ddd" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          {/* tab switcher (now sticky because it’s inside sticky header) */}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => setTab("assessment")}
+              style={{
+                flex: 1,
+                padding: "8px 10px",
+                borderRadius: 999,
+                border: tab === "assessment" ? "2px solid #2563eb" : "1px solid #e5e7eb",
+                background: tab === "assessment" ? "#eff6ff" : "#f9fafb",
+                cursor: "pointer",
+                fontWeight: tab === "assessment" ? 700 : 500,
+              }}
+            >
+              Assessment
+            </button>
+            <button
+              onClick={() => setTab("practice")}
+              style={{
+                flex: 1,
+                padding: "8px 10px",
+                borderRadius: 999,
+                border: tab === "practice" ? "2px solid #0ea5e9" : "1px solid #e5e7eb",
+                background: tab === "practice" ? "#ecfeff" : "#f9fafb",
+                cursor: "pointer",
+                fontWeight: tab === "practice" ? 700 : 500,
+              }}
+            >
+              Practice items
+            </button>
+          </div>
         </div>
 
         {/* ---------- ASSESSMENT TAB CONTENT ---------- */}
@@ -644,35 +711,6 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
             )}
           </>
         )}
-
-        {/* ---------- BOTTOM BUTTONS ---------- */}
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
-          <button
-            onClick={onClose}
-            style={{ background: "#ddd", border: "none", padding: "8px 12px", borderRadius: 8 }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => (tab === "assessment" ? save() : savePracticeBank())}
-            disabled={tab === "assessment" ? saving : practiceSaving}
-            style={{
-              background: tab === "assessment" ? "#16a34a" : "#0ea5e9",
-              color: "#fff",
-              border: "none",
-              padding: "8px 12px",
-              borderRadius: 8,
-            }}
-          >
-            {tab === "assessment"
-              ? saving
-                ? "Saving..."
-                : "Save Assessment"
-              : practiceSaving
-              ? "Saving..."
-              : "Save Practice Items"}
-          </button>
-        </div>
       </div>
     </div>
   );
