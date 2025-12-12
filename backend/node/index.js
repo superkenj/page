@@ -1033,8 +1033,14 @@ app.post("/topics/:id/schedule", async (req, res) => {
     }
 
     const update = {};
-    if (open_at !== undefined) update.open_at = open_at || null;
-    if (close_at !== undefined) update.close_at = close_at || null;
+    const { Timestamp } = admin.firestore;
+
+    if (open_at !== undefined) {
+      update.open_at = open_at ? Timestamp.fromDate(new Date(open_at)) : null;
+    }
+    if (close_at !== undefined) {
+      update.close_at = close_at ? Timestamp.fromDate(new Date(close_at)) : null;
+    }
     if (manual_lock !== undefined) update.manual_lock = !!manual_lock;
 
     await db.collection("topics").doc(topicId).set(update, { merge: true });
@@ -1693,8 +1699,25 @@ app.post("/assessments/:topicId/submit", async (req, res) => {
 
     if (topicData) {
       const nowMs = Date.now();
-      const openMs = topicData.open_at ? new Date(topicData.open_at).getTime() : null;
-      const closeMs = topicData.close_at ? new Date(topicData.close_at).getTime() : null;
+      function toMsMaybe(val) {
+        if (!val) return null;
+
+        // Firestore Timestamp (Admin SDK)
+        if (typeof val === "object" && typeof val.toDate === "function") {
+          try {
+            return val.toDate().getTime();
+          } catch {
+            return null;
+          }
+        }
+
+        // ISO string / Date / number
+        const ms = new Date(val).getTime();
+        return Number.isFinite(ms) ? ms : null;
+      }
+
+      const openMs = toMsMaybe(topicData.open_at);
+      const closeMs = toMsMaybe(topicData.close_at);
 
       if (openMs && nowMs < openMs) {
         return res.status(403).json({ error: "Topic not yet open" });

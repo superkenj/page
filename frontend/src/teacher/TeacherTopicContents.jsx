@@ -27,6 +27,17 @@ export default function TeacherTopicContents() {
   const [practice, setPractice] = useState(null); // null = not loaded
   const [savingPractice, setSavingPractice] = useState(false);
 
+  // ---------- Add Resource modal ----------
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [modalLinks, setModalLinks] = useState([{ link: "", type: "video", description: "" }]);
+
+  // ---------- Schedule modal ----------
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [scheduleOpenAt, setScheduleOpenAt] = useState("");
+  const [scheduleCloseAt, setScheduleCloseAt] = useState("");
+  const [scheduleManualLock, setScheduleManualLock] = useState(false);
+  const [savingScheduleModal, setSavingScheduleModal] = useState(false);
+
   // load topic & contents (existing)
   useEffect(() => {
     async function loadData() {
@@ -370,85 +381,369 @@ export default function TeacherTopicContents() {
     }
   }
 
+    function addModalLink() {
+    setModalLinks((s) => [...s, { link: "", type: "video", description: "" }]);
+  }
+  function removeModalLink(i) {
+    setModalLinks((s) => s.filter((_, idx) => idx !== i));
+  }
+  function updateModalLink(i, val) {
+    setModalLinks((s) => {
+      const copy = [...s];
+      copy[i] = val;
+      return copy;
+    });
+  }
+
+  async function refreshContents() {
+    const cRes = await fetch(`${API_BASE}/content/${topicId}`);
+    const cJson = await cRes.json();
+    setContents(cJson || []);
+  }
+
+  async function handleAddContentSave() {
+    const valid = modalLinks.filter((l) => l.link.trim());
+    if (!valid.length) {
+      alert("Add at least one link.");
+      return;
+    }
+
+    try {
+      for (const item of valid) {
+        await fetch(`${API_BASE}/content`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topic_id: topicId,
+            title: topic?.name || "Untitled",
+            description: item.description || "",
+            link: item.link,
+            type: item.type,
+            created_by: "teacher",
+          }),
+        });
+      }
+
+      setShowAddModal(false);
+      setModalLinks([{ link: "", type: "video", description: "" }]);
+      await refreshContents();
+      alert("Content added.");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to add content.");
+    }
+  }
+
+  function confirmTypeDelete(message = "This action is permanent.") {
+    const ok = window.confirm(`${message}\n\nYou will be asked to type DELETE to confirm.`);
+    if (!ok) return false;
+    const typed = window.prompt("Type DELETE to confirm:");
+    return (typed || "").trim().toUpperCase() === "DELETE";
+  }
+
+  async function deleteTopic() {
+    const ok = confirmTypeDelete("Delete this topic and all its contents?");
+    if (!ok) return;
+
+    try {
+      await fetch(`${API_BASE}/topics/${topicId}`, { method: "DELETE" });
+      alert("Deleted topic.");
+      navigate("/teacher/content");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete topic.");
+    }
+  }
+
+  function isoUtcToLocalDatetimeInput(iso) {
+    if (!iso) return "";
+    try {
+      const d = new Date(iso);
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    } catch {
+      return "";
+    }
+  }
+
+  function openScheduleModal() {
+    setScheduleOpenAt(topic?.open_at ? isoUtcToLocalDatetimeInput(topic.open_at) : "");
+    setScheduleCloseAt(topic?.close_at ? isoUtcToLocalDatetimeInput(topic.close_at) : "");
+    setScheduleManualLock(!!topic?.manual_lock);
+    setScheduleModalOpen(true);
+  }
+
+  async function saveScheduleModal() {
+    setSavingScheduleModal(true);
+    try {
+      const payload = {
+        open_at: scheduleOpenAt ? new Date(scheduleOpenAt).toISOString() : null,
+        close_at: scheduleCloseAt ? new Date(scheduleCloseAt).toISOString() : null,
+        manual_lock: !!scheduleManualLock,
+      };
+
+      const res = await fetch(`${API_BASE}/topics/${topicId}/schedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      alert("Schedule saved.");
+      setScheduleModalOpen(false);
+
+      // refresh topic info
+      const tRes = await fetch(`${API_BASE}/topics/list`);
+      const tJson = await tRes.json();
+      const found = Array.isArray(tJson) ? tJson.find((t) => t.id === topicId) : null;
+      setTopic(found);
+
+      window.dispatchEvent(new Event("studentDataUpdated"));
+      window.dispatchEvent(new Event("studentPathUpdated"));
+    } catch (err) {
+      console.error("saveScheduleModal error", err);
+      alert("Failed to save schedule.");
+    } finally {
+      setSavingScheduleModal(false);
+    }
+  }
+
+  async function tempOpenTopicFromModal(days = 3) {
+    if (!window.confirm(`Open topic for all students for ${days} day(s)?`)) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/topics/${topicId}/temporary-open-class`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days, createdBy: "teacher-ui" }),
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      alert("Topic temporarily opened for class.");
+      setScheduleModalOpen(false);
+
+      // refresh topic info
+      const tRes = await fetch(`${API_BASE}/topics/list`);
+      const tJson = await tRes.json();
+      const found = Array.isArray(tJson) ? tJson.find((t) => t.id === topicId) : null;
+      setTopic(found);
+
+      window.dispatchEvent(new Event("studentDataUpdated"));
+      window.dispatchEvent(new Event("studentPathUpdated"));
+    } catch (err) {
+      console.error("tempOpenTopicFromModal error", err);
+      alert("Failed to open temporarily.");
+    }
+  }
+
   // ---------------- Render ----------------
   if (!topic) return <div style={{ padding: 20 }}>Loading...</div>;
 
   return (
     <div style={{ padding: 20 }}>
-      <button
-        onClick={() => navigate("/teacher/content")}
-        style={{
-          marginBottom: 20,
-          background: "#e5e7eb",
-          border: "none",
-          padding: "6px 10px",
-          borderRadius: 6,
-          cursor: "pointer",
-        }}
-      >
-        ← Back
-      </button>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 12 }}>
-        <h1 style={{ margin: 0 }}>{topic.name}</h1>
-
-        {topic.term && (
-          <span
-            style={{
-              padding: "4px 10px",
-              borderRadius: 999,
-              background: "#eff6ff",
-              color: "#1d4ed8",
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
-            {topic.term} Grading
-          </span>
-        )}
-
-        {/* Tab switcher */}
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <button
-            onClick={() => setTab("content")}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 6,
-              border: tab === "content" ? "2px solid #2563eb" : "1px solid #e5e7eb",
-              background: tab === "content" ? "#eef2ff" : "#fff",
-              cursor: "pointer"
-            }}
-          >
-            Content
+      {/* Top header card */}
+      <div style={headerCard}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <button onClick={() => navigate("/teacher/content")} style={backBtn}>
+            ← Back
           </button>
-          <button
-            onClick={() => setTab("assessment")}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 6,
-              border: tab === "assessment" ? "2px solid #2563eb" : "1px solid #e5e7eb",
-              background: tab === "assessment" ? "#eef2ff" : "#fff",
-              cursor: "pointer"
-            }}
-          >
-            Assessment
+
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+            <h1 style={{ margin: 0, fontSize: 28 }}>{topic.name}</h1>
+
+            {topic.term && (
+              <span style={pill}>
+                {topic.term} Grading
+              </span>
+            )}
+          </div>
+
+          <div style={{ marginLeft: "auto" }}>
+            <div style={tabsWrap}>
+              <button
+                onClick={() => setTab("content")}
+                style={{ ...tabBtn, ...(tab === "content" ? tabActiveBlue : {}) }}
+              >
+                Content
+              </button>
+              <button
+                onClick={() => setTab("assessment")}
+                style={{ ...tabBtn, ...(tab === "assessment" ? tabActiveBlue : {}) }}
+              >
+                Assessment
+              </button>
+              <button
+                onClick={() => setTab("practice")}
+                style={{ ...tabBtn, ...(tab === "practice" ? tabActiveTeal : {}) }}
+              >
+                Practice
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p style={{ color: "#4b5563", marginTop: 10 }}>
+          {topic.description}
+        </p>
+
+        {/* Header action row */}
+        <div style={actionRow}>
+          <button onClick={openScheduleModal} style={{ ...actionBtn, background: "#06b6d4" }}>
+            🗓 Schedule
           </button>
-          <button
-            onClick={() => setTab("practice")}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 6,
-              border: tab === "practice" ? "2px solid #0f766e" : "1px solid #e5e7eb",
-              background: tab === "practice" ? "#ecfeff" : "#fff",
-              cursor: "pointer"
-            }}
-          >
-            Practice
+          <button onClick={deleteTopic} style={{ ...actionBtn, background: "#ef4444" }}>
+            🗑 Delete Topic
           </button>
+
+          <div style={{ flex: 1 }} />
+          
+          {tab === "content" && (
+            <button onClick={() => setShowAddModal(true)} style={{ ...actionBtn, background: "#2563eb" }}>
+              ➕ Add Resource
+            </button>
+          )}
+
+          {tab === "assessment" && (
+            <>
+              <button onClick={addQuestion} style={{ ...actionBtn, background: "#16a34a" }}>
+                + Add question
+              </button>
+              <button
+                onClick={saveAssessment}
+                disabled={savingAssessment}
+                style={{ ...actionBtn, background: "#2563eb" }}
+              >
+                Save Assessment
+              </button>
+            </>
+          )}
+
+          {tab === "practice" && (
+            <>
+              <button onClick={addPracticeQuestion} style={{ ...actionBtn, background: "#0f766e" }}>
+                + Add practice question
+              </button>
+              <button
+                onClick={savePractice}
+                disabled={savingPractice}
+                style={{ ...actionBtn, background: "#0f766e" }}
+              >
+                Save Practice
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      <p style={{ color: "#555", marginBottom: 18 }}>{topic.description}</p>
+            {/* Add Resource Modal */}
+      {showAddModal && (
+        <div style={modalOverlay}>
+          <div style={modalCard}>
+            <h3 style={{ marginTop: 0 }}>Add Resource — {topic.name}</h3>
+
+            {modalLinks.map((it, i) => (
+              <div
+                key={i}
+                style={{
+                  marginTop: 12,
+                  background: "#fff",
+                  padding: 10,
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                }}
+              >
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <input
+                    placeholder={`Resource link #${i + 1}`}
+                    value={it.link}
+                    onChange={(e) => updateModalLink(i, { ...it, link: e.target.value })}
+                    style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #d1d5db" }}
+                  />
+                  <select
+                    value={it.type}
+                    onChange={(e) => updateModalLink(i, { ...it, type: e.target.value })}
+                    style={{ padding: 10, borderRadius: 8, border: "1px solid #d1d5db" }}
+                  >
+                    <option value="video">Video</option>
+                    <option value="presentation">Presentation</option>
+                    <option value="pdf">PDF</option>
+                    <option value="link">Link</option>
+                  </select>
+                  {modalLinks.length > 1 && (
+                    <button
+                      onClick={() => removeModalLink(i)}
+                      style={{ background: "#ef4444", color: "#fff", border: "none", borderRadius: 8, padding: "8px 10px" }}
+                    >
+                      ✖
+                    </button>
+                  )}
+                </div>
+
+                <textarea
+                  placeholder="Short description..."
+                  value={it.description}
+                  onChange={(e) => updateModalLink(i, { ...it, description: e.target.value })}
+                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #d1d5db", resize: "vertical" }}
+                />
+              </div>
+            ))}
+
+            <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+              <button onClick={addModalLink} style={{ ...actionBtn, background: "#2563eb" }}>
+                ➕ Add Another
+              </button>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+                <button onClick={() => setShowAddModal(false)} style={{ ...actionBtn, background: "#9ca3af" }}>
+                  Cancel
+                </button>
+                <button onClick={handleAddContentSave} style={{ ...actionBtn, background: "#16a34a" }}>
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Schedule Modal */}
+      {scheduleModalOpen && (
+        <div style={modalOverlay}>
+          <div style={modalCard}>
+            <h3 style={{ marginTop: 0 }}>Schedule — {topic.name}</h3>
+
+            <label style={labelStyle}>Open at (local)</label>
+            <input type="datetime-local" value={scheduleOpenAt} onChange={(e) => setScheduleOpenAt(e.target.value)} style={inputStyle} />
+
+            <label style={labelStyle}>Close at (local)</label>
+            <input type="datetime-local" value={scheduleCloseAt} onChange={(e) => setScheduleCloseAt(e.target.value)} style={inputStyle} />
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+              <input id="sched-manual" type="checkbox" checked={scheduleManualLock} onChange={(e) => setScheduleManualLock(e.target.checked)} />
+              <label htmlFor="sched-manual" style={{ fontWeight: 700, color: "#111827" }}>Manual lock</label>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+              <button onClick={() => setScheduleModalOpen(false)} style={{ ...actionBtn, background: "#9ca3af" }}>
+                Cancel
+              </button>
+              <button onClick={saveScheduleModal} disabled={savingScheduleModal} style={{ ...actionBtn, background: "#2563eb", opacity: savingScheduleModal ? 0.75 : 1 }}>
+                {savingScheduleModal ? "Saving..." : "Save Schedule"}
+              </button>
+
+              <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+                <button onClick={() => tempOpenTopicFromModal(1)} style={{ ...actionBtn, background: "#06b6d4" }}>
+                  Open 1 day
+                </button>
+                <button onClick={() => tempOpenTopicFromModal(3)} style={{ ...actionBtn, background: "#0ea5a4" }}>
+                  Open 3 days
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CONTENT TAB (unchanged) */}
       {tab === "content" && (
@@ -691,8 +986,8 @@ export default function TeacherTopicContents() {
                       <strong style={{ minWidth: 140 }}>{`Q${idx + 1} — ${q.type}`}</strong>
                       <select value={q.type} onChange={(e) => updateQuestion(idx, { type: e.target.value })} style={{ padding: 6, borderRadius: 6 }}>
                         <option value="multiple_choice">Multiple Choice</option>
-                        <option value="short_answer">Short Answer</option>
                         <option value="numeric">Numeric</option>
+                        <option value="short_answer">Short Answer</option>
                         <option value="ordering">Ordering</option>
                       </select>
                       <input
@@ -786,13 +1081,6 @@ export default function TeacherTopicContents() {
                 <div style={{ marginTop: 10 }}>
                   <button onClick={addQuestion} style={{ background: "#16a34a", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 6 }}>+ Add question</button>
                 </div>
-              </div>
-
-              <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-                <button onClick={() => setTab("content")} style={{ background: "#ddd", padding: "8px 12px", borderRadius: 6 }}>Back to Content</button>
-                <button onClick={saveAssessment} disabled={savingAssessment} style={{ background: "#2563eb", color: "#fff", padding: "8px 12px", borderRadius: 6 }}>
-                  {savingAssessment ? "Saving..." : "Save Assessment"}
-                </button>
               </div>
             </>
           )}
@@ -1199,31 +1487,6 @@ export default function TeacherTopicContents() {
                   </button>
                 </div>
               </div>
-
-              <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-                <button
-                  onClick={() => setTab("content")}
-                  style={{
-                    background: "#ddd",
-                    padding: "8px 12px",
-                    borderRadius: 6,
-                  }}
-                >
-                  Back to Content
-                </button>
-                <button
-                  onClick={savePractice}
-                  disabled={savingPractice}
-                  style={{
-                    background: "#0f766e",
-                    color: "#fff",
-                    padding: "8px 12px",
-                    borderRadius: 6,
-                  }}
-                >
-                  {savingPractice ? "Saving..." : "Save Practice"}
-                </button>
-              </div>
             </>
           )}
         </div>
@@ -1231,3 +1494,109 @@ export default function TeacherTopicContents() {
     </div>
   );
 }
+
+const headerCard = {
+  background: "#ffffff",
+  border: "1px solid #e5e7eb",
+  borderRadius: 16,
+  padding: 16,
+  boxShadow: "0 10px 24px rgba(0,0,0,0.06)",
+  marginBottom: 16,
+};
+
+const backBtn = {
+  background: "#111827",
+  color: "#fff",
+  border: "none",
+  padding: "10px 12px",
+  borderRadius: 999,
+  cursor: "pointer",
+  fontWeight: 700,
+  letterSpacing: 0.2,
+  boxShadow: "0 8px 18px rgba(17,24,39,0.18)",
+};
+
+const pill = {
+  padding: "6px 10px",
+  borderRadius: 999,
+  background: "#eff6ff",
+  color: "#1d4ed8",
+  fontSize: 13,
+  fontWeight: 800,
+};
+
+const tabsWrap = {
+  display: "inline-flex",
+  background: "#f3f4f6",
+  padding: 6,
+  borderRadius: 999,
+  border: "1px solid #e5e7eb",
+  gap: 6,
+};
+
+const tabBtn = {
+  border: "none",
+  padding: "10px 14px",
+  borderRadius: 999,
+  cursor: "pointer",
+  background: "transparent",
+  fontWeight: 800,
+  color: "#374151",
+};
+
+const tabActiveBlue = {
+  background: "#2563eb",
+  color: "#fff",
+  boxShadow: "0 8px 16px rgba(37,99,235,0.22)",
+};
+
+const tabActiveTeal = {
+  background: "#0f766e",
+  color: "#fff",
+  boxShadow: "0 8px 16px rgba(15,118,110,0.22)",
+};
+
+const actionRow = {
+  marginTop: 14,
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+  alignItems: "center",
+};
+
+const actionBtn = {
+  border: "none",
+  color: "#fff",
+  padding: "10px 12px",
+  borderRadius: 12,
+  cursor: "pointer",
+  fontWeight: 800,
+  boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
+};
+
+const modalOverlay = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  width: "100vw",
+  height: "100vh",
+  background: "rgba(0,0,0,0.45)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 9999,
+};
+
+const modalCard = {
+  background: "#fff",
+  padding: 18,
+  borderRadius: 16,
+  width: "720px",
+  maxWidth: "92vw",
+  maxHeight: "90vh",
+  overflowY: "auto",
+  boxShadow: "0 16px 40px rgba(0,0,0,0.18)",
+};
+
+const labelStyle = { display: "block", fontWeight: 800, marginTop: 10, marginBottom: 6, color: "#111827" };
+const inputStyle = { width: "100%", padding: 10, borderRadius: 10, border: "1px solid #d1d5db", boxSizing: "border-box" };
