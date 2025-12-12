@@ -751,57 +751,112 @@ export default function StudentTopicContent() {
       {/* CONTENT TAB */}
       {tab === "content" && (
         <>
-          {/* Student Notes / Discussion (from teacher) */}
           <div
             style={{
               background: "#fff",
               border: "1px solid #dbeafe",
-              borderRadius: 12,
-              padding: 18,
-              marginBottom: 16,
-              boxShadow: "0 3px 6px rgba(0,0,0,0.06)",
+              borderRadius: 14,
+              padding: 24,
+              marginBottom: 20,
+              boxShadow: "0 6px 14px rgba(0,0,0,0.06)",
             }}
           >
-            <h2 style={{ marginTop: 0, marginBottom: 10, color: "#2563eb" }}>
-              🧾 Notes
-            </h2>
-
-            {topic?.discussion?.trim() ? (
-              <div
+            {/* ───────────── Notes Section ───────────── */}
+            <div style={{ marginBottom: 24 }}>
+              <h2
                 style={{
-                  color: "#334155",
-                  lineHeight: 1.7,
-                  whiteSpace: "pre-wrap",
-                  fontSize: 15,
+                  marginTop: 0,
+                  marginBottom: 8,
+                  color: "#2563eb",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
                 }}
               >
-                {topic.discussion}
-              </div>
-            ) : (
-              <div style={{ color: "#94a3b8", fontStyle: "italic", fontSize: 14 }}>
-                No notes yet.
-              </div>
-            )}
-          </div>
-          
-          <h2 style={{ marginBottom: 16, color: "#2563eb" }}>🎨 Learning Materials</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 20 }}>
-            {contents.map((c) => (
-              <div key={c.id} style={{ background: "#fff", border: "1px solid #e0e7ff", borderRadius: 12, padding: 16, boxShadow: "0 3px 6px rgba(0,0,0,0.08)", position: "relative" }}>
-                <h3 style={{ marginBottom: 8, fontWeight: "bold", color: "#2563eb", cursor: "pointer" }}
-                    onClick={() => { setActiveVideo(getEmbedLink(c.link)); setActiveContentId(c.id); }}>
-                  ▶ {c.title}
-                </h3>
+                🧾 Notes
+              </h2>
 
-                <p style={{ fontSize: 14, color: "#475569", marginBottom: 12 }}>{c.description}</p>
+              {topic?.discussion?.trim() ? (
+                <div
+                  style={{
+                    color: "#334155",
+                    lineHeight: 1.7,
+                    whiteSpace: "pre-wrap",
+                    fontSize: 15,
+                  }}
+                >
+                  {topic.discussion}
+                </div>
+              ) : (
+                <div style={{ color: "#94a3b8", fontStyle: "italic", fontSize: 14 }}>
+                  No notes yet.
+                </div>
+              )}
+            </div>
 
-                {seen.includes(c.id) ? (
-                  <span style={{ color: "#16a34a", fontWeight: "bold" }}>✅ Viewed</span>
-                ) : (
-                  <span style={{ color: "#f59e0b", fontWeight: "bold" }}>Not viewed</span>
-                )}
-              </div>
-            ))}
+            {/* Divider */}
+            <div
+              style={{
+                height: 1,
+                background: "#e5e7eb",
+                margin: "16px 0 20px",
+              }}
+            />
+
+            {/* ───────────── Learning Materials ───────────── */}
+            <h2 style={{ marginBottom: 16, color: "#2563eb" }}>
+              🎨 Learning Materials
+            </h2>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))",
+                gap: 20,
+              }}
+            >
+              {contents.map((c) => (
+                <div
+                  key={c.id}
+                  style={{
+                    background: "#f9fafb",
+                    border: "1px solid #e0e7ff",
+                    borderRadius: 12,
+                    padding: 16,
+                    boxShadow: "0 3px 6px rgba(0,0,0,0.06)",
+                  }}
+                >
+                  <h3
+                    style={{
+                      marginBottom: 8,
+                      fontWeight: "bold",
+                      color: "#2563eb",
+                      cursor: "pointer",
+                    }}
+                    onClick={() => {
+                      setActiveVideo(getEmbedLink(c.link));
+                      setActiveContentId(c.id);
+                    }}
+                  >
+                    ▶ {c.title}
+                  </h3>
+
+                  <p style={{ fontSize: 14, color: "#475569", marginBottom: 12 }}>
+                    {c.description}
+                  </p>
+
+                  {seen.includes(c.id) ? (
+                    <span style={{ color: "#16a34a", fontWeight: "bold" }}>
+                      ✅ Viewed
+                    </span>
+                  ) : (
+                    <span style={{ color: "#f59e0b", fontWeight: "bold" }}>
+                      Not viewed
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </>
       )}
