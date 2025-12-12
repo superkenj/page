@@ -581,6 +581,9 @@ export default function TeacherTopicContents() {
   const shell = {
     maxWidth: 1100,
     margin: "0 auto",
+    width: "100%",
+    minWidth: 0,          // ✅ important inside flex parents
+    boxSizing: "border-box",
   };
 
   const headerCard = {
@@ -688,8 +691,8 @@ export default function TeacherTopicContents() {
   if (!topic) return <div style={{ padding: 20 }}>Loading...</div>;
 
   return (
-    <div style={{ padding: 24, background: "#f6f8fc", minHeight: "100vh" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+    <div style={{ ...pageWrap, overflowX: "hidden", boxSizing: "border-box" }}>
+      <div style={{ ...shell, width: "100%", minWidth: 0 }}>
         {/* Top header card */}
         <div style={headerCard}>
           <div
@@ -941,7 +944,7 @@ export default function TeacherTopicContents() {
         )}
 
         {/* Centered main content area (tabs content) */}
-        <div style={{ maxWidth: 980, margin: "0 auto" }}>
+        <div style={{ maxWidth: 980, margin: "0 auto", width: "100%", minWidth: 0 }}>
 
           {/* CONTENT TAB (unchanged) */}
           {tab === "content" && (
@@ -1017,6 +1020,8 @@ export default function TeacherTopicContents() {
                       boxShadow: "0 10px 24px rgba(15, 23, 42, 0.06)",
                       width: "100%",
                       maxWidth: 980,
+                      boxSizing: "border-box",
+                      minWidth: 0,
                     }}
                   >
                     {/* EDIT MODE */}
@@ -1106,7 +1111,9 @@ export default function TeacherTopicContents() {
                           <div
                             style={{
                               position: "relative",
-                              paddingBottom: "56.25%", // 16:9 aspect ratio
+                              width: "100%",
+                              maxWidth: "100%",
+                              paddingBottom: "56.25%",
                               height: 0,
                               overflow: "hidden",
                               borderRadius: 6,

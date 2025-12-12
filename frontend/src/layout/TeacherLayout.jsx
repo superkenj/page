@@ -17,6 +17,7 @@ export default function TeacherLayout() {
         style={{
           flex: 1,
           overflowY: "auto",
+          minWidth: 0,
           background: "#f8fbff",
           padding: "2rem"
         }}
