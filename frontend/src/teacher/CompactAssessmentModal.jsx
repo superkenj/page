@@ -29,11 +29,17 @@ const inputStyle = { width: "100%", padding: 8, borderRadius: 6, border: "1px so
 const stickyHeaderStyle = {
   position: "sticky",
   top: 0,
-  zIndex: 50,
+  zIndex: 999,
   background: "#fff",
-  paddingBottom: 10,
-  marginBottom: 12,
   borderBottom: "1px solid #e5e7eb",
+  // ✅ extend to modal edges
+  marginLeft: -20,             // same as card padding
+  marginRight: -20,
+  paddingLeft: 20,
+  paddingRight: 20,
+  paddingTop: 12,
+  paddingBottom: 12,
+  pointerEvents: "auto",
 };
 
 const headerActionsColStyle = {
