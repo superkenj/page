@@ -426,8 +426,8 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
                         <strong>Q{i + 1}</strong>
                         <select value={q.type} onChange={e => updateQuestion(i, { type: e.target.value })}>
                           <option value="multiple_choice">Multiple Choice</option>
-                          <option value="short_answer">Short Answer</option>
                           <option value="numeric">Numeric</option>
+                          <option value="short_answer">Short Answer</option>
                           <option value="ordering">Ordering</option>
                         </select>
                         <input
