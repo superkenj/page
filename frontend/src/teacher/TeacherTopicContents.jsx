@@ -949,258 +949,266 @@ export default function TeacherTopicContents() {
           {/* CONTENT TAB (unchanged) */}
           {tab === "content" && (
             <>
-              <div
-                style={{
-                  background: "#ffffff",
-                  borderRadius: 18,
-                  padding: 18,
-                  boxShadow: "0 10px 24px rgba(15, 23, 42, 0.06)",
-                  border: "1px solid #e2e8f0",
-                  marginBottom: 16,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: 18 }}>Teacher Discussion</h3>
-                    <div style={{ color: "#64748b", fontSize: 13, marginTop: 4 }}>
-                      Notes you want to discuss while teaching this topic (visible to teachers only).
+              <div style={contentGroup}>
+
+                {/* (optional) small section title */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <h2 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: "#0f172a" }}>Content Area</h2>
+                  <span style={{ color: "#64748b", fontSize: 13 }}>Discussion + materials</span>
+                </div>
+                <div
+                  style={{
+                    background: "#ffffff",
+                    borderRadius: 18,
+                    padding: 18,
+                    boxShadow: "0 10px 24px rgba(15, 23, 42, 0.06)",
+                    border: "1px solid #e2e8f0",
+                    marginBottom: 16,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: 18 }}>Teacher Discussion</h3>
+                      <div style={{ color: "#64748b", fontSize: 13, marginTop: 4 }}>
+                        Notes you want to discuss while teaching this topic (visible to teachers only).
+                      </div>
                     </div>
+
+                    <button
+                      onClick={saveDiscussion}
+                      disabled={savingDiscussion}
+                      style={{
+                        background: "#2563eb",
+                        color: "#fff",
+                        border: "none",
+                        padding: "10px 14px",
+                        borderRadius: 12,
+                        cursor: "pointer",
+                        fontWeight: 800,
+                        opacity: savingDiscussion ? 0.7 : 1,
+                      }}
+                    >
+                      {savingDiscussion ? "Saving..." : "Save Discussion"}
+                    </button>
                   </div>
 
-                  <button
-                    onClick={saveDiscussion}
-                    disabled={savingDiscussion}
+                  <textarea
+                    value={discussion}
+                    onChange={(e) => setDiscussion(e.target.value)}
+                    placeholder="Write your discussion points here..."
                     style={{
-                      background: "#2563eb",
-                      color: "#fff",
-                      border: "none",
-                      padding: "10px 14px",
+                      width: "100%",
+                      maxWidth: "100%",
+                      boxSizing: "border-box",
+                      marginTop: 12,
+                      padding: 12,
                       borderRadius: 12,
-                      cursor: "pointer",
-                      fontWeight: 800,
-                      opacity: savingDiscussion ? 0.7 : 1,
+                      border: "1px solid #cbd5e1",
+                      minHeight: 120,
+                      resize: "vertical",
+                      outline: "none",
+                      lineHeight: 1.6,
                     }}
-                  >
-                    {savingDiscussion ? "Saving..." : "Save Discussion"}
-                  </button>
+                  />
                 </div>
 
-                <textarea
-                  value={discussion}
-                  onChange={(e) => setDiscussion(e.target.value)}
-                  placeholder="Write your discussion points here..."
-                  style={{
-                    width: "100%",
-                    maxWidth: "100%",
-                    boxSizing: "border-box",
-                    marginTop: 12,
-                    padding: 12,
-                    borderRadius: 12,
-                    border: "1px solid #cbd5e1",
-                    minHeight: 120,
-                    resize: "vertical",
-                    outline: "none",
-                    lineHeight: 1.6,
-                  }}
-                />
-              </div>
-
-              {contents.length === 0 ? (
-                <p>No materials yet.</p>
-              ) : (
-                contents.map((m) => (
-                  <div
-                    key={m.id}
-                    style={{
-                      background: "#ffffff",
-                      borderRadius: 18,
-                      padding: 18,
-                      margin: "0 auto 16px auto",
-                      border: "1px solid #e2e8f0",
-                      boxShadow: "0 10px 24px rgba(15, 23, 42, 0.06)",
-                      width: "100%",
-                      maxWidth: 980,
-                      boxSizing: "border-box",
-                      minWidth: 0,
-                    }}
-                  >
-                    {/* EDIT MODE */}
-                    {editingId === m.id ? (
-                      <div>
-                        <h3 style={{ marginBottom: 10 }}>Editing Resource</h3>
-                        <label style={{ display: "block", fontWeight: 600 }}>Type</label>
-                        <select
-                          value={editData.type}
-                          onChange={(e) => setEditData({ ...editData, type: e.target.value })}
-                          style={{
-                            marginBottom: 8,
-                            padding: 6,
-                            borderRadius: 4,
-                            width: "100%",
-                          }}
-                        >
-                          <option value="video">Video</option>
-                          <option value="presentation">Presentation</option>
-                          <option value="pdf">PDF</option>
-                          <option value="link">Link</option>
-                        </select>
-
-                        <label style={{ display: "block", fontWeight: 600 }}>Link</label>
-                        <input
-                          type="text"
-                          value={editData.link}
-                          onChange={(e) => setEditData({ ...editData, link: e.target.value })}
-                          style={{
-                            width: "100%",
-                            marginBottom: 8,
-                            padding: 6,
-                            borderRadius: 4,
-                            border: "1px solid #ccc",
-                          }}
-                        />
-
-                        <label style={{ display: "block", fontWeight: 600 }}>Description</label>
-                        <textarea
-                          rows={2}
-                          value={editData.description}
-                          onChange={(e) =>
-                            setEditData({ ...editData, description: e.target.value })
-                          }
-                          style={{
-                            width: "100%",
-                            padding: 6,
-                            borderRadius: 4,
-                            border: "1px solid #ccc",
-                            marginBottom: 10,
-                          }}
-                        />
-
-                        <button
-                          onClick={() => saveEdit(m.id)}
-                          style={{
-                            background: "#16a34a",
-                            color: "white",
-                            border: "none",
-                            padding: "6px 12px",
-                            borderRadius: 6,
-                            marginRight: 8,
-                          }}
-                        >
-                          💾 Save
-                        </button>
-                        <button
-                          onClick={cancelEdit}
-                          style={{
-                            background: "#9ca3af",
-                            color: "white",
-                            border: "none",
-                            padding: "6px 12px",
-                            borderRadius: 6,
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <h3 style={{ marginBottom: 8 }}>{m.type.toUpperCase()}</h3>
-                        <p style={{ marginBottom: 8 }}>{m.description}</p>
-
-                        {/* PREVIEW AREA */}
-                        {m.type === "video" && (
-                          <div
+                {contents.length === 0 ? (
+                  <p style={{ margin: 0, color: "#64748b" }}>No materials yet.</p>
+                ) : (
+                  contents.map((m) => (
+                    <div
+                      key={m.id}
+                      style={{
+                        background: "#ffffff",
+                        borderRadius: 18,
+                        padding: 18,
+                        margin: "0 auto 16px auto",
+                        border: "1px solid #e2e8f0",
+                        boxShadow: "0 10px 24px rgba(15, 23, 42, 0.06)",
+                        width: "100%",
+                        maxWidth: 980,
+                        boxSizing: "border-box",
+                        minWidth: 0,
+                      }}
+                    >
+                      {/* EDIT MODE */}
+                      {editingId === m.id ? (
+                        <div>
+                          <h3 style={{ marginBottom: 10 }}>Editing Resource</h3>
+                          <label style={{ display: "block", fontWeight: 600 }}>Type</label>
+                          <select
+                            value={editData.type}
+                            onChange={(e) => setEditData({ ...editData, type: e.target.value })}
                             style={{
-                              position: "relative",
-                              width: "100%",
-                              maxWidth: "100%",
-                              paddingBottom: "56.25%",
-                              height: 0,
-                              overflow: "hidden",
-                              borderRadius: 6,
                               marginBottom: 8,
+                              padding: 6,
+                              borderRadius: 4,
+                              width: "100%",
                             }}
                           >
-                            <iframe
-                              src={m.link.replace("watch?v=", "embed/")}
-                              title="Video"
-                              frameBorder="0"
-                              allowFullScreen
-                              style={{
-                                position: "absolute",
-                                top: 0,
-                                left: 0,
-                                width: "100%",
-                                height: "100%",
-                                borderRadius: 6,
-                              }}
-                            />
-                          </div>
-                        )}
+                            <option value="video">Video</option>
+                            <option value="presentation">Presentation</option>
+                            <option value="pdf">PDF</option>
+                            <option value="link">Link</option>
+                          </select>
 
-                        {m.type === "presentation" && (
-                          <iframe
-                            src={m.link}
-                            width="100%"
-                            height="400"
+                          <label style={{ display: "block", fontWeight: 600 }}>Link</label>
+                          <input
+                            type="text"
+                            value={editData.link}
+                            onChange={(e) => setEditData({ ...editData, link: e.target.value })}
                             style={{
-                              border: "none",
-                              borderRadius: 6,
+                              width: "100%",
                               marginBottom: 8,
-                              maxWidth: 720,
+                              padding: 6,
+                              borderRadius: 4,
+                              border: "1px solid #ccc",
                             }}
                           />
-                        )}
-                        {m.type === "pdf" && (
-                          <iframe
-                            src={m.link}
-                            width="100%"
-                            height="500"
+
+                          <label style={{ display: "block", fontWeight: 600 }}>Description</label>
+                          <textarea
+                            rows={2}
+                            value={editData.description}
+                            onChange={(e) =>
+                              setEditData({ ...editData, description: e.target.value })
+                            }
                             style={{
-                              border: "none",
-                              borderRadius: 6,
-                              marginBottom: 8,
-                              maxWidth: 720,
+                              width: "100%",
+                              padding: 6,
+                              borderRadius: 4,
+                              border: "1px solid #ccc",
+                              marginBottom: 10,
                             }}
                           />
-                        )}
-                        {m.type === "link" && (
-                          <a href={m.link} target="_blank" rel="noreferrer">
-                            Open Resource ↗
-                          </a>
-                        )}
 
-                        <div style={{ marginTop: 10 }}>
                           <button
-                            onClick={() => startEdit(m)}
+                            onClick={() => saveEdit(m.id)}
                             style={{
-                              background: "#3b82f6",
+                              background: "#16a34a",
                               color: "white",
                               border: "none",
-                              padding: "6px 10px",
+                              padding: "6px 12px",
                               borderRadius: 6,
                               marginRight: 8,
                             }}
                           >
-                            ✏️ Edit
+                            💾 Save
                           </button>
                           <button
-                            onClick={() => deleteContent(m.id)}
+                            onClick={cancelEdit}
                             style={{
-                              background: "#dc2626",
+                              background: "#9ca3af",
                               color: "white",
                               border: "none",
-                              padding: "6px 10px",
+                              padding: "6px 12px",
                               borderRadius: 6,
                             }}
                           >
-                            🗑️ Delete
+                            Cancel
                           </button>
                         </div>
-                      </>
-                    )}
-                  </div>
-                ))
-              )}
+                      ) : (
+                        <>
+                          <h3 style={{ marginBottom: 8 }}>{m.type.toUpperCase()}</h3>
+                          <p style={{ marginBottom: 8 }}>{m.description}</p>
+
+                          {/* PREVIEW AREA */}
+                          {m.type === "video" && (
+                            <div
+                              style={{
+                                position: "relative",
+                                width: "100%",
+                                maxWidth: "100%",
+                                paddingBottom: "56.25%",
+                                height: 0,
+                                overflow: "hidden",
+                                borderRadius: 6,
+                                marginBottom: 8,
+                              }}
+                            >
+                              <iframe
+                                src={m.link.replace("watch?v=", "embed/")}
+                                title="Video"
+                                frameBorder="0"
+                                allowFullScreen
+                                style={{
+                                  position: "absolute",
+                                  top: 0,
+                                  left: 0,
+                                  width: "100%",
+                                  height: "100%",
+                                  borderRadius: 6,
+                                }}
+                              />
+                            </div>
+                          )}
+
+                          {m.type === "presentation" && (
+                            <iframe
+                              src={m.link}
+                              width="100%"
+                              height="400"
+                              style={{
+                                border: "none",
+                                borderRadius: 6,
+                                marginBottom: 8,
+                                maxWidth: 720,
+                              }}
+                            />
+                          )}
+                          {m.type === "pdf" && (
+                            <iframe
+                              src={m.link}
+                              width="100%"
+                              height="500"
+                              style={{
+                                border: "none",
+                                borderRadius: 6,
+                                marginBottom: 8,
+                                maxWidth: 720,
+                              }}
+                            />
+                          )}
+                          {m.type === "link" && (
+                            <a href={m.link} target="_blank" rel="noreferrer">
+                              Open Resource ↗
+                            </a>
+                          )}
+
+                          <div style={{ marginTop: 10 }}>
+                            <button
+                              onClick={() => startEdit(m)}
+                              style={{
+                                background: "#3b82f6",
+                                color: "white",
+                                border: "none",
+                                padding: "6px 10px",
+                                borderRadius: 6,
+                                marginRight: 8,
+                              }}
+                            >
+                              ✏️ Edit
+                            </button>
+                            <button
+                              onClick={() => deleteContent(m.id)}
+                              style={{
+                                background: "#dc2626",
+                                color: "white",
+                                border: "none",
+                                padding: "6px 10px",
+                                borderRadius: 6,
+                              }}
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
             </>
           )}
 
@@ -1768,6 +1776,15 @@ const headerCard = {
   padding: 16,
   boxShadow: "0 10px 24px rgba(0,0,0,0.06)",
   marginBottom: 16,
+};
+
+const contentGroup = {
+  marginTop: 18,
+  padding: 14,
+  borderRadius: 18,
+  border: "1px solid #e2e8f0",
+  background: "#f8fafc",
+  boxShadow: "0 10px 24px rgba(15, 23, 42, 0.04)",
 };
 
 const backBtn = {
