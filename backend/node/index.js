@@ -859,6 +859,10 @@ app.get("/topics/list", async (req, res) => {
         description: d.description || "",
         prerequisites: Array.isArray(d.prerequisites) ? d.prerequisites : [],
 
+        // ✅ include discussion so student can render it
+        discussion: d.discussion || "",
+        discussion_updated_at: d.discussion_updated_at || null,
+
         // NORMALIZED schedule fields (ISO strings or null)
         open_at: toIsoMaybe(d.open_at),
         close_at: toIsoMaybe(d.close_at),
