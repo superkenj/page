@@ -21,7 +21,8 @@ const cardStyle = {
   overflowY: "auto",
   padding: 20,
   boxSizing: "border-box",
-  boxShadow: "0 10px 30px rgba(0,0,0,0.12)"
+  boxShadow: "0 10px 30px rgba(0,0,0,0.12)",
+  position: "relative",   // ✅ create stacking context for sticky children
 };
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc", boxSizing: "border-box" };
@@ -29,17 +30,16 @@ const inputStyle = { width: "100%", padding: 8, borderRadius: 6, border: "1px so
 const stickyHeaderStyle = {
   position: "sticky",
   top: 0,
-  zIndex: 999,
+  zIndex: 9999,              // ✅ higher than anything inside card
   background: "#fff",
   borderBottom: "1px solid #e5e7eb",
-  // ✅ extend to modal edges
-  marginLeft: -20,             // same as card padding
+  marginLeft: -20,
   marginRight: -20,
   paddingLeft: 20,
   paddingRight: 20,
   paddingTop: 12,
   paddingBottom: 12,
-  pointerEvents: "auto",
+  transform: "translateZ(0)", // ✅ forces its own paint layer (prevents click-through bugs)
 };
 
 const headerActionsColStyle = {
@@ -379,6 +379,8 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
           </div>
         </div>
 
+        <div style={{ height: 10 }} />   {/* ✅ spacer so content won't slide under header */}
+
         {/* ---------- ASSESSMENT TAB CONTENT ---------- */}
         {tab === "assessment" && (
           <>
@@ -494,7 +496,7 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
                         <button
                           onClick={() =>
                             updateQuestion(i, {
-                              choices: [...(q.choices || []), `Option ${(q.choices || []).length + 1}`],
+                              choices: [...(q.choices || []), ""],
                             })
                           }
                           style={{
@@ -661,7 +663,7 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
                           <button
                             onClick={() =>
                               updatePracticeQuestion(i, {
-                                choices: [...(q.choices || []), `Option ${(q.choices || []).length + 1}`],
+                                choices: [...(q.choices || []), ""],
                               })
                             }
                             style={{ background: "#2563eb", color: "#fff", border: "none", padding: "6px 8px", borderRadius: 6 }}
