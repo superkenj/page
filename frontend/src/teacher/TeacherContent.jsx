@@ -28,6 +28,9 @@ export default function TeacherContent() {
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({ link: "", type: "video", description: "" });
 
+  // Resource edit mode per topic (controls Save/Cancel & disables Delete Topic)
+  const [resourceEditMode, setResourceEditMode] = useState({});
+
   // Search
   const [query, setQuery] = useState("");
 
@@ -281,9 +284,10 @@ export default function TeacherContent() {
   }
 
   async function deleteTopic(topicId) {
-    if (!confirm("Delete this topic and all its contents?")) return;
+    const ok = confirmTypeDelete("Delete this topic and all its contents?");
+    if (!ok) return;
+
     try {
-      // delete topic via backend (which also deletes its contents)
       await fetch(`${API_BASE}/topics/${topicId}`, { method: "DELETE" });
       await loadAll();
       alert("Deleted topic");
@@ -291,6 +295,13 @@ export default function TeacherContent() {
       console.error(err);
       alert("Failed to delete topic");
     }
+  }
+
+  function confirmTypeDelete(message = "This action is permanent.") {
+    const ok = confirm(`${message}\n\nYou will be asked to type DELETE to confirm.`);
+    if (!ok) return false;
+    const typed = prompt('Type DELETE to confirm:');
+    return (typed || "").trim().toUpperCase() === "DELETE";
   }
 
   if (loading) return <div style={{ padding: 20 }}>Loading...</div>;
@@ -540,16 +551,48 @@ export default function TeacherContent() {
 
                 {/* action row under materials */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setModalTopic(topic.id); setShowAddModal(true); }}
-                    style={{ background: "#2563eb", color: "white", border: "none", padding: "10px", borderRadius: 8, cursor: "pointer", width: "100%" }}
-                  >
-                    ➕ Add Resource
-                  </button>
+                  {!resourceEditMode[topic.id] ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setResourceEditMode(prev => ({ ...prev, [topic.id]: true }));
+                      }}
+                      style={{ background: "#2563eb", color: "white", border: "none", padding: "10px", borderRadius: 8, cursor: "pointer", width: "100%" }}
+                    >
+                      ➕ Add/Edit Resource
+                    </button>
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // in edit mode, this becomes Add Resource (opens your existing modal)
+                        setModalTopic(topic.id);
+                        setShowAddModal(true);
+                      }}
+                      style={{ background: "#2563eb", color: "white", border: "none", padding: "10px", borderRadius: 8, cursor: "pointer", width: "100%" }}
+                    >
+                      ➕ Add Resource
+                    </button>
+                  )}
 
                   <button
-                    onClick={(e) => { e.stopPropagation(); deleteTopic(topic.id); }}
-                    style={{ background: "#ef4444", color: "white", border: "none", padding: "10px", borderRadius: 8, cursor: "pointer", width: "100%" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (resourceEditMode[topic.id]) return; // unclickable in edit mode
+                      deleteTopic(topic.id);
+                    }}
+                    disabled={!!resourceEditMode[topic.id]}
+                    style={{
+                      background: resourceEditMode[topic.id] ? "#fca5a5" : "#ef4444", // lighter red when disabled
+                      color: "white",
+                      border: "none",
+                      padding: "10px",
+                      borderRadius: 8,
+                      cursor: resourceEditMode[topic.id] ? "not-allowed" : "pointer",
+                      width: "100%",
+                      opacity: resourceEditMode[topic.id] ? 0.75 : 1,
+                    }}
+                    title={resourceEditMode[topic.id] ? "Finish editing resources (Save/Cancel) to delete this topic." : "Delete topic"}
                   >
                     🗑️ Delete Topic
                   </button>
@@ -567,6 +610,35 @@ export default function TeacherContent() {
                   >
                     📝 Manage Assessment
                   </button>
+
+                  {resourceEditMode[topic.id] && (
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Save = just reload (since your edits already save individually or via modal)
+                          // This also exits edit mode.
+                          loadAll();
+                          setResourceEditMode(prev => ({ ...prev, [topic.id]: false }));
+                        }}
+                        style={{ background: "#16a34a", color: "white", border: "none", padding: "10px", borderRadius: 8, cursor: "pointer", width: "100%" }}
+                      >
+                        💾 Save
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Cancel = exit edit mode and cancel inline edit if active
+                          cancelEdit();
+                          setResourceEditMode(prev => ({ ...prev, [topic.id]: false }));
+                        }}
+                        style={{ background: "#9ca3af", color: "white", border: "none", padding: "10px", borderRadius: 8, cursor: "pointer", width: "100%" }}
+                      >
+                        ✖ Cancel
+                      </button>
+                    </>
+                  )}
 
                   <div style={{ gridColumn: "1 / -1", justifySelf: "end", fontSize: 13, color: "#666", marginTop: 4 }}>
                     {topic.materials.length} resource{topic.materials.length !== 1 ? "s" : ""}
