@@ -114,7 +114,7 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
       // --- NEW: practice bank ---
       setPracticeLoading(true);
       try {
-        const pRes = await fetch(`${API_BASE}/practice-bank/${topicId}`);
+        const pRes = await fetch(`${API_BASE}/practice/${topicId}`);
         if (pRes.ok) {
           const pj = await pRes.json();
           if (!mounted) return;
@@ -261,17 +261,21 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
     try {
       const payload = {
         topic_id: practiceBank.topic_id || topicId,
-        questions: (practiceBank.questions || []).map(q => ({
-          question_id: q.question_id || `pr_${Date.now()}`,
+        title: "Practice",
+        instructions: "",
+        passing_score: 60,
+        questions: (practiceBank.questions || []).map((q, idx) => ({
+          question_id: q.question_id || q.id || `pr_${Date.now()}_${idx}`,
           type: q.type || "multiple_choice",
           question: q.question || "",
           choices: q.choices || [],
           answer: q.answer || "",
-          correct_order: q.correct_order || null
+          correct_order: q.correct_order || null,
+          points: 1,
         }))
       };
 
-      const res = await fetch(`${API_BASE}/practice-bank/${topicId}`, {
+      const res = await fetch(`${API_BASE}/practice`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
