@@ -38,16 +38,26 @@ const stickyHeaderStyle = {
 
 const headerActionsColStyle = {
   display: "flex",
-  flexDirection: "column",
-  gap: 6,
-  alignItems: "stretch",
+  flexDirection: "row",
+  gap: 10,
+  alignItems: "center",
 };
 
 const headerBtnStyle = {
   border: "none",
-  padding: "6px 10px",
-  borderRadius: 8,
+  padding: "8px 14px",        // ⬅️ slightly larger
+  borderRadius: 10,           // ⬅️ softer, modern
+  fontSize: 14,               // ⬅️ readable but compact
+  fontWeight: 600,
   cursor: "pointer",
+  whiteSpace: "nowrap",       // ⬅️ prevents wrapping
+};
+
+const headerDividerStyle = {
+  width: 1,
+  height: 32,
+  background: "#e5e7eb", // subtle gray
+  margin: "0 6px",
 };
 
 export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
@@ -293,7 +303,9 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
           <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 8 }}>
             <h3 style={{ margin: 0, flex: 1 }}>Manage Assessment — {topicName}</h3>
 
-            {/* REPLACED: close button -> Save + Cancel */}
+            {/* subtle divider */}
+            <div style={headerDividerStyle} />
+
             <div style={headerActionsColStyle}>
               <button
                 onClick={() => (tab === "assessment" ? save() : savePracticeBank())}
@@ -305,6 +317,7 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
                   opacity: (tab === "assessment" ? saving : practiceSaving) ? 0.7 : 1,
                 }}
               >
+                💾{" "}
                 {tab === "assessment"
                   ? saving
                     ? "Saving..."
@@ -316,9 +329,9 @@ export default function CompactAssessmentModal({ topicId, onClose, onSaved }) {
 
               <button
                 onClick={onClose}
-                style={{ ...headerBtnStyle, background: "#ddd" }}
+                style={{ ...headerBtnStyle, background: "#e5e7eb", color: "#111827" }}
               >
-                Cancel
+                ✖ Cancel
               </button>
             </div>
           </div>
