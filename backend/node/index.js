@@ -886,6 +886,23 @@ app.get("/topics/list", async (req, res) => {
   }
 });
 
+// This endpoint allows saving/updating the discussion field for a topic
+app.post("/topics/:id/discussion", async (req, res) => {
+  try {
+    const topicId = req.params.id;
+    const discussion = (req.body.discussion ?? "").toString();
+
+    await db.collection("topics").doc(topicId).set(
+      { discussion, discussion_updated_at: new Date().toISOString() },
+      { merge: true }
+    );
+
+    return res.json({ success: true, topicId, discussion });
+  } catch (err) {
+    console.error("POST /topics/:id/discussion error:", err);
+    return res.status(500).json({ error: "Failed to save discussion" });
+  }
+});
 
 app.get("/server-time", (req, res) => {
   return res.json({ server_time_utc: new Date().toISOString() });
