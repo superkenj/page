@@ -44,6 +44,21 @@ export default function StudentTopicContent() {
     isRemedial: false,
   });
 
+    // NEW: remediation practice state
+  const [practiceConfig, setPracticeConfig] = useState(null);      // full practice bank from backend
+  const [practiceLoading, setPracticeLoading] = useState(false);   // loading practice bank
+  const [practiceQuestions, setPracticeQuestions] = useState([]);  // sampled questions for current session
+  const [practiceAnswers, setPracticeAnswers] = useState({});      // { question_id: answer }
+  const [practiceSubmitting, setPracticeSubmitting] = useState(false);
+
+  const [practiceMeta, setPracticeMeta] = useState({
+    requiredSessions: 3,
+    minPasses: 2,
+    sessionsCompleted: 0,
+    passes: 0,
+    complete: false,  // true → assessment unlocked for remedial
+  });
+
   function shuffle(arr) {
     const a = Array.isArray(arr) ? [...arr] : [];
     for (let i = a.length - 1; i > 0; i--) {
@@ -81,6 +96,21 @@ export default function StudentTopicContent() {
         setExtraAttempts(extra);
         setAllowedAttempts(allowed);
 
+        // NEW: practice meta from topic_progress (fallback to defaults)
+        const practiceRequired = tp && tp.practiceRequired != null ? Number(tp.practiceRequired) : 3;
+        const practiceMinPasses = tp && tp.practiceMinPasses != null ? Number(tp.practiceMinPasses) : 2;
+        const practiceSessionsCompleted = tp && tp.practiceSessionsCompleted != null ? Number(tp.practiceSessionsCompleted) : 0;
+        const practicePasses = tp && tp.practicePasses != null ? Number(tp.practicePasses) : 0;
+        const practiceComplete = tp ? !!tp.practiceComplete : false;
+
+        setPracticeMeta({
+          requiredSessions: practiceRequired,
+          minPasses: practiceMinPasses,
+          sessionsCompleted: practiceSessionsCompleted,
+          passes: practicePasses,
+          complete: practiceComplete,
+        });
+
       } catch (err) {
         console.error("Error loading topic content:", err);
       } finally {
@@ -112,7 +142,7 @@ export default function StudentTopicContent() {
 
         const json = await res.json();
 
-                // Shuffle questions and choices for presentation
+        // Shuffle questions and choices for presentation
         let qlist = Array.isArray(json.questions) ? [...json.questions] : [];
 
         qlist = qlist.map((q, idx) => {
@@ -224,6 +254,181 @@ export default function StudentTopicContent() {
     return () => clearInterval(iv);
   }, [assessmentInProgress, timeLeftSec, timeExpired]);
 
+    // --- Practice helpers ---
+
+  function pickRandomQuestions(all, countMin = 3, countMax = 5) {
+    const src = Array.isArray(all) ? [...all] : [];
+    if (src.length === 0) return [];
+    const max = Math.min(src.length, countMax);
+    const targetCount = Math.min(max, Math.max(countMin, 1));
+    const shuffled = shuffle(src);
+    return shuffled.slice(0, targetCount);
+  }
+
+  async function startPracticeSession() {
+    try {
+      setPracticeLoading(true);
+
+      // Load practice config once
+      let config = practiceConfig;
+      if (!config) {
+        const res = await fetch(`${API_BASE}/practice/${topicId}`);
+        if (res.ok) {
+          config = await res.json();
+        } else {
+          config = null;
+        }
+        setPracticeConfig(config);
+      }
+
+      if (!config || !Array.isArray(config.questions) || config.questions.length === 0) {
+        alert("No practice items are available for this topic yet. Your teacher may need to add them.");
+        // Fallback: unlock assessment if no practice has been configured
+        setPracticeMeta((m) => ({ ...m, complete: true }));
+        setAssessmentInProgress(true);
+        return;
+      }
+
+      const sample = pickRandomQuestions(config.questions, 3, 5);
+      setPracticeQuestions(sample);
+      setPracticeAnswers({});
+    } catch (err) {
+      console.error("startPracticeSession error:", err);
+      alert("Failed to load practice items.");
+    } finally {
+      setPracticeLoading(false);
+    }
+  }
+
+  async function submitPracticeSession() {
+    if (!practiceQuestions || practiceQuestions.length === 0) {
+      alert("No practice questions to submit.");
+      return;
+    }
+
+    setPracticeSubmitting(true);
+    try {
+      const payloadAnswers = practiceQuestions.map((q) => {
+        const ans = practiceAnswers[q.question_id];
+        return {
+          question_id: q.question_id,
+          student_answer: typeof ans === "undefined" ? null : ans,
+        };
+      });
+
+      const res = await fetch(`${API_BASE}/practice/${topicId}/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_id: studentId, answers: payloadAnswers }),
+      });
+
+      let body = {};
+      try {
+        body = await res.json();
+      } catch (e) {
+        body = {};
+      }
+
+      const score = body.score ?? null;
+      const passed = !!body.passed;
+
+      // Update local meta using server values if present, otherwise fallback
+      let nextMeta = { ...practiceMeta };
+
+      if (typeof body.sessionsCompleted === "number") {
+        nextMeta.sessionsCompleted = body.sessionsCompleted;
+      } else {
+        nextMeta.sessionsCompleted = (nextMeta.sessionsCompleted || 0) + 1;
+      }
+
+      if (typeof body.passes === "number") {
+        nextMeta.passes = body.passes;
+      } else if (passed) {
+        nextMeta.passes = (nextMeta.passes || 0) + 1;
+      }
+
+      const required = body.requiredSessions ?? nextMeta.requiredSessions ?? 3;
+      const minPasses = body.minPasses ?? nextMeta.minPasses ?? 2;
+      nextMeta.requiredSessions = required;
+      nextMeta.minPasses = minPasses;
+
+      const complete =
+        typeof body.practiceComplete === "boolean"
+          ? body.practiceComplete
+          : nextMeta.sessionsCompleted >= required &&
+            nextMeta.passes >= minPasses;
+
+      nextMeta.complete = complete;
+      setPracticeMeta(nextMeta);
+
+      // Refresh student document so topic_progress stays in sync
+      try {
+        const stuRes = await fetch(`${API_BASE}/students/${studentId}`);
+        if (stuRes.ok) {
+          const stu = await stuRes.json();
+          const tp =
+            stu.topic_progress && stu.topic_progress[topicId]
+              ? stu.topic_progress[topicId]
+              : null;
+
+          if (tp) {
+            setPracticeMeta({
+              requiredSessions:
+                tp.practiceRequired ?? nextMeta.requiredSessions,
+              minPasses: tp.practiceMinPasses ?? nextMeta.minPasses,
+              sessionsCompleted:
+                tp.practiceSessionsCompleted ?? nextMeta.sessionsCompleted,
+              passes: tp.practicePasses ?? nextMeta.passes,
+              complete: tp.practiceComplete ?? complete,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to refresh student after practice submit:", e);
+      }
+
+      if (passed) {
+        alert(`Practice session result: Passed (score: ${score ?? "N/A"}).`);
+      } else {
+        alert(
+          `Practice session result: Not passed (score: ${score ?? "N/A"}).`
+        );
+      }
+
+      if (!nextMeta.complete) {
+        const remaining = Math.max(
+          0,
+          (nextMeta.requiredSessions || 3) - (nextMeta.sessionsCompleted || 0)
+        );
+        alert(
+          `You have completed ${nextMeta.sessionsCompleted}/${
+            nextMeta.requiredSessions
+          } practice sessions.\n` +
+            `You must pass at least ${nextMeta.minPasses} of them to unlock the assessment.` +
+            (remaining > 0
+              ? `\nYou still have ${remaining} practice session(s) to finish.`
+              : "")
+        );
+        // Start another session
+        await startPracticeSession();
+      } else {
+        alert(
+          "You have completed enough practice sessions.\nYou may now take the assessment, or come back later."
+        );
+        setPracticeQuestions([]);
+        setPracticeAnswers({});
+      }
+
+      window.dispatchEvent(new Event("studentDataUpdated"));
+      window.dispatchEvent(new Event("studentPathUpdated"));
+    } catch (err) {
+      console.error("submitPracticeSession error:", err);
+      alert("Failed to submit practice session.");
+    } finally {
+      setPracticeSubmitting(false);
+    }
+  }
+
   async function markSeen(contentId) {
     try {
       const res = await fetch(`${API_BASE}/students/${studentId}/content_seen`, {
@@ -257,8 +462,25 @@ export default function StudentTopicContent() {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
 
-  function handleStartAssessment() {
+    function handleStartAssessment() {
     setShowAssessmentConfirm(false);
+
+    // If this is remedial and practice is not yet completed,
+    // go into practice mode first (inside the Assessment tab)
+    if (confirmInfo.isRemedial && !practiceMeta.complete) {
+      setTab("assessment");
+
+      // Make sure we are NOT in timed assessment mode yet
+      setAssessmentInProgress(false);
+      setTimeExpired(false);
+      setTimeLeftSec(null);
+
+      // Start or prepare a practice session
+      startPracticeSession();
+      return;
+    }
+
+    // Normal assessment flow
     setTab("assessment");
     setAssessmentInProgress(true);
     setTimeExpired(false);
@@ -447,6 +669,9 @@ export default function StudentTopicContent() {
     }
   }
 
+  const isRemedialFlow = (attempts || 0) >= 3 || (extraAttempts || 0) > 0;
+  const needsPracticeFirst = isRemedialFlow && !practiceMeta.complete;
+
   if (loading) return <div style={{ padding: 20 }}>Loading topic...</div>;
 
   return (
@@ -526,6 +751,35 @@ export default function StudentTopicContent() {
       {/* CONTENT TAB */}
       {tab === "content" && (
         <>
+          {/* Student Notes / Discussion (from teacher) */}
+          {topic?.discussion?.trim() ? (
+            <div
+              style={{
+                background: "#fff",
+                border: "1px solid #dbeafe",
+                borderRadius: 12,
+                padding: 18,
+                marginBottom: 16,
+                boxShadow: "0 3px 6px rgba(0,0,0,0.06)",
+              }}
+            >
+              <h2 style={{ marginTop: 0, marginBottom: 10, color: "#2563eb" }}>
+                🧾 Notes
+              </h2>
+
+              <div
+                style={{
+                  color: "#334155",
+                  lineHeight: 1.7,
+                  whiteSpace: "pre-wrap", // keeps line breaks
+                  fontSize: 15,
+                }}
+              >
+                {topic.discussion}
+              </div>
+            </div>
+          ) : null}
+          
           <h2 style={{ marginBottom: 16, color: "#2563eb" }}>🎨 Learning Materials</h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 20 }}>
             {contents.map((c) => (
@@ -559,8 +813,10 @@ export default function StudentTopicContent() {
               alignItems: "center",
             }}
           >
-            <span>📝 Assessment</span>
-            {timeLeftSec !== null && (
+            <span>
+              📝 {needsPracticeFirst ? "Practice Session" : "Assessment"}
+            </span>
+            {!needsPracticeFirst && timeLeftSec !== null && (
               <span
                 style={{
                   fontSize: 14,
@@ -574,128 +830,480 @@ export default function StudentTopicContent() {
             )}
           </h2>
 
-          {assessmentLoading ? (
-            <div>Loading assessment...</div>
-          ) : !assessment ? (
-            <div style={{ padding: 12, background: "#fff", border: "1px solid #f1f5f9", borderRadius: 8 }}>
-              <p style={{ margin: 0 }}>No assessment has been created for this topic yet. Please notify your teacher.</p>
-            </div>
-          ) : (
-            <div style={{ background: "#fff", borderRadius: 8, padding: 12, border: "1px solid #e6eefc" }}>
-              <h3 style={{ marginTop: 0 }}>{assessment.title}</h3>
-              {assessment.instructions && <p style={{ color: "#475569" }}>{assessment.instructions}</p>}
+          {/* ───────────────── PRACTICE FLOW (REMEDIAL) ───────────────── */}
+          {needsPracticeFirst ? (
+            practiceLoading ? (
+              <div>Loading practice...</div>
+            ) : practiceQuestions.length === 0 ? (
+              <div
+                style={{
+                  padding: 12,
+                  background: "#fff",
+                  border: "1px solid #f1f5f9",
+                  borderRadius: 8,
+                }}
+              >
+                <p style={{ marginBottom: 8 }}>
+                  This attempt is part of your <strong>remediation</strong>.
+                  You’ll do short practice sessions first before retaking the
+                  assessment.
+                </p>
+                <p
+                  style={{
+                    marginTop: 0,
+                    marginBottom: 12,
+                    fontSize: 13,
+                    color: "#4b5563",
+                  }}
+                >
+                  A practice session has <strong>{practiceSessionSize}</strong>{" "}
+                  questions. You need to pass at least{" "}
+                  <strong>2 out of 3</strong> sessions.
+                </p>
 
-              {timeExpired && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={startPracticeSession}
+                    style={{
+                      background: "#2563eb",
+                      color: "#fff",
+                      padding: "8px 12px",
+                      borderRadius: 6,
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Start practice session
+                  </button>
+                  <button
+                    onClick={() => setTab("content")}
+                    style={{
+                      background: "#e5e7eb",
+                      padding: "8px 12px",
+                      borderRadius: 6,
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Back to Content
+                  </button>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 10,
+                    fontSize: 13,
+                    color: "#6b7280",
+                  }}
+                >
+                  Sessions done:{" "}
+                  <strong>{practiceMeta.totalSessions}</strong> · Passed:{" "}
+                  <strong>{practiceMeta.passedSessions}</strong>
+                </div>
+              </div>
+            ) : (
+              <div
+                style={{
+                  background: "#fff",
+                  borderRadius: 8,
+                  padding: 12,
+                  border: "1px solid #e6eefc",
+                }}
+              >
                 <div
                   style={{
                     marginBottom: 8,
                     padding: 8,
                     borderRadius: 6,
-                    background: "#fef2f2",
-                    color: "#b91c1c",
+                    background: "#ecfeff",
+                    color: "#0f766e",
                     fontSize: 13,
                   }}
                 >
-                  Time is up. You can no longer change your answers, but you can still submit this attempt.
+                  Practice session in progress. Answer the questions below and
+                  click <strong>Submit practice</strong>.
                 </div>
-              )}
 
-              {(assessment.questions || []).map((q, idx) => (
-                <div key={q.question_id} style={{ border: "1px solid #eef2ff", padding: 10, borderRadius: 8, marginBottom: 10 }}>
-                  <div style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                    <strong>{`Q${idx + 1}.`}</strong>
-                    <div style={{ color: "#334155" }}>{q.question}</div>
+                {(practiceQuestions || []).map((q, idx) => (
+                  <div
+                    key={q.question_id}
+                    style={{
+                      border: "1px solid #eef2ff",
+                      padding: 10,
+                      borderRadius: 8,
+                      marginBottom: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        marginBottom: 8,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <strong>{`Q${idx + 1}.`}</strong>
+                      <div style={{ color: "#334155" }}>{q.question}</div>
+                    </div>
+
+                    {/* render input by type for PRACTICE */}
+                    {q.type === "multiple_choice" && (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 8,
+                        }}
+                      >
+                        {(q.choices || []).map((c, ci) => (
+                          <label
+                            key={ci}
+                            style={{
+                              display: "flex",
+                              gap: 8,
+                              alignItems: "center",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <input
+                              type="radio"
+                              name={`practice_${q.question_id}`}
+                              checked={practiceAnswers[q.question_id] === c}
+                              onChange={() =>
+                                setPracticeAnswer(q.question_id, c)
+                              }
+                            />
+                            <span>{c}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+
+                    {q.type === "short_answer" && (
+                      <input
+                        value={practiceAnswers[q.question_id] ?? ""}
+                        onChange={(e) =>
+                          setPracticeAnswer(q.question_id, e.target.value)
+                        }
+                        placeholder="Type your answer"
+                        style={{
+                          width: "100%",
+                          padding: 8,
+                          borderRadius: 6,
+                          border: "1px solid #ccc",
+                        }}
+                      />
+                    )}
+
+                    {q.type === "numeric" && (
+                      <input
+                        type="number"
+                        value={practiceAnswers[q.question_id] ?? ""}
+                        onChange={(e) =>
+                          setPracticeAnswer(q.question_id, e.target.value)
+                        }
+                        placeholder="Numeric answer"
+                        style={{
+                          width: "200px",
+                          padding: 8,
+                          borderRadius: 6,
+                          border: "1px solid #ccc",
+                        }}
+                      />
+                    )}
+
+                    {q.type === "ordering" && (
+                      <>
+                        <p style={{ marginTop: 8, color: "#6b7280" }}>
+                          Enter the items in the correct order separated by{" "}
+                          <code>|</code> (pipe).
+                        </p>
+                        <input
+                          value={practiceAnswers[q.question_id] ?? ""}
+                          onChange={(e) =>
+                            setPracticeAnswer(
+                              q.question_id,
+                              e.target.value.split("|").map((s) => s.trim())
+                            )
+                          }
+                          placeholder="item1 | item2 | item3"
+                          style={{
+                            width: "100%",
+                            padding: 8,
+                            borderRadius: 6,
+                            border: "1px solid #ccc",
+                          }}
+                        />
+                      </>
+                    )}
                   </div>
+                ))}
 
-                  {/* render input by type */}
-                  {q.type === "multiple_choice" && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {(q.choices || []).map((c, ci) => (
-                        <label key={ci} style={{ display: "flex", gap: 8, alignItems: "center", cursor: "pointer" }}>
-                          <input
-                            type="radio"
-                            name={q.question_id}
-                            checked={answers[q.question_id] === c}
-                            onChange={() => setAnswer(q.question_id, c)}
-                            disabled={locked || timeExpired}
-                          />
-                          <span>{c}</span>
-                        </label>
-                      ))}
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <button
+                    onClick={submitPracticeSession}
+                    style={{
+                      background: "#16a34a",
+                      color: "#fff",
+                      padding: "8px 12px",
+                      borderRadius: 6,
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Submit practice
+                  </button>
+                  <button
+                    onClick={() => {
+                      // allow cancelling this practice session explicitly
+                      setPracticeQuestions([]);
+                      setPracticeAnswers({});
+                    }}
+                    style={{
+                      background: "#e5e7eb",
+                      padding: "8px 12px",
+                      borderRadius: 6,
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel session
+                  </button>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 10,
+                    fontSize: 13,
+                    color: "#6b7280",
+                  }}
+                >
+                  Sessions done:{" "}
+                  <strong>{practiceMeta.totalSessions}</strong> · Passed:{" "}
+                  <strong>{practiceMeta.passedSessions}</strong>
+                </div>
+              </div>
+            )
+          ) : (
+            /* ─────────────── NORMAL ASSESSMENT (EXISTING) ─────────────── */
+            <>
+              {assessmentLoading ? (
+                <div>Loading assessment...</div>
+              ) : !assessment ? (
+                <div
+                  style={{
+                    padding: 12,
+                    background: "#fff",
+                    border: "1px solid #f1f5f9",
+                    borderRadius: 8,
+                  }}
+                >
+                  <p style={{ margin: 0 }}>
+                    No assessment has been created for this topic yet. Please
+                    notify your teacher.
+                  </p>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    background: "#fff",
+                    borderRadius: 8,
+                    padding: 12,
+                    border: "1px solid #e6eefc",
+                  }}
+                >
+                  <h3 style={{ marginTop: 0 }}>{assessment.title}</h3>
+                  {assessment.instructions && (
+                    <p style={{ color: "#475569" }}>
+                      {assessment.instructions}
+                    </p>
+                  )}
+
+                  {timeExpired && (
+                    <div
+                      style={{
+                        marginBottom: 8,
+                        padding: 8,
+                        borderRadius: 6,
+                        background: "#fef2f2",
+                        color: "#b91c1c",
+                        fontSize: 13,
+                      }}
+                    >
+                      Time is up. You can no longer change your answers, but you
+                      can still submit this attempt.
                     </div>
                   )}
 
-                  {q.type === "short_answer" && (
-                    <input
-                      value={answers[q.question_id] ?? ""}
-                      onChange={(e) => setAnswer(q.question_id, e.target.value)}
-                      placeholder="Type your answer"
-                      style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
-                      disabled={locked || timeExpired}
-                    />
+                  {(assessment.questions || []).map((q, idx) => (
+                    <div
+                      key={q.question_id}
+                      style={{
+                        border: "1px solid #eef2ff",
+                        padding: 10,
+                        borderRadius: 8,
+                        marginBottom: 10,
+                      }}
+                    >
+                      <div
+                        style={{
+                          marginBottom: 8,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <strong>{`Q${idx + 1}.`}</strong>
+                        <div style={{ color: "#334155" }}>{q.question}</div>
+                      </div>
+
+                      {/* render input by type */}
+                      {q.type === "multiple_choice" && (
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 8,
+                          }}
+                        >
+                          {(q.choices || []).map((c, ci) => (
+                            <label
+                              key={ci}
+                              style={{
+                                display: "flex",
+                                gap: 8,
+                                alignItems: "center",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <input
+                                type="radio"
+                                name={q.question_id}
+                                checked={answers[q.question_id] === c}
+                                onChange={() => setAnswer(q.question_id, c)}
+                                disabled={locked || timeExpired}
+                              />
+                              <span>{c}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+
+                      {q.type === "short_answer" && (
+                        <input
+                          value={answers[q.question_id] ?? ""}
+                          onChange={(e) =>
+                            setAnswer(q.question_id, e.target.value)
+                          }
+                          placeholder="Type your answer"
+                          style={{
+                            width: "100%",
+                            padding: 8,
+                            borderRadius: 6,
+                            border: "1px solid #ccc",
+                          }}
+                          disabled={locked || timeExpired}
+                        />
+                      )}
+
+                      {q.type === "numeric" && (
+                        <input
+                          type="number"
+                          value={answers[q.question_id] ?? ""}
+                          onChange={(e) =>
+                            setAnswer(q.question_id, e.target.value)
+                          }
+                          placeholder="Numeric answer"
+                          style={{
+                            width: "200px",
+                            padding: 8,
+                            borderRadius: 6,
+                            border: "1px solid #ccc",
+                          }}
+                          disabled={locked || timeExpired}
+                        />
+                      )}
+
+                      {q.type === "ordering" && (
+                        <>
+                          <p
+                            style={{ marginTop: 8, color: "#6b7280" }}
+                          >
+                            Drag & drop not available in this minimal UI — enter
+                            the items in the correct order separated by{" "}
+                            <code>|</code> (pipe).
+                          </p>
+                          <input
+                            value={answers[q.question_id] ?? ""}
+                            onChange={(e) =>
+                              setAnswer(
+                                q.question_id,
+                                e.target.value
+                                  .split("|")
+                                  .map((s) => s.trim())
+                              )
+                            }
+                            placeholder="item1 | item2 | item3"
+                            style={{
+                              width: "100%",
+                              padding: 8,
+                              borderRadius: 6,
+                              border: "1px solid #ccc",
+                            }}
+                            disabled={locked || timeExpired}
+                          />
+                        </>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* show last submission if exists */}
+                  {submissionResult && (
+                    <div style={{ marginBottom: 12 }}>
+                      <strong>Last attempt:</strong> Score:{" "}
+                      {submissionResult.score} —{" "}
+                      {submissionResult.passed ? "Passed" : "Not passed"}
+                    </div>
                   )}
 
-                  {q.type === "numeric" && (
-                    <input
-                      type="number"
-                      value={answers[q.question_id] ?? ""}
-                      onChange={(e) => setAnswer(q.question_id, e.target.value)}
-                      placeholder="Numeric answer"
-                      style={{ width: "200px", padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
-                      disabled={locked || timeExpired}
-                    />
-                  )}
-
-                  {q.type === "ordering" && (
-                    <>
-                      <p style={{ marginTop: 8, color: "#6b7280" }}>Drag & drop not available in this minimal UI — enter the items in the correct order separated by `|` (pipe).</p>
-                      <input
-                        value={answers[q.question_id] ?? ""}
-                        onChange={(e) => setAnswer(q.question_id, e.target.value.split("|").map(s => s.trim()))}
-                        placeholder="item1 | item2 | item3"
-                        style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
-                        disabled={locked || timeExpired}
-                      />
-                    </>
-                  )}
-                </div>
-              ))}
-
-              {/* show last submission if exists */}
-              {submissionResult && (
-                <div style={{ marginBottom: 12 }}>
-                  <strong>Last attempt:</strong> Score: {submissionResult.score} — {submissionResult.passed ? "Passed" : "Not passed"}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => {
+                        if (assessmentInProgress && !locked) {
+                          alert(
+                            "Please submit your assessment before going back to the Content tab."
+                          );
+                          return;
+                        }
+                        setTab("content");
+                      }}
+                      style={{
+                        background: "#ddd",
+                        padding: "8px 12px",
+                        borderRadius: 6,
+                      }}
+                    >
+                      Back to Content
+                    </button>
+                    <button
+                      onClick={submitAssessment}
+                      disabled={submitting || locked}
+                      style={{
+                        background:
+                          submitting || locked ? "#94a3b8" : "#2563eb",
+                        color: "#fff",
+                        padding: "8px 12px",
+                        borderRadius: 6,
+                        cursor:
+                          submitting || locked ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {submitting ? "Submitting..." : "Submit Assessment"}
+                    </button>
+                  </div>
                 </div>
               )}
-
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={() => {
-                    if (assessmentInProgress && !locked) {
-                      alert("Please submit your assessment before going back to the Content tab.");
-                      return;
-                    }
-                    setTab("content");
-                  }}
-                  style={{ background: "#ddd", padding: "8px 12px", borderRadius: 6 }}
-                >
-                  Back to Content
-                </button>
-                <button
-                  onClick={submitAssessment}
-                  disabled={submitting || locked}
-                  style={{
-                    background: submitting || locked ? "#94a3b8" : "#2563eb",
-                    color: "#fff",
-                    padding: "8px 12px",
-                    borderRadius: 6,
-                    cursor: submitting || locked ? "not-allowed" : "pointer"
-                  }}
-                >
-                  {submitting ? "Submitting..." : "Submit Assessment"}
-                </button>
-              </div>
-            </div>
+            </>
           )}
         </div>
       )}

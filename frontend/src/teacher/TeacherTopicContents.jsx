@@ -968,9 +968,9 @@ export default function TeacherTopicContents() {
                 >
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                     <div>
-                      <h3 style={{ margin: 0, fontSize: 18 }}>Teacher Discussion</h3>
+                      <h3 style={{ margin: 0, fontSize: 18 }}>Student Notes / Discussion</h3>
                       <div style={{ color: "#64748b", fontSize: 13, marginTop: 4 }}>
-                        Notes you want to discuss while teaching this topic (visible to teachers only).
+                        This will appear in the student Content view for this topic.
                       </div>
                     </div>
 
